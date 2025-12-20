@@ -1,8 +1,46 @@
 {
-  "hash": "7e8e9f3b",
+  "hash": "e81662f2",
   "configHash": "2e94f41d",
-  "lockfileHash": "e3b0c442",
-  "browserHash": "4faaebe6",
-  "optimized": {},
-  "chunks": {}
+  "lockfileHash": "afa363b6",
+  "browserHash": "8103894a",
+  "optimized": {
+    "react/jsx-dev-runtime": {
+      "src": "../../node_modules/react/jsx-dev-runtime.js",
+      "file": "react_jsx-dev-runtime.js",
+      "fileHash": "5f51f495",
+      "needsInterop": true
+    },
+    "react": {
+      "src": "../../node_modules/react/index.js",
+      "file": "react.js",
+      "fileHash": "43ca76b3",
+      "needsInterop": true
+    },
+    "react-dom/client": {
+      "src": "../../node_modules/react-dom/client.js",
+      "file": "react-dom_client.js",
+      "fileHash": "d9ed0e1c",
+      "needsInterop": true
+    },
+    "localforage": {
+      "src": "../../node_modules/localforage/dist/localforage.js",
+      "file": "localforage.js",
+      "fileHash": "291ed46a",
+      "needsInterop": true
+    },
+    "@google/generative-ai": {
+      "src": "../../node_modules/@google/generative-ai/dist/index.mjs",
+      "file": "@google_generative-ai.js",
+      "fileHash": "52fb105e",
+      "needsInterop": false
+    }
+  },
+  "chunks": {
+    "chunk-N35IK7S5": {
+      "file": "chunk-N35IK7S5.js"
+    },
+    "chunk-VUNV25KB": {
+      "file": "chunk-VUNV25KB.js"
+    }
+  }
 }
