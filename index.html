@@ -20,54 +20,49 @@
 
 
 
-/* ========== 这是一组精准修复顶部Header被状态栏遮挡的核心CSS ========== */
-/* 作用：只让聊天界面和列表界面的顶部栏往下移，避免被iPhone状态栏挡住 */
-/* 同时增加高度和内边距，让栏看起来“宽一点、更舒服” */
-/* 兼容所有iPhone（刘海/动态岛），非iPhone设备上不会有多余空间 */
 
-/* 1. 聊天界面顶部栏（返回 + 名字 + 设置） */
-div[class*="bg-white/90"] + div > div:first-child, /* 匹配聊天Header */
-div.bg-white\/90 ~ div div:first-child /* 备用选择器 */
-{
-  padding-top: env(safe-area-inset-top) !important;     /* 关键：往下推 */
-  padding-top: constant(safe-area-inset-top) !important; /* 兼容老iOS */
-  height: calc(56px + env(safe-area-inset-top));         /* 增加高度，让它“宽一点” */
-  min-height: calc(56px + env(safe-area-inset-top));
+/* ========== 这是一组超级精准只修复顶部Header的CSS（不会影响消息气泡） ========== */
+/* 作用：只给聊天界面的顶部栏（返回+Aria+设置）增加顶部安全区，让它往下移并变高一点 */
+/* 完全不碰消息气泡、输入框、列表页，保证样式不崩 */
+
+/* 聊天界面顶部Header（class包含 bg-white/90 backdrop-blur border-b 的那个div） */
+div.bg-white\/90.backdrop-blur.border-b.p-3 {
+  padding-top: calc(env(safe-area-inset-top) + 0.5rem) !important;     /* 往下推安全区 + 一点内边距 */
+  padding-top: calc(constant(safe-area-inset-top) + 0.5rem) !important; /* 兼容老iOS */
+  min-height: calc(3.5rem + env(safe-area-inset-top));                 /* 原高度约3rem，增加安全区，让它“宽一点” */
   box-sizing: border-box;
+  align-items: flex-end; /* 内容向下对齐，避免文字被拉伸 */
 }
 
-/* 2. 聊天列表界面顶部栏（Exit + Chats + 导入/添加按钮） */
-div.bg-white.p-4.flex.justify-between.items-center.shadow-sm {
-  padding-top: env(safe-area-inset-top) !important;
-  padding-top: constant(safe-area-inset-top) !important;
-  height: calc(64px + env(safe-area-inset-top));         /* 原高度约56-64px，增加安全区 */
-  min-height: calc(64px + env(safe-area-inset-top));
-  align-items: flex-end; /* 内容向下对齐，避免拉伸变形 */
-  padding-bottom: 8px;   /* 让文字不贴太下 */
+/* 如果上面选择器不生效，备用更精确的选择器（同时保留） */
+.sticky.top-0.z-10 > div.bg-white\/90 {
+  padding-top: calc(env(safe-area-inset-top) + 0.5rem) !important;
+  padding-top: calc(constant(safe-area-inset-top) + 0.5rem) !important;
+  min-height: calc(3.5rem + env(safe-area-inset-top));
   box-sizing: border-box;
+  align-items: flex-end;
 }
 
-/* 3. 可选：让状态栏背景也跟随你的Header颜色（更沉浸） */
+/* 可选：让状态栏区域背景也透明，跟你的毛玻璃一致（更沉浸） */
 @supports (padding-top: env(safe-area-inset-top)) {
-  div.bg-white\/90.backdrop-blur.border-b,
-  div.bg-white.p-4.flex.justify-between {
-    background-color: rgba(255, 255, 255, 0.9) !important;
+  div.bg-white\/90.backdrop-blur.border-b {
+    background-color: rgba(255, 255, 255, 0.85) !important;
+    backdrop-filter: blur(12px);
   }
 }
 /* ========== 精准修复结束 ========== */
 
 
-
-
-/* ========== 这是一组恢复 body 原样的代码（去除顶部padding，避免底部白条） ========== */
+/* ========== 这是一组安全的 body 样式（只处理底部安全区） ========== */
 body {
   font-family: 'Inter', sans-serif;
   margin: 0;
   padding: 0;
-  /* 只保留底部安全区，避免影响整体布局 */
-  padding-bottom: env(safe-area-inset-bottom);
+  padding-bottom: env(safe-area-inset-bottom); /* 只留底部，避免输入框上移露白条 */
 }
-/* ========== 恢复结束 ========== */
+/* ========== 结束 ========== */
+
+
 
 /* Hide scrollbar */
 .no-scrollbar::-webkit-scrollbar { display: none; }
