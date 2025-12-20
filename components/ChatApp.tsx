@@ -2568,6 +2568,9 @@ if (parts.length === 0) {
       </div>
     );
   }
+
+
+  
   if (view === 'create') {
     return (
       <div className="h-full w-full bg-white flex flex-col p-6 overflow-y-auto">
@@ -2613,413 +2616,523 @@ if (parts.length === 0) {
       </div>
     );
   }
+
+
+
+
+  
 if (view === 'settings' && activeContact) {
-        const form = { ...activeContact, ...editForm };
-        const enabledBooks = form.enabledWorldBooks || [];
+  const form = { ...activeContact, ...editForm };
+  const enabledBooks = form.enabledWorldBooks || [];
 
-        // --- 新增：预设管理逻辑（保持不变）---
-        const handleSavePreset = () => {
-          if (!presetName.trim()) return alert("请输入预设名称！");
-          const cssToSave = editForm.customCSS || form.customCSS || "";
-          if (!cssToSave) return alert("当前没有 CSS 代码可保存！");
-          const newPreset = {
-            id: Date.now().toString(),
-            name: presetName,
-            css: cssToSave
-          };
-          if (!globalSettings.themePresets) globalSettings.themePresets = [];
-          globalSettings.themePresets.push(newPreset);
-          setPresetName("");
-          alert(`预设 "${newPreset.name}" 保存成功！`);
-        };
+  // --- 预设管理逻辑保持不变 ---
+  const handleSavePreset = () => {
+    if (!presetName.trim()) return alert("请输入预设名称！");
+    const cssToSave = editForm.customCSS || form.customCSS || "";
+    if (!cssToSave) return alert("当前没有 CSS 代码可保存！");
+    const newPreset = {
+      id: Date.now().toString(),
+      name: presetName,
+      css: cssToSave
+    };
+    if (!globalSettings.themePresets) globalSettings.themePresets = [];
+    globalSettings.themePresets.push(newPreset);
+    setPresetName("");
+    alert(`预设 "${newPreset.name}" 保存成功！`);
+  };
 
-        const handleLoadPreset = (presetId) => {
-          const preset = globalSettings.themePresets?.find(p => p.id === presetId);
-          if (preset) {
-            setEditForm({ ...editForm, customCSS: preset.css });
-            setSelectedPresetId(presetId);
-          }
-        };
+  const handleLoadPreset = (presetId) => {
+    const preset = globalSettings.themePresets?.find(p => p.id === presetId);
+    if (preset) {
+      setEditForm({ ...editForm, customCSS: preset.css });
+      setSelectedPresetId(presetId);
+    }
+  };
 
-        const handleDeletePreset = () => {
-          if (!selectedPresetId) return;
-          if (!globalSettings.themePresets) return;
-          const idx = globalSettings.themePresets.findIndex(p => p.id === selectedPresetId);
-          if (idx > -1) {
-            globalSettings.themePresets.splice(idx, 1);
-            setSelectedPresetId("");
-            setEditForm({ ...editForm, customCSS: "" });
-          }
-        };
+  const handleDeletePreset = () => {
+    if (!selectedPresetId) return;
+    if (!globalSettings.themePresets) return;
+    const idx = globalSettings.themePresets.findIndex(p => p.id === selectedPresetId);
+    if (idx > -1) {
+      globalSettings.themePresets.splice(idx, 1);
+      setSelectedPresetId("");
+      setEditForm({ ...editForm, customCSS: "" });
+    }
+  };
 
-        return (
-          <div className="h-full w-full bg-gray-100 flex flex-col overflow-hidden">
-            {/* 沉浸式 Header */}
-            <SafeAreaHeader
-              title="Chat Settings"
-              left={<button onClick={() => setView('chat')} className="text-blue-500 text-2xl -ml-2">‹</button>}
-            />
+  return (
+    <div className="h-full w-full bg-gray-100 flex flex-col overflow-hidden">
+      {/* 沉浸式 Header */}
+      <SafeAreaHeader
+        title="Chat Settings"
+        left={<button onClick={() => setView('chat')} className="text-blue-500 text-2xl -ml-2">‹</button>}
+      />
 
-            {/* 模态框保持不变 */}
-            {showMemoryModal && (
-              <div className="absolute inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-                <div className="bg-white w-full h-[80%] rounded-2xl flex flex-col shadow-2xl animate-scaleIn">
-                  <div className="p-4 border-b flex justify-between items-center"><h3 className="font-bold text-lg">🧠 Long-Term Memory</h3><button onClick={() => setShowMemoryModal(false)} className="text-gray-400">✕</button></div>
-                  <div className="flex-1 p-4 bg-yellow-50"><textarea className="w-full h-full bg-transparent outline-none resize-none text-sm font-mono leading-relaxed" value={tempSummary} onChange={(e) => setTempSummary(e.target.value)} placeholder="Summary..." /></div>
-                  <div className="p-4 border-t"><button onClick={handleMemorySave} className="w-full bg-green-500 text-white py-3 rounded-xl font-bold">Save</button></div>
+      {/* 模态框保持不变 */}
+      {showMemoryModal && (
+        <div className="absolute inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white w-full h-[80%] rounded-2xl flex flex-col shadow-2xl animate-scaleIn">
+            <div className="p-4 border-b flex justify-between items-center">
+              <h3 className="font-bold text-lg">🧠 Long-Term Memory</h3>
+              <button onClick={() => setShowMemoryModal(false)} className="text-gray-400">✕</button>
+            </div>
+            <div className="flex-1 p-4 bg-yellow-50">
+              <textarea
+                className="w-full h-full bg-transparent outline-none resize-none text-sm font-mono leading-relaxed"
+                value={tempSummary}
+                onChange={(e) => setTempSummary(e.target.value)}
+                placeholder="Summary..."
+              />
+            </div>
+            <div className="p-4 border-t">
+              <button onClick={handleMemorySave} className="w-full bg-green-500 text-white py-3 rounded-xl font-bold">Save</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showWorldBookModal && (
+        <div className="absolute inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white w-full max-h-[70%] rounded-2xl flex flex-col shadow-2xl animate-scaleIn">
+            <div className="p-4 border-b flex justify-between items-center">
+              <h3 className="font-bold text-lg">📚 Select Lorebooks</h3>
+              <button onClick={() => setShowWorldBookModal(false)} className="text-gray-400">✕</button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-2">
+              {worldBooks.map(wb => (
+                <div
+                  key={wb.id}
+                  onClick={() => toggleWorldBook(wb.name)}
+                  className={`p-4 mb-2 rounded-xl border flex items-center justify-between cursor-pointer transition ${enabledBooks.includes(wb.name) ? 'bg-orange-50 border-orange-400' : 'bg-white border-gray-200'}`}
+                >
+                  <span className="font-bold text-sm">{wb.name}</span>
+                  {enabledBooks.includes(wb.name) && <span className="text-orange-500 font-bold">✓</span>}
                 </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 主内容区 */}
+      <div className="flex-1 overflow-y-auto p-4 pt-20 space-y-6">
+        {/* 1. My Persona */}
+        <section className="bg-white rounded-2xl p-4 shadow-sm transition-all border border-gray-100">
+          <div className="flex items-center gap-4 mb-6">
+            <div className="w-16 h-16 rounded-full overflow-hidden relative border border-gray-100 bg-gray-50 group hover:shadow-md transition">
+              <img src={editForm.userAvatar || form.userAvatar} className="w-full h-full object-cover" alt="user" />
+              <input type="file" onChange={(e) => handleImageUpload(e, 'userAvatar')} className="absolute inset-0 opacity-0 cursor-pointer" title="Change Avatar" />
+            </div>
+            <div className="flex-1">
+              <label className="text-xs text-gray-500 font-bold ml-1">My Name</label>
+              <input
+                type="text"
+                value={editForm.userName !== undefined ? editForm.userName : form.userName}
+                onChange={e => setEditForm({ ...editForm, userName: e.target.value })}
+                className="w-full border-b p-2 outline-none text-sm font-bold bg-transparent focus:border-blue-500 transition"
+                placeholder="User"
+              />
+            </div>
+          </div>
+          <div>
+            <label className="text-xs text-gray-500 font-bold ml-1">My Description</label>
+            <textarea
+              rows={3}
+              value={editForm.userPersona !== undefined ? editForm.userPersona : form.userPersona}
+              onChange={e => setEditForm({ ...editForm, userPersona: e.target.value })}
+              className="w-full border p-3 rounded-xl text-sm mt-1 bg-gray-50 text-xs focus:bg-white focus:ring-2 focus:ring-blue-100 outline-none transition resize-none"
+              placeholder="描述一下你自己，AI 会看到的..."
+            />
+          </div>
+        </section>
+
+        {/* 2. 角色信息 */}
+        <section className="bg-white rounded-2xl p-4 shadow-sm">
+          <h3 className="text-xs font-bold text-gray-400 uppercase mb-3">🤖 Character Identity</h3>
+          <div className="flex items-center gap-4 mb-4">
+            <div className="w-16 h-16 rounded-full overflow-hidden relative border border-gray-100 bg-gray-50">
+              <img src={form.avatar} className="w-full h-full object-cover" alt="character" />
+              <input type="file" onChange={(e) => handleImageUpload(e, 'avatar')} className="absolute inset-0 opacity-0 cursor-pointer" />
+            </div>
+            <div className="flex-1">
+              <label className="text-xs text-gray-500">Name</label>
+              <input
+                type="text"
+                value={form.name}
+                onChange={e => setEditForm({ ...editForm, name: e.target.value })}
+                className="w-full border-b p-1 outline-none text-sm font-bold bg-transparent"
+              />
+            </div>
+          </div>
+          <div className="mb-2">
+            <label className="text-xs text-gray-500">Private Memo</label>
+            <input
+              type="text"
+              value={form.memo}
+              onChange={e => setEditForm({ ...editForm, memo: e.target.value })}
+              className="w-full border p-2 rounded text-sm mt-1 bg-gray-50"
+            />
+          </div>
+          <div>
+            <label className="text-xs text-gray-500">Persona</label>
+            <textarea
+              rows={4}
+              value={form.persona}
+              onChange={e => setEditForm({ ...editForm, persona: e.target.value })}
+              className="w-full border p-2 rounded text-sm mt-1 bg-gray-50 text-xs leading-relaxed font-mono"
+            />
+          </div>
+
+          {/* Minimax Config */}
+          <div className="mt-6 pt-6 border-t border-dashed border-purple-200">
+            <div className="flex items-center gap-2 mb-4">
+              <div className="w-8 h-8 rounded-full bg-purple-100 flex items-center justify-center text-lg">🗣️</div>
+              <div>
+                <h3 className="font-bold text-gray-800 text-sm">Minimax 语音配置</h3>
               </div>
-            )}
-            {showWorldBookModal && (
-              <div className="absolute inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-                <div className="bg-white w-full max-h-[70%] rounded-2xl flex flex-col shadow-2xl animate-scaleIn">
-                  <div className="p-4 border-b flex justify-between items-center"><h3 className="font-bold text-lg">📚 Select Lorebooks</h3><button onClick={() => setShowWorldBookModal(false)} className="text-gray-400">✕</button></div>
-                  <div className="flex-1 overflow-y-auto p-2">
-                    {worldBooks.map(wb => (
-                      <div key={wb.id} onClick={() => toggleWorldBook(wb.name)} className={`p-4 mb-2 rounded-xl border flex items-center justify-between cursor-pointer transition ${enabledBooks.includes(wb.name) ? 'bg-orange-50 border-orange-400' : 'bg-white border-gray-200'}`}>
-                        <span className="font-bold text-sm">{wb.name}</span>{enabledBooks.includes(wb.name) && <span className="text-orange-500 font-bold">✓</span>}
-                      </div>
-                    ))}
+            </div>
+            {/* 国内/国际版选择 */}
+            <div className="mb-4 bg-purple-50 p-3 rounded-xl">
+              <div className="flex gap-2">
+                <button
+                  onClick={() => {
+                    if (!globalSettings.minimax) globalSettings.minimax = { groupId: '', apiKey: '', model: 'speech-01' };
+                    globalSettings.minimax.serviceArea = 'domestic';
+                    setEditForm({ ...editForm });
+                  }}
+                  className={`flex-1 py-2 text-xs font-bold rounded-lg border-2 transition-all ${globalSettings.minimax?.serviceArea !== 'international' ? 'border-purple-500 bg-purple-500 text-white shadow-md' : 'border-gray-200 bg-white text-gray-400'}`}
+                >
+                  🇨🇳 国内版
+                </button>
+                <button
+                  onClick={() => {
+                    if (!globalSettings.minimax) globalSettings.minimax = { groupId: '', apiKey: '', model: 'speech-01' };
+                    globalSettings.minimax.serviceArea = 'international';
+                    setEditForm({ ...editForm });
+                  }}
+                  className={`flex-1 py-2 text-xs font-bold rounded-lg border-2 transition-all ${globalSettings.minimax?.serviceArea === 'international' ? 'border-blue-500 bg-blue-500 text-white shadow-md' : 'border-gray-200 bg-white text-gray-400'}`}
+                >
+                  🌏 国际版
+                </button>
+              </div>
+            </div>
+            {/* 模型选择 */}
+            <div className="mb-4">
+              <select
+                className="w-full border-2 border-gray-100 p-2.5 rounded-xl text-sm bg-white outline-none"
+                value={globalSettings.minimax?.model || "speech-01"}
+                onChange={(e) => {
+                  if (globalSettings.minimax) globalSettings.minimax.model = e.target.value;
+                  setEditForm({ ...editForm });
+                }}
+              >
+                <optgroup label="🔥 最新推荐">
+                  <option value="speech-2.6-hd">speech-2.6-hd</option>
+                  <option value="speech-2.6-turbo">speech-2.6-turbo</option>
+                </optgroup>
+                <optgroup label="👴 兼容旧版">
+                  <option value="speech-01-hd">speech-01-hd</option>
+                  <option value="speech-01">speech-01</option>
+                </optgroup>
+              </select>
+            </div>
+            {/* Voice ID 区域 */}
+            <div>
+              <div className="flex justify-between items-end mb-1">
+                <label className="text-xs font-bold text-gray-500 uppercase">Voice ID</label>
+                <button
+                  onClick={async () => {
+                    if (!globalSettings.minimax?.groupId) {
+                      alert("Key missing!");
+                      return;
+                    }
+                    try {
+                      await fetchMinimaxVoices(globalSettings.minimax.groupId, globalSettings.minimax.apiKey);
+                      setAvailableVoices(getBuiltInMinimaxVoices());
+                      alert("Voices loaded.");
+                    } catch (e) {
+                      alert("Failed.");
+                    }
+                  }}
+                  className="text-[10px] text-purple-600 underline"
+                >
+                  🔄 Fetch
+                </button>
+              </div>
+              <select
+                className="w-full border-2 border-gray-100 p-2.5 rounded-xl text-sm bg-white"
+                value={form.voiceId || ""}
+                onChange={e => setEditForm({ ...editForm, voiceId: e.target.value })}
+              >
+                <option value="">Select Voice from List</option>
+                {(availableVoices.length > 0 ? availableVoices : getBuiltInMinimaxVoices()).map(v => (
+                  <option key={v.voice_id} value={v.voice_id}>{v.name}</option>
+                ))}
+              </select>
+              <div className="mt-2">
+                <label className="text-xs text-gray-500">Or manually enter a custom Voice ID</label>
+                <input
+                  type="text"
+                  className="w-full border p-2 rounded text-sm mt-1 bg-gray-50"
+                  value={form.voiceId || ""}
+                  onChange={e => setEditForm({ ...editForm, voiceId: e.target.value })}
+                  placeholder="e.g. custom-voice-id"
+                />
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* 3. Memory & Lore */}
+        <section className="bg-white rounded-2xl p-4 shadow-sm border border-gray-200">
+          <h3 className="text-xs font-bold text-gray-400 uppercase mb-3">🧠 Memory Console</h3>
+          <div className="grid grid-cols-2 gap-4 mb-4">
+            <div>
+              <label className="text-[10px] text-gray-500 font-bold uppercase">Context Depth</label>
+              <input
+                type="number"
+                value={form.contextDepth || 20}
+                onChange={e => setEditForm({ ...editForm, contextDepth: parseInt(e.target.value) || 20 })}
+                className="w-full border p-2 rounded text-sm mt-1 bg-gray-50 text-center"
+              />
+            </div>
+            <div>
+              <label className="text-[10px] text-gray-500 font-bold uppercase">Auto-Sum Trigger</label>
+              <input
+                type="number"
+                value={form.summaryTrigger || 50}
+                onChange={e => setEditForm({ ...editForm, summaryTrigger: parseInt(e.target.value) || 50 })}
+                className="w-full border p-2 rounded text-sm mt-1 bg-gray-50 text-center"
+              />
+            </div>
+          </div>
+          <button
+            onClick={() => {
+              setView('chat');
+              setTimeout(() => setShowPersonaPanel(true), 100);
+            }}
+            className="w-full bg-yellow-100 text-yellow-800 py-3 rounded-xl font-bold border border-yellow-200 hover:bg-yellow-200 transition"
+          >
+            📝 查看 / 编辑 记忆便签墙
+          </button>
+        </section>
+
+        {/* World Lore */}
+        <section className="bg-white rounded-2xl p-4 shadow-sm border border-gray-200">
+          <h3 className="text-xs font-bold text-gray-400 uppercase mb-3">🌍 World Lore</h3>
+          <div className="flex justify-between items-center bg-gray-50 p-3 rounded-lg border border-gray-100">
+            <span className="text-sm text-gray-600">{enabledBooks.length} Books Active</span>
+            <button
+              onClick={() => setShowWorldBookModal(true)}
+              className="px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-xs font-bold text-blue-600 shadow-sm hover:bg-blue-50 transition"
+            >
+              Select
+            </button>
+          </div>
+        </section>
+
+        {/* 时区设置 */}
+        <section className="bg-white rounded-2xl p-4 shadow-sm border border-gray-200">
+          <h3 className="text-xs font-bold text-gray-400 uppercase mb-3">🕐 时区设置</h3>
+          <div className="mb-4">
+            <label className="text-sm font-bold text-gray-700 block mb-1">AI 角色的时区</label>
+            <select
+              className="w-full border-2 border-gray-100 p-2.5 rounded-xl text-sm bg-white"
+              value={form.timezone || "Asia/Seoul"}
+              onChange={e => setEditForm({ ...editForm, timezone: e.target.value })}
+            >
+              <option value="Asia/Shanghai">🇨🇳 中国大陆（北京时间）</option>
+              <option value="Asia/Hong_Kong">🇭🇰 香港</option>
+              <option value="Asia/Taipei">🇹🇼 台湾</option>
+              <option value="Asia/Seoul">🇰🇷 韩国（首尔）</option>
+              <option value="Asia/Tokyo">🇯🇵 日本（东京）</option>
+              <option value="Asia/Singapore">🇸🇬 新加坡</option>
+              <option value="Australia/Sydney">🇦🇺 澳大利亚（悉尼）</option>
+              <option value="Europe/London">🇬🇧 英国（伦敦）</option>
+              <option value="Europe/Paris">🇪🇺 中欧（巴黎/柏林）</option>
+              <option value="America/New_York">🇺🇸 美国东部（纽约）</option>
+              <option value="America/Los_Angeles">🇺🇸 美国西部（洛杉矶）</option>
+            </select>
+          </div>
+          <div className="mb-4">
+            <label className="text-sm font-bold text-gray-700 block mb-1">你的时区</label>
+            <select
+              className="w-full border-2 border-gray-100 p-2.5 rounded-xl text-sm bg-white"
+              value={globalSettings.userTimezone || Intl.DateTimeFormat().resolvedOptions().timeZone}
+              onChange={(e) => {
+                const newTz = e.target.value;
+                setGlobalSettings(prev => ({ ...prev, userTimezone: newTz }));
+              }}
+            >
+              <option value="Asia/Shanghai">🇨🇳 中国大陆（北京时间）</option>
+              <option value="Asia/Hong_Kong">🇭🇰 香港</option>
+              <option value="Asia/Taipei">🇹🇼 台湾</option>
+              <option value="Asia/Seoul">🇰🇷 韩国（首尔）</option>
+              <option value="Asia/Tokyo">🇯🇵 日本（东京）</option>
+              <option value="Asia/Singapore">🇸🇬 新加坡</option>
+              <option value="Australia/Sydney">🇦🇺 澳大利亚（悉尼）</option>
+              <option value="Europe/London">🇬🇧 英国（伦敦）</option>
+              <option value="Europe/Paris">🇪🇺 中欧（巴黎/柏林）</option>
+              <option value="America/New_York">🇺🇸 美国东部（纽约）</option>
+              <option value="America/Los_Angeles">🇺🇸 美国西部（洛杉矶）</option>
+            </select>
+          </div>
+          {activeContact && (
+            <div className="mt-2 p-3 bg-purple-50 rounded-lg text-sm text-center">
+              <div className="font-bold text-purple-700">
+                {(() => {
+                  const diff = getTimezoneOffsetDiff(
+                    globalSettings.userTimezone || Intl.DateTimeFormat().resolvedOptions().timeZone,
+                    form.timezone || activeContact.timezone
+                  );
+                  if (diff > 0) return `你 比 ta 快 ${diff} 小时`;
+                  if (diff < 0) return `你 比 ta 慢 ${Math.abs(diff)} 小时`;
+                  return "你们在同一时区～";
+                })()}
+              </div>
+            </div>
+          )}
+        </section>
+
+        {/* 主动消息配置 */}
+        <section className="bg-white rounded-2xl p-4 shadow-sm border border-gray-200">
+          <div className="flex items-center gap-2 mb-3">
+            <span className="text-lg">📩</span>
+            <h3 className="text-xs font-bold text-gray-400 uppercase">主动消息配置</h3>
+          </div>
+          <div className="flex justify-between items-center mb-4 p-2">
+            <span className="text-sm text-gray-700 font-bold">启用主动消息</span>
+            <Switch
+              onValueChange={(val) => setEditForm(prev => ({
+                ...prev,
+                proactiveConfig: { ...(form.proactiveConfig || {}), enabled: val }
+              }))}
+              value={form.proactiveConfig?.enabled || false}
+            />
+          </div>
+          {form.proactiveConfig?.enabled && (
+            <div className="space-y-4 pt-2 border-t border-gray-100 animate-slideDown">
+              <div className="mb-2 px-2">
+                <div className="flex justify-between items-center text-xs text-gray-500 mb-1">
+                  <span>最小间隔（分钟）</span>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="number"
+                      className="w-16 text-right font-bold text-blue-600 bg-gray-100 rounded-md p-1 outline-none focus:ring-2 focus:ring-blue-300"
+                      value={form.proactiveConfig?.minGapMinutes || 480}
+                      onChange={(e) => setEditForm(prev => ({
+                        ...prev,
+                        proactiveConfig: { ...(form.proactiveConfig || {}), minGapMinutes: parseInt(e.target.value) || 0 }
+                      }))}
+                    />
+                    <span>分钟</span>
                   </div>
                 </div>
               </div>
-            )}
-
-            {/* 主内容区：加 pt-20 防止被 Header 遮挡 */}
-            <div className="flex-1 overflow-y-auto p-4 pt-20 space-y-6">
-            {/* --- 下面是常规输入框 (头像/名字/描述) --- */}
-            <div className="flex items-center gap-4 mb-4">
-              <div className="w-16 h-16 rounded-full overflow-hidden relative border border-gray-100 bg-gray-50 group hover:shadow-md transition">
-                  <img src={editForm.userAvatar || form.userAvatar} className="w-full h-full object-cover" alt="user" />
-                  <input type="file" onChange={(e) => handleImageUpload(e, 'userAvatar')} className="absolute inset-0 opacity-0 cursor-pointer" title="Change Avatar" />
-              </div>
-              <div className="flex-1">
-                  <label className="text-xs text-gray-500 font-bold ml-1">My Name</label>
-                  <input
-                    type="text"
-                    value={editForm.userName !== undefined ? editForm.userName : form.userName}
-                    onChange={e => setEditForm({ ...editForm, userName: e.target.value })}
-                    className="w-full border-b p-2 outline-none text-sm font-bold bg-transparent focus:border-blue-500 transition"
-                    placeholder="User"
-                  />
-              </div>
-            </div>
-            <div>
-                <label className="text-xs text-gray-500 font-bold ml-1">My Description</label>
-                <textarea
-                    rows={3}
-                    value={editForm.userPersona !== undefined ? editForm.userPersona : form.userPersona}
-                    onChange={e => setEditForm({ ...editForm, userPersona: e.target.value })}
-                    className="w-full border p-3 rounded-xl text-sm mt-1 bg-gray-50 text-xs focus:bg-white focus:ring-2 focus:ring-blue-100 outline-none transition resize-none"
-                    placeholder="描述一下你自己，AI 会看到的..."
+              <div className="mb-2 px-2">
+                <div className="flex justify-between text-xs text-gray-500 mb-1">
+                  <span>每日上限（次）</span>
+                  <span className="font-bold text-blue-600">{form.proactiveConfig?.maxDaily || 2} / 天</span>
+                </div>
+                <Slider
+                  minimumValue={1}
+                  maximumValue={5}
+                  step={1}
+                  value={form.proactiveConfig?.maxDaily || 2}
+                  onValueChange={(val) => setEditForm(prev => ({
+                    ...prev,
+                    proactiveConfig: { ...(form.proactiveConfig || {}), maxDaily: val }
+                  }))}
                 />
-            </div>
-          </section>
-
-
-
-
-
-
-          {/* 2. 角色信息 */}
-          <section className="bg-white rounded-2xl p-4 shadow-sm">
-            <h3 className="text-xs font-bold text-gray-400 uppercase mb-3">🤖 Character Identity</h3>
-            <div className="flex items-center gap-4 mb-4">
-              <div className="w-16 h-16 rounded-full overflow-hidden relative border border-gray-100 bg-gray-50"><img src={form.avatar} className="w-full h-full object-cover" alt="character" /><input type="file" onChange={(e) => handleImageUpload(e, 'avatar')} className="absolute inset-0 opacity-0 cursor-pointer" /></div>
-              <div className="flex-1"><label className="text-xs text-gray-500">Name</label><input type="text" value={form.name} onChange={e => setEditForm({ ...editForm, name: e.target.value })} className="w-full border-b p-1 outline-none text-sm font-bold bg-transparent" /></div>
-            </div>
-            <div className="mb-2"><label className="text-xs text-gray-500">Private Memo</label><input type="text" value={form.memo} onChange={e => setEditForm({ ...editForm, memo: e.target.value })} className="w-full border p-2 rounded text-sm mt-1 bg-gray-50" /></div>
-            <div><label className="text-xs text-gray-500">Persona</label><textarea rows={4} value={form.persona} onChange={e => setEditForm({ ...editForm, persona: e.target.value })} className="w-full border p-2 rounded text-sm mt-1 bg-gray-50 text-xs leading-relaxed font-mono" /></div>
-            {/* Minimax Config */}
-            <div className="mt-6 pt-6 border-t border-dashed border-purple-200">
-              <div className="flex items-center gap-2 mb-4"><div className="w-8 h-8 rounded-full bg-purple-100 flex items-center justify-center text-lg">🗣️</div><div><h3 className="font-bold text-gray-800 text-sm">Minimax 语音配置</h3></div></div>
-              {/* 国内/国际版选择 */}
-              <div className="mb-4 bg-purple-50 p-3 rounded-xl">
-                <div className="flex gap-2">
-                  <button onClick={() => { if (!globalSettings.minimax) globalSettings.minimax = { groupId: '', apiKey: '', model: 'speech-01' }; globalSettings.minimax.serviceArea = 'domestic'; setEditForm({ ...editForm }); }} className={`flex-1 py-2 text-xs font-bold rounded-lg border-2 transition-all ${globalSettings.minimax?.serviceArea !== 'international' ? 'border-purple-500 bg-purple-500 text-white shadow-md' : 'border-gray-200 bg-white text-gray-400'}`}>🇨🇳 国内版</button>
-                  <button onClick={() => { if (!globalSettings.minimax) globalSettings.minimax = { groupId: '', apiKey: '', model: 'speech-01' }; globalSettings.minimax.serviceArea = 'international'; setEditForm({ ...editForm }); }} className={`flex-1 py-2 text-xs font-bold rounded-lg border-2 transition-all ${globalSettings.minimax?.serviceArea === 'international' ? 'border-blue-500 bg-blue-500 text-white shadow-md' : 'border-gray-200 bg-white text-gray-400'}`}>🌏 国际版</button>
-                </div>
               </div>
-              {/* 模型选择 */}
-              <div className="mb-4">
-                <select className="w-full border-2 border-gray-100 p-2.5 rounded-xl text-sm bg-white outline-none" value={globalSettings.minimax?.model || "speech-01"} onChange={(e) => { if (globalSettings.minimax) globalSettings.minimax.model = e.target.value; setEditForm({ ...editForm }); }}>
-                  <optgroup label="🔥 最新推荐"><option value="speech-2.6-hd">speech-2.6-hd</option><option value="speech-2.6-turbo">speech-2.6-turbo</option></optgroup>
-                  <optgroup label="👴 兼容旧版"><option value="speech-01-hd">speech-01-hd</option><option value="speech-01">speech-01</option></optgroup>
-                </select>
-              </div>
-              {/* ★★★ 这里是修正后的 Voice ID 区域 ★★★ */}
-              <div>
-                <div className="flex justify-between items-end mb-1">
-                  <label className="text-xs font-bold text-gray-500 uppercase">Voice ID</label>
-                  <button onClick={async () => { if (!globalSettings.minimax?.groupId) { alert("Key missing!"); return; } try { await fetchMinimaxVoices(globalSettings.minimax.groupId, globalSettings.minimax.apiKey); setAvailableVoices(getBuiltInMinimaxVoices()); alert("Voices loaded."); } catch (e) { alert("Failed."); } }} className="text-[10px] text-purple-600 underline">🔄 Fetch</button>
-                </div>
-                {/* 1. 保留了带 Fetch 功能的下拉框 */}
-                <select className="w-full border-2 border-gray-100 p-2.5 rounded-xl text-sm bg-white" value={form.voiceId || ""} onChange={e => setEditForm({ ...editForm, voiceId: e.target.value })}>
-                  <option value="">Select Voice from List</option>
-                  {(availableVoices.length > 0 ? availableVoices : getBuiltInMinimaxVoices()).map(v => (<option key={v.voice_id} value={v.voice_id}>{v.name}</option>))}
-                </select>
-                {/* 2. 将自定义输入框合并到这里，作为补充选项 */}
-                <div className="mt-2">
-                  <label className="text-xs text-gray-500">Or manually enter a custom Voice ID</label>
-                  <input type="text" className="w-full border p-2 rounded text-sm mt-1 bg-gray-50" value={form.voiceId || ""} onChange={e => setEditForm({ ...editForm, voiceId: e.target.value })} placeholder="e.g. custom-voice-id" />
-                </div>
-              </div>
+              <p className="text-[10px] text-gray-400 mt-4 text-center bg-gray-50 p-2 rounded-lg">
+                AI 将根据当前状态和聊天历史，自己决定说什么～
+              </p>
             </div>
-          </section>
+          )}
+        </section>
 
-
-
-
-
-
-
-          {/* 3. Memory & Lore */}
-          <section className="bg-white rounded-2xl p-4 shadow-sm border border-gray-200">
-            <h3 className="text-xs font-bold text-gray-400 uppercase mb-3">🧠 Memory Console</h3>
-            <div className="grid grid-cols-2 gap-4 mb-4">
-              <div><label className="text-[10px] text-gray-500 font-bold uppercase">Context Depth</label><input type="number" value={form.contextDepth || 20} onChange={e => setEditForm({ ...editForm, contextDepth: parseInt(e.target.value) || 20 })} className="w-full border p-2 rounded text-sm mt-1 bg-gray-50 text-center" /></div>
-              <div><label className="text-[10px] text-gray-500 font-bold uppercase">Auto-Sum Trigger</label><input type="number" value={form.summaryTrigger || 50} onChange={e => setEditForm({ ...editForm, summaryTrigger: parseInt(e.target.value) || 50 })} className="w-full border p-2 rounded text-sm mt-1 bg-gray-50 text-center" /></div>
-            </div>
-            <button
-    onClick={() => {
-        // 先关闭设置页回到聊天
-        setView('chat');
-        // 稍微延迟一下打开面板，或者你需要把 showPersonaPanel 的控制权提到父级
-        // 这里最简单的办法是：我们在 ChatApp 内部加一个状态来控制 "初始打开面板"
-        // 但为了不改动太大，我们可以直接这样：
-        setTimeout(() => setShowPersonaPanel(true), 100);
-    }}
-    className="w-full bg-yellow-100 text-yellow-800 py-3 rounded-xl font-bold border border-yellow-200 hover:bg-yellow-200 transition"
->
-    📝 查看 / 编辑 记忆便签墙
-</button>
-          </section>
-          <section className="bg-white rounded-2xl p-4 shadow-sm border border-gray-200">
-            <h3 className="text-xs font-bold text-gray-400 uppercase mb-3">🌍 World Lore</h3>
-            <div className="flex justify-between items-center bg-gray-50 p-3 rounded-lg border border-gray-100">
-              <span className="text-sm text-gray-600">{enabledBooks.length} Books Active</span>
-              <button 
-                onClick={() => setShowWorldBookModal(true)} 
-                className="px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-xs font-bold text-blue-600 shadow-sm hover:bg-blue-50 transition"
-              >
-                Select
-              </button>
-            </div>
-          </section>
-          {/* ★★★ 全新整合的时区设置卡片 ★★★ */}
-          <section className="bg-white rounded-2xl p-4 shadow-sm border border-gray-200">
-            <h3 className="text-xs font-bold text-gray-400 uppercase mb-3">🕐 时区设置</h3>
-            {/* 1. 角色时区 */}
-            <div className="mb-4">
-              <label className="text-sm font-bold text-gray-700 block mb-1">AI 角色的时区</label>
+        {/* 外观定制 */}
+        <section className="bg-white rounded-2xl p-4 shadow-sm border border-gray-200">
+          <h3 className="text-xs font-bold text-gray-400 uppercase mb-3">🎨 Appearance Customization</h3>
+          <div className="bg-gray-50 p-3 rounded-xl border border-gray-200 mb-4">
+            <label className="text-[10px] text-gray-500 font-bold uppercase block mb-2">Theme Presets</label>
+            <div className="flex gap-2 mb-2">
               <select
-                className="w-full border-2 border-gray-100 p-2.5 rounded-xl text-sm bg-white"
-                value={form.timezone || "Asia/Seoul"}
-                onChange={e => setEditForm({ ...editForm, timezone: e.target.value })}
+                className="flex-1 p-2 rounded-lg border text-sm outline-none bg-white"
+                value={selectedPresetId}
+                onChange={(e) => handleLoadPreset(e.target.value)}
               >
-                <option value="Asia/Shanghai">🇨🇳 中国大陆（北京时间）</option>
-                <option value="Asia/Hong_Kong">🇭🇰 香港</option>
-                <option value="Asia/Taipei">🇹🇼 台湾</option>
-                <option value="Asia/Seoul">🇰🇷 韩国（首尔）</option>
-                <option value="Asia/Tokyo">🇯🇵 日本（东京）</option>
-                <option value="Asia/Singapore">🇸🇬 新加坡</option>
-                <option value="Australia/Sydney">🇦🇺 澳大利亚（悉尼）</option>
-                <option value="Europe/London">🇬🇧 英国（伦敦）</option>
-                <option value="Europe/Paris">🇪🇺 中欧（巴黎/柏林）</option>
-                <option value="America/New_York">🇺🇸 美国东部（纽约）</option>
-                <option value="America/Los_Angeles">🇺🇸 美国西部（洛杉矶）</option>
+                <option value="">-- Load a Preset --</option>
+                {globalSettings.themePresets?.map(p => (
+                  <option key={p.id} value={p.id}>{p.name}</option>
+                ))}
               </select>
+              <button onClick={handleDeletePreset} className="bg-red-100 text-red-500 px-3 rounded-lg font-bold hover:bg-red-200">Del</button>
             </div>
-            {/* 2. 你的时区 */}
-            <div className="mb-4">
-              <label className="text-sm font-bold text-gray-700 block mb-1">你的时区</label>
-              <select
-                className="w-full border-2 border-gray-100 p-2.5 rounded-xl text-sm bg-white"
-                value={globalSettings.userTimezone || Intl.DateTimeFormat().resolvedOptions().timeZone}
-                onChange={(e) => {
-                  const newTz = e.target.value;
-                  setGlobalSettings(prev => ({ ...prev, userTimezone: newTz }));
-                }}
-              >
-                <option value="Asia/Shanghai">🇨🇳 中国大陆（北京时间）</option>
-                <option value="Asia/Hong_Kong">🇭🇰 香港</option>
-                <option value="Asia/Taipei">🇹🇼 台湾</option>
-                <option value="Asia/Seoul">🇰🇷 韩国（首尔）</option>
-                <option value="Asia/Tokyo">🇯🇵 日本（东京）</option>
-                <option value="Asia/Singapore">🇸🇬 新加坡</option>
-                <option value="Australia/Sydney">🇦🇺 澳大利亚（悉尼）</option>
-                <option value="Europe/London">🇬🇧 英国（伦敦）</option>
-                <option value="Europe/Paris">🇪🇺 中欧（巴黎/柏林）</option>
-                <option value="America/New_York">🇺🇸 美国东部（纽约）</option>
-                <option value="America/Los_Angeles">🇺🇸 美国西部（洛杉矶）</option>
-              </select>
-            </div>
-            {/* 3. 时差对比显示 */}
-            {activeContact && (
-              <div className="mt-2 p-3 bg-purple-50 rounded-lg text-sm text-center">
-                <div className="font-bold text-purple-700">
-                  {(() => {
-                    const diff = getTimezoneOffsetDiff(
-                      globalSettings.userTimezone || Intl.DateTimeFormat().resolvedOptions().timeZone,
-                      form.timezone || activeContact.timezone // 优先使用表单里正在编辑的值
-                    );
-                    if (diff > 0) return `你 比 ta 快 ${diff} 小时`;
-                    if (diff < 0) return `你 比 ta 慢 ${Math.abs(diff)} 小时`;
-                    return "你们在同一时区～";
-                  })()}
-                </div>
-              </div>
-            )}
-          </section>
-
-
-
-
-
-
-
-
-{/* ★★★ 最终版：主动消息配置面板 (无模板，带图标) ★★★ */}
-<section className="bg-white rounded-2xl p-4 shadow-sm border border-gray-200">
-  <div className="flex items-center gap-2 mb-3">
-      <span className="text-lg">📩</span>
-      <h3 className="text-xs font-bold text-gray-400 uppercase">主动消息配置</h3>
-  </div>
-  
-  <div className="flex justify-between items-center mb-4 p-2">
-    <span className="text-sm text-gray-700 font-bold">启用主动消息</span>
-    <Switch
-      onValueChange={(val) => setEditForm(prev => ({
-        ...prev,
-        proactiveConfig: { ...(form.proactiveConfig as object), enabled: val }
-      }))}
-      value={form.proactiveConfig?.enabled || false}
-    />
-  </div>
-
-  {form.proactiveConfig?.enabled && (
-    <div className="space-y-4 pt-2 border-t border-gray-100 animate-slideDown">
-      
-      {/* 最小间隔输入框 */}
-      <div className="mb-2 px-2">
-        <div className="flex justify-between items-center text-xs text-gray-500 mb-1">
-          <span>最小间隔（分钟）</span>
-          <div className="flex items-center gap-2">
-            <input 
-              type="number"
-              className="w-16 text-right font-bold text-blue-600 bg-gray-100 rounded-md p-1 outline-none focus:ring-2 focus:ring-blue-300"
-              value={form.proactiveConfig?.minGapMinutes || 480}
-              onChange={(e) => setEditForm(prev => ({
-                ...prev,
-                proactiveConfig: { ...(form.proactiveConfig as object), minGapMinutes: parseInt(e.target.value) || 0 }
-              }))}
-            />
-            <span>分钟</span>
-          </div>
-        </div>
-      </div>
-
-      {/* 每日上限滑块 */}
-      <div className="mb-2 px-2">
-        <div className="flex justify-between text-xs text-gray-500 mb-1">
-          <span>每日上限（次）</span>
-          <span className="font-bold text-blue-600">{form.proactiveConfig?.maxDaily || 2} / 天</span>
-        </div>
-        <Slider
-          minimumValue={1}
-          maximumValue={5}
-          step={1}
-          value={form.proactiveConfig?.maxDaily || 2}
-          onValueChange={(val) => setEditForm(prev => ({
-            ...prev,
-            proactiveConfig: { ...(form.proactiveConfig as object), maxDaily: val }
-          }))}
-        />
-      </div>
-
-      {/* 说明文字 */}
-      <p className="text-[10px] text-gray-400 mt-4 text-center bg-gray-50 p-2 rounded-lg">
-          AI 将根据当前状态和聊天历史，自己决定说什么～
-      </p>
-
-    </div>
-  )}
-</section>
-
-
-          {/* ★★★ 4. 外观定制系统 (CSS + 预设) ★★★ */}
-          <section className="bg-white rounded-2xl p-4 shadow-sm border border-gray-200">
-            <h3 className="text-xs font-bold text-gray-400 uppercase mb-3">🎨 Appearance Customization</h3>
-            {/* 预设管理栏 */}
-            <div className="bg-gray-50 p-3 rounded-xl border border-gray-200 mb-4">
-              <label className="text-[10px] text-gray-500 font-bold uppercase block mb-2">Theme Presets</label>
-              <div className="flex gap-2 mb-2">
-                <select
-                  className="flex-1 p-2 rounded-lg border text-sm outline-none bg-white"
-                  value={selectedPresetId}
-                  onChange={(e) => handleLoadPreset(e.target.value)}
-                >
-                  <option value="">-- Load a Preset --</option>
-                  {globalSettings.themePresets?.map(p => (
-                    <option key={p.id} value={p.id}>{p.name}</option>
-                  ))}
-                </select>
-                <button onClick={handleDeletePreset} className="bg-red-100 text-red-500 px-3 rounded-lg font-bold hover:bg-red-200">Del</button>
-              </div>
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  placeholder="New Preset Name"
-                  className="flex-1 p-2 rounded-lg border text-sm outline-none"
-                  value={presetName}
-                  onChange={e => setPresetName(e.target.value)}
-                />
-                <button onClick={handleSavePreset} className="bg-green-100 text-green-600 px-3 rounded-lg font-bold text-sm hover:bg-green-200">Save</button>
-              </div>
-            </div>
-            {/* CSS 编辑器 (核心功能) */}
-            <div className="mb-4">
-              <div className="flex justify-between items-end mb-1">
-                <label className="text-xs font-bold text-gray-400">Custom CSS Code</label>
-                <button onClick={() => setEditForm({ ...editForm, customCSS: "" })} className="text-[10px] text-gray-400 underline">Reset</button>
-              </div>
-              <textarea
-                className="w-full h-64 bg-gray-800 text-green-400 font-mono text-[11px] p-3 rounded-xl outline-none resize-none leading-relaxed"
-                placeholder="/* Paste your CSS here... */&#10;.message-wrapper { ... }"
-                value={editForm.customCSS || form.customCSS || ""}
-                onChange={(e) => setEditForm({ ...editForm, customCSS: e.target.value })}
-                spellCheck={false}
+            <div className="flex gap-2">
+              <input
+                type="text"
+                placeholder="New Preset Name"
+                className="flex-1 p-2 rounded-lg border text-sm outline-none"
+                value={presetName}
+                onChange={e => setPresetName(e.target.value)}
               />
+              <button onClick={handleSavePreset} className="bg-green-100 text-green-600 px-3 rounded-lg font-bold text-sm hover:bg-green-200">Save</button>
             </div>
-            {/* 背景图 */}
-            <div>
-              <label className="text-xs font-bold text-gray-400 uppercase mb-1 block">Chat Background URL</label>
-              <div className="flex gap-2">
-                <input type="text" placeholder="https://..." className="flex-1 border p-2 rounded-lg text-xs outline-none" value={editForm.chatBackground || form.chatBackground || ""} onChange={(e) => setEditForm({ ...editForm, chatBackground: e.target.value })} />
-                <label className="bg-gray-100 border px-3 py-2 rounded-lg text-xs cursor-pointer hover:bg-gray-200">Upload<input type="file" className="hidden" onChange={(e) => handleImageUpload(e, 'chatBackground')} /></label>
-              </div>
-            </div>
-          </section>
-          {/* 5. 绿色保存按钮 */}
-          <button onClick={saveSettings} className="w-full bg-green-500 text-white py-3 rounded-xl font-bold shadow-lg active:scale-95 transition">
-            💾 Save All Changes
-          </button>
-          {/* 6. 危险区域 (独立在最底部！) */}
-          <div className="mt-auto pt-10 pb-4">
-            <section className="bg-red-50 rounded-2xl p-4 border border-red-100 text-center">
-              <h3 className="text-xs font-bold text-red-400 uppercase mb-3">Danger Zone</h3>
-              <button
-                onClick={handleClearChat}
-                className="w-full bg-white text-red-500 py-3 rounded-xl font-bold border border-red-200 shadow-sm hover:bg-red-50 transition"
-              >
-                ⚠️ Delete All Chat History
-              </button>
-            </section>
           </div>
+          <div className="mb-4">
+            <div className="flex justify-between items-end mb-1">
+              <label className="text-xs font-bold text-gray-400">Custom CSS Code</label>
+              <button onClick={() => setEditForm({ ...editForm, customCSS: "" })} className="text-[10px] text-gray-400 underline">Reset</button>
+            </div>
+            <textarea
+              className="w-full h-64 bg-gray-800 text-green-400 font-mono text-[11px] p-3 rounded-xl outline-none resize-none leading-relaxed"
+              placeholder="/* Paste your CSS here... */&#10;.message-wrapper { ... }"
+              value={editForm.customCSS || form.customCSS || ""}
+              onChange={(e) => setEditForm({ ...editForm, customCSS: e.target.value })}
+              spellCheck={false}
+            />
+          </div>
+          <div>
+            <label className="text-xs font-bold text-gray-400 uppercase mb-1 block">Chat Background URL</label>
+            <div className="flex gap-2">
+              <input
+                type="text"
+                placeholder="https://..."
+                className="flex-1 border p-2 rounded-lg text-xs outline-none"
+                value={editForm.chatBackground || form.chatBackground || ""}
+                onChange={(e) => setEditForm({ ...editForm, chatBackground: e.target.value })}
+              />
+              <label className="bg-gray-100 border px-3 py-2 rounded-lg text-xs cursor-pointer hover:bg-gray-200">
+                Upload
+                <input type="file" className="hidden" onChange={(e) => handleImageUpload(e, 'chatBackground')} />
+              </label>
+            </div>
+          </div>
+        </section>
+
+        {/* 保存按钮 */}
+        <button onClick={saveSettings} className="w-full bg-green-500 text-white py-3 rounded-xl font-bold shadow-lg active:scale-95 transition">
+          💾 Save All Changes
+        </button>
+
+        {/* 危险区 */}
+        <div className="mt-auto pt-10 pb-4">
+          <section className="bg-red-50 rounded-2xl p-4 border border-red-100 text-center">
+            <h3 className="text-xs font-bold text-red-400 uppercase mb-3">Danger Zone</h3>
+            <button
+              onClick={handleClearChat}
+              className="w-full bg-white text-red-500 py-3 rounded-xl font-bold border border-red-200 shadow-sm hover:bg-red-50 transition"
+            >
+              ⚠️ Delete All Chat History
+            </button>
+          </section>
         </div>
       </div>
-    );
-  }
+    </div>
+  );
+}
 
   // ==================== 聊天界面 ====================
   if (activeContact) {
