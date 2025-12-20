@@ -3,11 +3,14 @@
 <head>
 <meta charset="UTF-8" />
 <!-- ==================== 关键：完美自适应 + 全屏填充 ==================== -->
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="hamburgerphone">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#111827">
+<!-- ========== 替换结束 ========== -->
 
 <title>hamburgerphone</title>
 <script src="https://cdn.tailwindcss.com"></script>
@@ -53,12 +56,15 @@ div.bg-white\/90.backdrop-blur.border-b.p-3 {
 /* ========== 精准修复结束 ========== */
 
 
-/* ========== 这是一组安全的 body 样式（只处理底部安全区） ========== */
+
+
+/* ========== 安全的 body 样式（只处理底部） ========== */
 body {
   font-family: 'Inter', sans-serif;
   margin: 0;
   padding: 0;
-  padding-bottom: env(safe-area-inset-bottom); /* 只留底部，避免输入框上移露白条 */
+  padding-bottom: env(safe-area-inset-bottom); /* 只留这一句处理底部 */
+  /* 不要加 padding-top！让内容顶到状态栏下面 */
 }
 /* ========== 结束 ========== */
 
