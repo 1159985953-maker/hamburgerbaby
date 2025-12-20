@@ -2,6 +2,7 @@
 // @ts-ignore
 import { GoogleGenerativeAI } from '@google/generative-ai';
 
+// 引入或定义 Message 类型，确保这里能读到 type 属性
 export interface ApiConfig {
   type: 'gemini' | 'openai';
   baseUrl?: string;
@@ -22,7 +23,7 @@ export const getCurrentConfig = (): ApiConfig | null => {
   return currentConfig;
 };
 
-// 自动拉取模型列表（支持反代）
+// 自动拉取模型列表（支持反代） - 保持原样
 export const fetchModels = async (
   type: 'gemini' | 'openai',
   baseUrl: string | undefined,
@@ -57,9 +58,11 @@ export const fetchModels = async (
   }
 };
 
-// 统一生成回复函数（支持 Gemini 官方 + 各种反代）
+// 统一生成回复函数
 export const generateResponse = async (
-  messages: { role: string; content: string }[],
+  // ★★★ 修改点1：把类型改为 any[]，因为我们需要读取 msg.type (text/image)，
+  // 而不仅仅是 role 和 content。这样兼容性最强，不会报错。
+  messages: any[], 
   config: ApiConfig
 ): Promise<string> => {
   const {
@@ -85,10 +88,41 @@ export const generateResponse = async (
         }
       });
 
-      const formatted = messages.map(m => ({
-        role: m.role === 'user' ? 'user' : 'model',
-        parts: [{ text: m.content }]
-      }));
+      // ★★★ 修改点2：Gemini 的图片处理逻辑 ★★★
+      const formatted = messages.map(m => {
+        const role = m.role === 'user' ? 'user' : 'model';
+
+        // 如果是图片消息
+        if (m.type === 'image') {
+          // m.content 是 "data:image/jpeg;base64,......"
+          // Gemini SDK 需要去掉头部，只留 base64 数据
+          try {
+            const base64Data = m.content.split(',')[1]; 
+            const mimeType = m.content.split(';')[0].split(':')[1] || 'image/jpeg';
+            return {
+              role,
+              parts: [
+                { text: "（用户发送了一张图片）" }, // 可选：给个文字提示
+                {
+                  inlineData: {
+                    mimeType: mimeType,
+                    data: base64Data
+                  }
+                }
+              ]
+            };
+          } catch (e) {
+            console.error("图片解析失败", e);
+            return { role, parts: [{ text: "[图片上传失败]" }] };
+          }
+        }
+
+        // 普通文字消息
+        return {
+          role,
+          parts: [{ text: m.content }]
+        };
+      });
 
       const result = await geminiModel.generateContent({ contents: formatted });
       return result.response.text() || '(无回复)';
@@ -102,6 +136,31 @@ export const generateResponse = async (
     throw new Error('OpenAI 模式必须填写 Base URL');
   }
 
+  // ★★★ 修改点3：OpenAI 的图片处理逻辑 (Vision 格式) ★★★
+  const apiMessages = messages.map(m => {
+    // 1. 如果是图片，构造多模态 content 数组
+    if (m.type === 'image') {
+      return {
+        role: m.role,
+        content: [
+          { type: "text", text: "（用户发送了一张图片）" },
+          {
+            type: "image_url",
+            image_url: {
+              url: m.content // OpenAI 兼容接口通常直接吃 Data URL
+            }
+          }
+        ]
+      };
+    }
+    
+    // 2. 普通文字，保持原样
+    return {
+      role: m.role,
+      content: m.content
+    };
+  });
+
   try {
     const res = await fetch(`${baseUrl.replace(/\/$/, '')}/chat/completions`, {
       method: 'POST',
@@ -111,7 +170,7 @@ export const generateResponse = async (
       },
       body: JSON.stringify({
         model,
-        messages,
+        messages: apiMessages, // 使用处理过包含图片的 messages
         temperature,
         max_tokens: maxTokens,
         top_p: topP
@@ -125,9 +184,21 @@ export const generateResponse = async (
 
     const data = await res.json();
 
-    // 智能解析多种返回格式（兼容大部分 Gemini 反代）
-    if (data.choices && data.choices[0]?.message?.content) {
-      return data.choices[0].message.content;
+    // 智能解析多种返回格式（保持你原来的逻辑完全不变）
+   // ★★★ 增强版解析逻辑 ★★★
+    if (data.choices && data.choices.length > 0) {
+      const msg = data.choices[0].message;
+      const content = msg.content;
+      const reasoning = msg.reasoning_content; // 兼容深度思考模型
+
+      // 1. 如果有内容，直接返回
+      if (content && content.length > 0) return content;
+      
+      // 2. 如果只有思考过程（针对某些深度思考模型）
+      if (reasoning && reasoning.length > 0) return `(思考中...)\n${reasoning}`;
+
+      // 3. 如果内容是空字符串，且 token 为 0 (这就是你遇到的情况)
+      return "(AI 返回了空内容，请重roll)";
     }
 
     if (data.candidates && data.candidates[0]?.content?.parts?.[0]?.text) {
@@ -138,7 +209,7 @@ export const generateResponse = async (
     if (data.content) return data.content;
     if (data.response) return data.response;
 
-    // 兜底返回原始数据（调试用）
+    // 兜底返回原始数据
     return `(未知格式回复: ${JSON.stringify(data)})`;
   } catch (e: any) {
     return `(反代错误: ${e.message || '未知错误'})`;

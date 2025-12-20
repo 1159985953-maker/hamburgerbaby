@@ -1,50 +1,40 @@
-import React, { useState, useEffect } from 'react';
-import { useCharacterLife } from './hooks/useCharacterLife';
+import React, { useState, useEffect, useRef } from 'react';
 import ChatApp from './components/ChatApp';
 import CoupleSpace from './components/CoupleSpace';
 import SettingsApp from './components/SettingsApp';
 import WorldBookApp from './components/WorldBookApp';
 import WallpaperApp from './components/WallpaperApp';
-import { Contact, GlobalSettings, WorldBookCategory } from './types';
-import { generateResponse } from './services/apiService';
+import localforage from 'localforage';
+import { Contact, GlobalSettings, WorldBookCategory, Message } from './types';
 
+// ==================== 1. 辅助函数 (保持不变) ====================
 
 const sanitizeContact = (c: any): any => {
   const now = Date.now();
   return {
     ...c,
-    // 1. 补全 mood
     mood: c.mood || { current: "Content", energyLevel: 80, lastUpdate: now },
-    // 2. 补全情侣空间字段
     diaries: Array.isArray(c.diaries) ? c.diaries : [],
     questions: Array.isArray(c.questions) ? c.questions : [],
     letters: Array.isArray(c.letters) ? c.letters : [],
-    coupleSpaceUnlocked: c.coupleSpaceUnlocked === true, // 强制转布尔值
-    // 3. 补全基础信息
+    coupleSpaceUnlocked: c.coupleSpaceUnlocked === true,
     name: c.name || "Unknown Character",
     history: Array.isArray(c.history) ? c.history : [],
-    // 4. 补全其他可能为空的对象
     hef: c.hef || {},
     playlist: c.playlist || [],
   };
 };
-// ==================== 全局生命计算逻辑 (防弹版) ====================
+
 const calculateLifeUpdate = (rawContact: Contact): Contact => {
-    // ★★★ 第一步先清洗数据，防止 undefined ★★★
-    const contact = sanitizeContact(rawContact); 
-
+  const contact = sanitizeContact(rawContact);
   const now = Date.now();
-
-  // 2. ★★★ 核心修复：如果数据里没有 mood，就给它造一个默认的，防止白屏！ ★★★
   const safeMood = contact.mood || { current: "Content", energyLevel: 80, lastUpdate: now };
-
   const lastUpdate = safeMood.lastUpdate || now;
   const minutesPassed = (now - lastUpdate) / 60000;
 
   if (minutesPassed < 1) return contact;
 
-  // 获取角色当地时间
-  let currentHour = 12; // 默认中午
+  let currentHour = 12;
   try {
     const timeFormat = new Intl.DateTimeFormat('en-US', {
       timeZone: contact.timezone || "Asia/Seoul",
@@ -52,14 +42,10 @@ const calculateLifeUpdate = (rawContact: Contact): Contact => {
       hour12: false
     });
     currentHour = parseInt(timeFormat.format(new Date()));
-  } catch (e) {
-    // 如果时区设置错了，就忽略，防止报错
-  }
+  } catch (e) {}
 
-  // 能量变化逻辑
   let newEnergy = safeMood.energyLevel;
   let moodState = safeMood.current;
-
   const isSleepTime = currentHour >= 23 || currentHour < 7;
 
   if (isSleepTime) {
@@ -75,7 +61,7 @@ const calculateLifeUpdate = (rawContact: Contact): Contact => {
   return {
     ...contact,
     mood: {
-      ...safeMood, // 使用修复后的 mood
+      ...safeMood,
       current: moodState,
       energyLevel: parseFloat(newEnergy.toFixed(1)),
       lastUpdate: now
@@ -83,15 +69,13 @@ const calculateLifeUpdate = (rawContact: Contact): Contact => {
   };
 };
 
-// ========================================================
-// 初始默认角色数据，保持不变
 const INITIAL_CONTACTS: Contact[] = [
   {
     id: '1',
     created: Date.now(),
     name: "Aria",
     avatar: "https://picsum.photos/200",
-    persona: "Aria is a gentle but sometimes clingy artist. She loves painting and coffee. She gets lonely easily.",
+    persona: "Aria is a gentle but sometimes clingy artist.",
     memo: "My Artist GF",
     userName: "Darling",
     userAvatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=Felix",
@@ -113,25 +97,7 @@ const INITIAL_CONTACTS: Contact[] = [
     enabledWorldBooks: [],
     voiceId: "female-shaonv-jingpin",
     playlist: [],
-    hef: {
-      CORE_DRIVES: { primary_motive: 'Connection', values: ['Kindness', 'Art', 'Intimacy'] },
-      EMOTIONAL_DYNAMICS: { baseline_mood: 'Calm', resilience: 7 },
-      RELATIONAL_MASKS: { default_style: 'Gentle', conflict_style: 'Avoidant' },
-      CULTURE_SCRIPTS: {
-        core_values: ['Honesty', 'Creativity', 'Emotional Depth'],
-        pet_phrases: ['嗯...', '真的吗？', '有点想你了呢']
-      },
-      INDIVIDUAL_VARIATION: {
-        personality_big5: {
-          openness: 8,
-          conscientiousness: 6,
-          extraversion: 7,
-          agreeableness: 9,
-          neuroticism: 5
-        },
-        speech_style: '温柔、偶尔撒娇、喜欢用省略号表达犹豫'
-      }
-    },
+    hef: {},
     affectionScore: 60,
     relationshipStatus: 'Close Friend',
     aiDND: { enabled: false, until: 0 },
@@ -143,243 +109,413 @@ const INITIAL_CONTACTS: Contact[] = [
   }
 ];
 
+// ==================== 2. App 组件主体 ====================
+
 const App: React.FC = () => {
-  // --- OS State ---
+
+
+  // ★★★ 全局通知状态 (整合了两种场景) ★★★
+const [globalNotification, setGlobalNotification] = useState<{
+  type: 'proactive_thinking' | 'new_message';
+  contactId: string;
+  name: string;
+  avatar: string;
+  content?: string;
+} | null>(null);
+
+// ★★★ 用于跨组件通信的跳转指令 ★★★
+const [jumpToContactId, setJumpToContactId] = useState<string | null>(null);
   const [currentApp, setCurrentApp] = useState<'home' | 'chat' | 'coupleSpace' | 'settings' | 'worldbook' | 'wallpaper'>('home');
+  const [contacts, setContacts] = useState<Contact[]>([]);
+  const [isLoaded, setIsLoaded] = useState(false);
+  
 
-  // === 数据持久化部分 (安全的版本) ===
-  const [contacts, setContacts] = useState<Contact[]>(() => {
-        try {
-            const saved = localStorage.getItem('character-app-contacts');
-            if (saved) {
-                const parsed = JSON.parse(saved);
-                // ★★★ 关键：读取时清洗每一个角色 ★★★
-                return parsed.map(sanitizeContact);
-            }
-        } catch (error) {
-            console.error("读取 contacts 失败", error);
+
+
+
+  
+  // ========== 这是新的、清理好的 "初始化读取" 代码，请完整复制并覆盖 ==========
+  // 1. 初始化读取 localforage
+  useEffect(() => {
+    const loadData = async () => {
+      try {
+        const savedContacts = await localforage.getItem<Contact[]>('contacts');
+        if (savedContacts && savedContacts.length > 0) {
+          setContacts(savedContacts);
+        } else {
+          // 如果没有保存的角色，就加载一个初始角色，防止白屏
+          setContacts(INITIAL_CONTACTS);
         }
-        return INITIAL_CONTACTS;
-    });
-  useEffect(() => {
-    if (contacts && contacts.length > 0) {
-      localStorage.setItem('character-app-contacts', JSON.stringify(contacts));
-    }
-  }, [contacts]);
-
-  const [worldBooks, setWorldBooks] = useState<WorldBookCategory[]>(() => {
-    const saved = localStorage.getItem('character-app-worldbooks');
-    return saved ? JSON.parse(saved) : [];
-  });
-  useEffect(() => {
-    localStorage.setItem('character-app-worldbooks', JSON.stringify(worldBooks));
-  }, [worldBooks]);
-
-  const [globalSettings, setGlobalSettings] = useState<GlobalSettings>(() => {
-    const initialSettings: GlobalSettings = {
-wallpaper: "#f9fafb",  // 浅灰色背景
-      apiPresets: [], activePresetId: "",
-      systemTimezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-      userTimezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-      appearance: { bubbleColorUser: '', bubbleColorAI: '', fontSize: 'text-sm', showStatusBar: true },
-      themePresets: []
+        
+        const savedSettings = await localforage.getItem<GlobalSettings>('globalSettings');
+        if (savedSettings) {
+          setGlobalSettings(savedSettings);
+        }
+        
+        const savedBooks = await localforage.getItem<WorldBookCategory[]>('worldBooks');
+        if (savedBooks) {
+          setWorldBooks(savedBooks);
+        }
+      } catch (err) {
+        console.error("读取数据库失败:", err);
+        // 如果读取失败，也加载初始角色
+        setContacts(INITIAL_CONTACTS);
+      } finally {
+        setIsLoaded(true);
+      }
     };
-    const saved = localStorage.getItem('character-app-global-settings');
-    return saved ? { ...initialSettings, ...JSON.parse(saved) } : initialSettings;
-  });
+    loadData();
+  }, []);
+// ======================================================================
+
+
+
+
+
+
+
+
+
+
+
+
+  // 3. WorldBooks State
+  const [worldBooks, setWorldBooks] = useState<WorldBookCategory[]>([]);
   useEffect(() => {
-    localStorage.setItem('character-app-global-settings', JSON.stringify(globalSettings));
-  }, [globalSettings]);
+    if (isLoaded) {
+      localforage.setItem('worldBooks', worldBooks).catch(console.error);
+    }
+  }, [worldBooks, isLoaded]);
 
-  // === 修复白屏的核心：启动安全检查 ===
-  if (!contacts || contacts.length === 0) {
-    return (
-      <div className="w-full h-full flex flex-col items-center justify-center bg-gray-800 text-white p-4 text-center">
-        <h1 className="text-2xl font-bold mb-4">糟糕！</h1>
-        <p className="mb-4">没有找到任何角色数据。</p>
-        <button
-          onClick={() => {
-            setContacts(INITIAL_CONTACTS);
-            window.location.reload();
-          }}
-          className="px-4 py-2 bg-blue-500 rounded hover:bg-blue-600"
-        >
-          恢复初始角色
-        </button>
-      </div>
-    );
-  }
+  // 4. GlobalSettings State
+  const [globalSettings, setGlobalSettings] = useState<GlobalSettings>({
+    wallpaper: "#f9fafb",
+    apiPresets: [], activePresetId: "",
+    systemTimezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+    userTimezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+    appearance: { bubbleColorUser: '', bubbleColorAI: '', fontSize: 'text-sm', showStatusBar: true },
+    themePresets: []
+  });
+  
+  useEffect(() => {
+    if (isLoaded) {
+      localforage.setItem('globalSettings', globalSettings).catch(console.error);
+    }
+  }, [globalSettings, isLoaded]);
 
-  // ★★★ 全局生命维持系统 (放在 App 组件里面，替换原来的 useCharacterLife) ★★★
+
+  // 5. 生命维持系统 heartbeat
   useEffect(() => {
     const heartbeat = () => {
       setContacts(prev => prev.map(c => calculateLifeUpdate(c)));
     };
-    // 立即执行一次，然后每 60 秒执行一次
     heartbeat();
     const intervalId = setInterval(heartbeat, 60000);
     return () => clearInterval(intervalId);
   }, []);
 
-  // 辅助函数：更新第一个角色（用于兼容旧逻辑）
+
+// ========== 这是新的、修复好的 "全局主动消息监视器" 代码 ==========
+// ★★★ 全局主动消息监视器 (Watchdog for Scene A) ★★★
+      useEffect(() => {
+        const checkProactiveMessages = () => {
+          // ✅ 修复点：增加了 currentApp !== 'home' 的判断，只有在主屏幕才触发思考
+          if (globalNotification || !isLoaded || contacts.length === 0 || currentApp !== 'home') {
+            return;
+          }
+    
+          for (const contact of contacts) {
+            // ✅ 修复点：确保所有检查都使用正确的 `contact` 变量
+            if (!contact.proactiveConfig?.enabled || contact.aiDND?.enabled || (contact.affectionScore || 50) < 60) continue;
+            const now = Date.now();
+            const lastUserMsg = [...contact.history].reverse().find(m => m.role === 'user');
+            const gapMinutes = lastUserMsg ? Math.floor((now - lastUserMsg.timestamp) / 60000) : Infinity;
+            const minGap = contact.proactiveConfig?.minGapMinutes ?? 480;
+            if (gapMinutes < minGap) continue;
+            const today = new Date().toISOString().slice(0, 10);
+            const sentToday = contact.proactiveLastSent?.[today] || 0;
+            const maxDaily = contact.proactiveConfig?.maxDaily ?? 2;
+            if (sentToday >= maxDaily) continue;
+    
+            console.log(`[全局监视器] ✅ '${contact.name}' 触发了【主动聊天】！`);
+            
+            // ✨ 新功能：触发“正在思考”的全局通知 (你的需求 A)
+            setGlobalNotification({ type: 'proactive_thinking', contactId: contact.id, name: contact.name, avatar: contact.avatar });
+            // 触发一个后就停止，避免同时弹出多个
+            break; 
+          }
+        };
+    
+        const intervalId = setInterval(checkProactiveMessages, 15000); // 每15秒检查一次
+        return () => clearInterval(intervalId);
+    
+      }, [contacts, isLoaded, globalNotification, currentApp]); // 依赖项现在更准确
+
+
+
+  // 6. 辅助函数
   const updatePrimaryContact = (updater: (prev: Contact) => Contact) => {
     setContacts(prev => {
+      if (prev.length === 0) return prev;
       const updated = updater(prev[0]);
       return [updated, ...prev.slice(1)];
     });
   };
 
-  // ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
-  // === 你的 Home 界面渲染 (我发誓这次是您完整的、一行不少的代码！) ===
-  // ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
-  const renderHome = () => (
-    <div
-      className="h-full w-full bg-cover bg-center flex flex-col p-6 text-white relative animate-fadeIn transition-all duration-500"
-      style={{ backgroundImage: `url(${globalSettings.wallpaper})` }}
-    >
-      {/* Status Bar */}
-      <div className="flex justify-between text-xs font-medium mb-8 pt-2">
-        <span>{new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}</span>
-        <div className="flex gap-1">
-          <span>5G</span>
-          <span>🔋 100%</span>
-        </div>
-      </div>
-      {/* Time Widget */}
-      <div className="mb-12 text-center drop-shadow-md">
-        <h1 className="text-6xl font-light tracking-tighter">
-          {new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false })}
-        </h1>
-        <p className="text-sm font-medium opacity-90">
-          {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
-        </p>
-      </div>
-      {/* Apps Grid */}
-      <div className="grid grid-cols-4 gap-x-4 gap-y-8">
-        <div className="flex flex-col items-center gap-2 cursor-pointer group" onClick={() => setCurrentApp('chat')}>
-          <div className="w-14 h-14 bg-gradient-to-b from-green-400 to-green-600 rounded-2xl flex items-center justify-center text-3xl app-icon-shadow group-hover:scale-105 transition duration-300">💬</div>
-          <span className="text-[11px] font-medium text-shadow opacity-90">Chat</span>
-        </div>
-        <div className="flex flex-col items-center gap-2 cursor-pointer group" onClick={() => setCurrentApp('coupleSpace')}>
-          <div className="w-14 h-14 bg-gradient-to-b from-pink-400 to-pink-600 rounded-2xl flex items-center justify-center text-3xl app-icon-shadow group-hover:scale-105 transition duration-300">❤️</div>
-          <span className="text-[11px] font-medium text-shadow opacity-90">Couple</span>
-        </div>
-        <div className="flex flex-col items-center gap-2 cursor-pointer group" onClick={() => setCurrentApp('worldbook')}>
-          <div className="w-14 h-14 bg-gradient-to-b from-orange-400 to-orange-600 rounded-2xl flex items-center justify-center text-3xl app-icon-shadow group-hover:scale-105 transition duration-300">📕</div>
-          <span className="text-[11px] font-medium text-shadow opacity-90">Book</span>
-        </div>
-        <div className="flex flex-col items-center gap-2 cursor-pointer group opacity-90">
-          <div className="w-14 h-14 bg-white rounded-2xl flex items-center justify-center text-3xl app-icon-shadow group-hover:scale-105 transition duration-300">📖</div>
-          <span className="text-[11px] font-medium text-shadow opacity-90">Diary</span>
-        </div>
-        <div className="flex flex-col items-center gap-2 cursor-pointer group" onClick={() => setCurrentApp('wallpaper')}>
-          <div className="w-14 h-14 bg-gradient-to-b from-purple-400 to-indigo-600 rounded-2xl flex items-center justify-center text-3xl app-icon-shadow group-hover:scale-105 transition duration-300">🎨</div>
-          <span className="text-[11px] font-medium text-shadow opacity-90">Theme</span>
-        </div>
-        <div className="flex flex-col items-center gap-2 cursor-pointer group" onClick={() => setCurrentApp('settings')}>
-          <div className="w-14 h-14 bg-gray-700 rounded-2xl flex items-center justify-center text-3xl app-icon-shadow group-hover:scale-105 transition duration-300">⚙️</div>
-          <span className="text-[11px] font-medium text-shadow opacity-90">Settings</span>
-        </div>
-      </div>
-      {/* Dock Area */}
-      <div className="absolute bottom-6 left-4 right-4 h-20 bg-white/20 backdrop-blur-xl rounded-[2rem] flex items-center justify-around px-2 border border-white/10">
-        <div className="w-12 h-12 bg-green-500 rounded-2xl flex items-center justify-center text-2xl shadow-lg cursor-pointer hover:-translate-y-2 transition duration-300" onClick={() => setCurrentApp('chat')}>💬</div>
-        <div className="w-12 h-12 bg-blue-500 rounded-2xl flex items-center justify-center text-2xl shadow-lg cursor-pointer hover:-translate-y-2 transition duration-300">🌐</div>
-        <div className="w-12 h-12 bg-yellow-500 rounded-2xl flex items-center justify-center text-2xl shadow-lg cursor-pointer hover:-translate-y-2 transition duration-300">🎵</div>
-        <div className="w-12 h-12 bg-pink-500 rounded-2xl flex items-center justify-center text-2xl shadow-lg cursor-pointer hover:-translate-y-2 transition duration-300" onClick={() => setCurrentApp('coupleSpace')}>❤️</div>
-      </div>
-    </div>
-  );
+  // 7. 渲染桌面的函数 (已修复红点逻辑)
+  const renderHome = () => {
+    // 1. 先在这里算出总未读数
+    const totalUnreadBadge = contacts.reduce((sum, c) => sum + ((c as any).unread || 0), 0);
 
-  // === 你的主渲染逻辑 (完全不变！) ===
+    return (
+      <div
+        className="h-full w-full bg-cover bg-center flex flex-col p-6 text-white relative animate-fadeIn transition-all duration-500"
+        style={{ backgroundImage: `url(${globalSettings.wallpaper})` }}
+      >
+        <div className="flex justify-between text-xs font-medium mb-8 pt-2">
+          <span>{new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}</span>
+          <div className="flex gap-1"><span>5G</span><span>🔋 100%</span></div>
+        </div>
+        <div className="mb-12 text-center drop-shadow-md">
+          <h1 className="text-6xl font-light tracking-tighter">
+            {new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false })}
+          </h1>
+          <p className="text-sm font-medium opacity-90">
+            {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
+          </p>
+        </div>
+        
+        {/* 图标区域 */}
+        <div className="grid grid-cols-4 gap-x-4 gap-y-8">
+          
+          {/* 👇 聊天图标 (带红点) 👇 */}
+          <div className="flex flex-col items-center gap-2 cursor-pointer group relative" onClick={() => setCurrentApp('chat')}>
+            <div className="w-14 h-14 bg-gradient-to-b from-green-400 to-green-600 rounded-2xl flex items-center justify-center text-3xl app-icon-shadow group-hover:scale-105 transition duration-300">💬</div>
+             {/* 👇👇👇 这里是新加的红点代码 👇👇👇 */}
+          {contacts.reduce((sum, c) => sum + ((c as any).unread || 0), 0) > 0 && (
+            <div className="absolute top-0 right-2 bg-red-500 text-white text-[10px] font-bold px-1.5 h-5 min-w-[1.25rem] flex items-center justify-center rounded-full border-2 border-black/20 shadow-sm z-10">
+              {contacts.reduce((sum, c) => sum + ((c as any).unread || 0), 0) > 99 ? '99+' : contacts.reduce((sum, c) => sum + ((c as any).unread || 0), 0)}
+            </div>
+          )}
+          {/* 👆👆👆 红点代码结束 👆👆👆 */}
+       
+            <span className="text-[11px] font-medium text-shadow opacity-90">Chat</span>
+          </div>
+
+          <div className="flex flex-col items-center gap-2 cursor-pointer group" onClick={() => setCurrentApp('coupleSpace')}>
+            <div className="w-14 h-14 bg-gradient-to-b from-pink-400 to-pink-600 rounded-2xl flex items-center justify-center text-3xl app-icon-shadow group-hover:scale-105 transition duration-300">❤️</div>
+            <span className="text-[11px] font-medium text-shadow opacity-90">Couple</span>
+          </div>
+          <div className="flex flex-col items-center gap-2 cursor-pointer group" onClick={() => setCurrentApp('worldbook')}>
+            <div className="w-14 h-14 bg-gradient-to-b from-orange-400 to-orange-600 rounded-2xl flex items-center justify-center text-3xl app-icon-shadow group-hover:scale-105 transition duration-300">📕</div>
+            <span className="text-[11px] font-medium text-shadow opacity-90">Book</span>
+          </div>
+          <div className="flex flex-col items-center gap-2 cursor-pointer group opacity-90">
+            <div className="w-14 h-14 bg-white rounded-2xl flex items-center justify-center text-3xl app-icon-shadow group-hover:scale-105 transition duration-300">📖</div>
+            <span className="text-[11px] font-medium text-shadow opacity-90">Diary</span>
+          </div>
+          <div className="flex flex-col items-center gap-2 cursor-pointer group" onClick={() => setCurrentApp('wallpaper')}>
+            <div className="w-14 h-14 bg-gradient-to-b from-purple-400 to-indigo-600 rounded-2xl flex items-center justify-center text-3xl app-icon-shadow group-hover:scale-105 transition duration-300">🎨</div>
+            <span className="text-[11px] font-medium text-shadow opacity-90">Theme</span>
+          </div>
+          <div className="flex flex-col items-center gap-2 cursor-pointer group" onClick={() => setCurrentApp('settings')}>
+            <div className="w-14 h-14 bg-gray-700 rounded-2xl flex items-center justify-center text-3xl app-icon-shadow group-hover:scale-105 transition duration-300">⚙️</div>
+            <span className="text-[11px] font-medium text-shadow opacity-90">Settings</span>
+          </div>
+        </div>
+        <div className="absolute bottom-6 left-4 right-4 h-20 bg-white/20 backdrop-blur-xl rounded-[2rem] flex items-center justify-around px-2 border border-white/10">
+          <div className="w-12 h-12 bg-green-500 rounded-2xl flex items-center justify-center text-2xl shadow-lg cursor-pointer hover:-translate-y-2 transition duration-300" onClick={() => setCurrentApp('chat')}>💬</div>
+          <div className="w-12 h-12 bg-blue-500 rounded-2xl flex items-center justify-center text-2xl shadow-lg cursor-pointer hover:-translate-y-2 transition duration-300">🌐</div>
+          <div className="w-12 h-12 bg-yellow-500 rounded-2xl flex items-center justify-center text-2xl shadow-lg cursor-pointer hover:-translate-y-2 transition duration-300">🎵</div>
+          <div className="w-12 h-12 bg-pink-500 rounded-2xl flex items-center justify-center text-2xl shadow-lg cursor-pointer hover:-translate-y-2 transition duration-300" onClick={() => setCurrentApp('coupleSpace')}>❤️</div>
+        </div>
+      </div>
+    );
+  };
+
+  // 8. 白屏救援
+  if (isLoaded && contacts.length === 0) {
+    return (
+      <div className="h-screen w-screen bg-black flex flex-col items-center justify-center text-white p-6">
+        <h1 className="text-3xl font-bold mb-4">欢迎回来</h1>
+        <p className="mb-6 text-gray-400 text-center">似乎没有检测到角色数据，<br/>是否恢复初始状态？</p>
+        <button
+          onClick={() => {
+            setContacts(INITIAL_CONTACTS);
+            window.location.reload();
+          }}
+          className="px-6 py-3 bg-blue-600 rounded-full font-bold shadow-lg hover:bg-blue-500 transition mb-12"
+        >
+          🚀 开始新旅程
+        </button>
+        <div className="mt-8 border-t border-gray-800 pt-8 w-full max-w-xs text-center">
+          <p className="text-xs text-red-500/50 mb-2">DEBUG ZONE</p>
+          <button
+            onClick={async () => {
+              if (confirm("⚠️ 确定要彻底清空所有数据并重置吗？")) {
+                try {
+                  await localforage.clear();
+                  localStorage.clear();
+                  alert("已重置，即将重启...");
+                  window.location.reload();
+                } catch (e) {
+                  alert("重置失败");
+                }
+              }
+            }}
+            className="text-xs text-red-500 underline hover:text-red-400"
+          >
+            强制清空所有缓存 (救砖)
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+// 9. 主渲染 JSX
   return (
-    <div className="w-full h-full sm:w-[375px] sm:h-[812px] bg-black sm:rounded-[3rem] sm:border-[8px] sm:border-gray-800 overflow-hidden shadow-2xl relative ring-4 ring-gray-900/50">
-      <div className="absolute top-0 left-1/2 transform -translate-x-1/2 w-[120px] h-[35px] bg-black rounded-b-3xl z-50 hidden sm:block pointer-events-none transition-all duration-300"></div>
+    <> {/* <--- 在这里加上开始标签 */}
 
-      {currentApp === 'home' && renderHome()}
-
-      {/* 修复点 1：把 livingPrimaryContact 删掉，直接判断 contacts 长度 */}
-      {currentApp === 'chat' && contacts.length > 0 && (
-        <ChatApp
-          contacts={contacts}  // 直接传活人列表
-          setContacts={setContacts}
-          globalSettings={globalSettings}
-          setGlobalSettings={setGlobalSettings}
-          worldBooks={worldBooks}
-          setWorldBooks={setWorldBooks}
-          onExit={() => setCurrentApp('home')}
-        />
+      {/* ★★★ 全局通知中心 UI ★★★ */}
+      {globalNotification && (
+        <div 
+          onClick={() => {
+            setJumpToContactId(globalNotification.contactId);
+            setCurrentApp('chat');
+            setGlobalNotification(null);
+          }} 
+          className="absolute top-12 left-2 right-2 z-[9998] rounded-2xl p-3 shadow-xl flex items-center gap-3 cursor-pointer animate-slideDown border"
+          style={{
+            backgroundColor: globalNotification.type === 'proactive_thinking' ? '#3b82f6' : 'rgba(255,255,255,0.95)',
+            borderColor: globalNotification.type === 'proactive_thinking' ? '#2563eb' : '#e5e7eb'
+          }}
+        >
+          <img src={globalNotification.avatar} className="w-10 h-10 rounded-full object-cover border-2 border-white/50" alt="icon" />
+          <div className="flex-1 min-w-0">
+            <span className="font-bold text-sm" style={{ color: globalNotification.type === 'proactive_thinking' ? 'white' : 'black' }}>
+              {globalNotification.name}
+            </span>
+            {globalNotification.type === 'proactive_thinking' ? (
+              <p className="text-xs text-white/80 truncate">正在准备给你发消息...</p>
+            ) : (
+              <p className="text-xs text-gray-600 truncate">{globalNotification.content || '发来一条新消息'}</p>
+            )}
+          </div>
+          {globalNotification.type === 'proactive_thinking' && <span className="text-2xl text-white animate-pulse">💬</span>}
+        </div>
       )}
 
-      {currentApp === 'coupleSpace' && contacts[0] && (
-        (() => {
-          let target = contacts[0];
+    <div className="h-screen w-screen bg-black flex items-center justify-center overflow-hidden">
+      <div className="w-full h-full sm:w-[375px] sm:h-[812px] bg-black sm:rounded-[3rem] sm:border-[8px] sm:border-gray-800 overflow-hidden shadow-2xl relative ring-4 ring-gray-900/50 flex flex-col">
+        
+        {/* 刘海 */}
+        <div className="absolute top-0 left-1/2 transform -translate-x-1/2 w-[120px] h-[35px] bg-black rounded-b-3xl z-50 hidden sm:block pointer-events-none transition-all duration-300"></div>
 
-          // ★★★★★ 超级防御修复：强制补全所有可能缺失的字段 ★★★★★
-          const safeProfile = {
-            ...target,
-            // 基本字段补全
-            name: target.name || "Unknown",
-            avatar: target.avatar || "https://picsum.photos/200",
-            mood: target.mood || { current: "Content", energyLevel: 80, lastUpdate: Date.now() },
-            userName: target.userName || "Darling",
-            // 情侣空间专属字段（旧数据一定没有！）
-            diaries: target.diaries || [],
-            coupleSpaceUnlocked: target.coupleSpaceUnlocked || false,
-            // 防止其他潜在字段缺失
-            history: target.history || [],
-            summary: target.summary || "",
-          };
 
-          const recentHistory = (target.history || []).slice(-5)
-            .map((msg: any) => `${msg.role === 'user' ? target.userName : target.name}: ${msg.content || ''}`)
-            .join('\n');
-          const chatMemorySummary = `
-长期记忆总结: ${target.summary || '无'}
-最近的对话片段:
-${recentHistory || '还没有聊过天。'}
-    `.trim();
 
-          return (
-            <CoupleSpace
-              profile={safeProfile}
-              chatMemorySummary={chatMemorySummary}
-              onClose={() => setCurrentApp('home')}
-              onUnlock={() => updatePrimaryContact(prev => ({ ...prev, coupleSpaceUnlocked: true }))}
-            />
-          );
-        })()
-      )}
 
-      {currentApp === 'settings' && (
-        <SettingsApp
-          settings={globalSettings}
-          setSettings={setGlobalSettings}
-          contacts={contacts}
-          setContacts={setContacts}
-          worldBooks={worldBooks}
-          setWorldBooks={setWorldBooks}
-          onClose={() => setCurrentApp('home')}
-        />
-      )}
+      
 
-      {currentApp === 'worldbook' && (
-        <WorldBookApp
-          worldBooks={worldBooks}
-          setWorldBooks={setWorldBooks}
-          onClose={() => setCurrentApp('home')}
-        />
-      )}
+        {/* 桌面 */}
+        {currentApp === 'home' && renderHome()}
 
-      {currentApp === 'wallpaper' && (
-        <WallpaperApp
-          settings={globalSettings}
-          setSettings={setGlobalSettings}
-          onClose={() => setCurrentApp('home')}
-        />
-      )}
+        {/* ★★★ 核心修改：让 ChatApp 在后台“隐身”运行，而不是销毁 ★★★ */}
+        {/* 我们用 display: none 来控制显示，这样 AI 可以在后台继续打字回复 */}
+        {/* ✅ 替换成这段 (隐身模式) */}
+        <div className="w-full h-full" style={{ display: currentApp === 'chat' ? 'block' : 'none' }}>
+           {contacts.length > 0 && (
+// ========== 这是新的、传递了新通知工具的 <ChatApp /> 组件调用 ==========
+          // ========== 这是最终正确版本的 <ChatApp /> 调用代码，请用它覆盖旧的 ==========
+<ChatApp
+contacts={contacts}
+setContacts={setContacts}
+globalSettings={globalSettings}
+setGlobalSettings={setGlobalSettings}
+worldBooks={worldBooks}
+setWorldBooks={setWorldBooks}
+onExit={() => setCurrentApp('home')}
+
+// ✨ 核心 props，连接 App 和 ChatApp
+        isBackground={currentApp !== 'chat'}
+        initialContactId={jumpToContactId}
+        onChatOpened={() => setJumpToContactId(null)}
+        onNewMessage={(contactId, name, avatar, content, activeContactIdInChat) => {
+          // ✅ 核心逻辑：只有当 App 不在聊天界面时，才弹窗
+          // ChatApp 会告诉我们它正在和谁聊天 (activeContactIdInChat)，但在这里我们简化为只要不在聊天App就弹窗
+          if (currentApp !== 'chat') {
+            setGlobalNotification({ type: 'new_message', contactId, name, avatar, content });
+            // 5秒后自动消失
+            setTimeout(() => setGlobalNotification(null), 5000);
+          }
+        }}
+      />
+          )}
+        </div>
+
+        {/* 其他 App (保持原来的逻辑，这些不需要后台运行) */}
+        {currentApp === 'coupleSpace' && contacts[0] && (
+          (() => {
+            let target = contacts[0];
+            const safeProfile = {
+              ...target,
+              name: target.name || "Unknown",
+              avatar: target.avatar || "https://picsum.photos/200",
+              mood: target.mood || { current: "Content", energyLevel: 80, lastUpdate: Date.now() },
+              userName: target.userName || "Darling",
+              diaries: target.diaries || [],
+              coupleSpaceUnlocked: target.coupleSpaceUnlocked || false,
+              history: target.history || [],
+              summary: target.summary || "",
+            };
+            const recentHistory = (target.history || []).slice(-5)
+              .map((msg: any) => `${msg.role === 'user' ? target.userName : target.name}: ${msg.content || ''}`)
+              .join('\n');
+            const chatMemorySummary = `长期记忆总结: ${target.summary || '无'}\n最近对话:\n${recentHistory}`;
+            
+            return (
+              <CoupleSpace
+                profile={safeProfile}
+                chatMemorySummary={chatMemorySummary}
+                onClose={() => setCurrentApp('home')}
+                onUnlock={() => updatePrimaryContact(prev => ({ ...prev, coupleSpaceUnlocked: true }))}
+              />
+            );
+          })()
+        )}
+
+        {currentApp === 'settings' && (
+          <SettingsApp
+            settings={globalSettings}
+            setSettings={setGlobalSettings}
+            contacts={contacts}
+            setContacts={setContacts}
+            worldBooks={worldBooks}
+            setWorldBooks={setWorldBooks}
+            onClose={() => setCurrentApp('home')}
+          />
+        )}
+
+        {currentApp === 'worldbook' && (
+          <WorldBookApp
+            worldBooks={worldBooks}
+            setWorldBooks={setWorldBooks}
+            onClose={() => setCurrentApp('home')}
+          />
+        )}
+
+        {currentApp === 'wallpaper' && (
+          <WallpaperApp
+            settings={globalSettings}
+            setSettings={setGlobalSettings}
+            onClose={() => setCurrentApp('home')}
+          />
+        )}
+
+      </div>
     </div>
+    </>
   );
 };
+
 
 export default App;

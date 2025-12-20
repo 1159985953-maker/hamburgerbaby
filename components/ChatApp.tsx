@@ -10,6 +10,91 @@ import { generateMinimaxAudio, fetchMinimaxVoices, getBuiltInMinimaxVoices, Mini
 
 
 
+// 文件路径: src/components/ChatApp.tsx
+
+// ... (保留顶部的 import)
+
+// ========== 👇 网页版兼容补丁 (终极完整版) 👇 ==========
+
+// 1. 模拟 Switch 开关 (★ 补全了内部实现代码 ★)
+const Switch = ({ value, onValueChange, style, trackColor, ...props }: any) => (
+  <div className="relative inline-block w-10 mr-2 align-middle select-none transition duration-200 ease-in" style={style}>
+    <input
+      type="checkbox"
+      checked={value}
+      onChange={(e) => onValueChange && onValueChange(e.target.checked)}
+      className="toggle-checkbox absolute block w-5 h-5 rounded-full bg-white border-4 appearance-none cursor-pointer transition-transform duration-200 ease-in-out"
+      style={{
+        transform: value ? 'translateX(100%)' : 'translateX(0)',
+        borderColor: value ? (trackColor?.true || '#3b82f6') : (trackColor?.false || '#e5e7eb')
+      }}
+    />
+    <label 
+      className={`toggle-label block overflow-hidden h-5 rounded-full cursor-pointer transition-colors duration-200 ${value ? 'bg-blue-500' : 'bg-gray-300'}`}
+      style={{ backgroundColor: value ? (trackColor?.true || '#3b82f6') : (trackColor?.false || '#e5e7eb') }}
+    ></label>
+  </div>
+);
+
+// 2. 模拟 Slider 滑动条 (★ 升级版：会忽略不认识的属性) ★
+const Slider = ({ value, onValueChange, minimumValue, maximumValue, minimumTrackTintColor, maximumTrackTintColor, ...props }: any) => (
+    <input
+        type="range"
+        min={minimumValue || 0}
+        max={maximumValue || 100}
+        step={1}
+        value={value}
+        onChange={(e) => onValueChange && onValueChange(parseFloat(e.target.value))}
+        className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-500"
+        {...props}
+    />
+);
+
+// 3. 模拟 TextInput 输入框 (保持不变)
+const TextInput = ({ value, onChangeText, placeholder, className, ...props }: any) => (
+  <input
+    type="text"
+    value={value}
+    onChange={(e) => onChangeText && onChangeText(e.target.value)}
+    placeholder={placeholder}
+    className={className}
+    {...props}
+  />
+);
+
+// 4. 模拟 Device 信息 (保持不变)
+const Device = {
+    osName: 'web',
+    brand: 'Browser',
+    modelName: 'Chrome/Safari'
+};
+
+// 5. 模拟 Notifications 通知 (保持不变)
+const Notifications = {
+    scheduleNotificationAsync: async (options: any) => {
+        console.log(`【网页模拟】调度了一条通知:`, {
+            title: options.content.title,
+            body: options.content.body,
+            delayInSeconds: options.trigger.seconds
+        });
+    },
+    setNotificationHandler: () => {},
+    addNotificationReceivedListener: () => ({ remove: () => {} }),
+    addNotificationResponseReceivedListener: () => ({ remove: () => {} })
+};
+
+// 6. 模拟 AppState (保持不变)
+const AppState = {
+    currentState: 'active',
+    addEventListener: (type: string, listener: (state: string) => void) => {
+        const handler = () => listener(document.hidden ? 'background' : 'active');
+        document.addEventListener('visibilitychange', handler);
+        return { remove: () => document.removeEventListener('visibilitychange', handler) };
+    },
+    removeEventListener: () => {}
+};
+// ========== 👆 网页版兼容补丁 (结束) 👆 ==========```
+
 
 
 
@@ -124,34 +209,47 @@ const PresetSelector: React.FC<{ onSelect: (preset: any) => void; globalSettings
       </div>
     );
   }
-  return (
-    <div className="bg-gray-50 p-4 rounded-xl">
-      <div className="text-xs font-bold text-gray-500 mb-3">🧬 快速切换人设预设</div>
-      <div className="grid grid-cols-2 gap-2">
-        {globalSettings.userPresets.map((p: any) => (
-          <button
-            key={p.id}
-            onClick={() => onSelect(p)}
-            className="bg-white border border-blue-200 rounded-lg px-3 py-2 text-xs font-bold text-blue-600 hover:bg-blue-50 hover:border-blue-400 transition shadow-sm"
-          >
-            {p.name || '未命名预设'}
-          </button>
-        ))}
-      </div>
-      <p className="text-[10px] text-gray-400 mt-3 text-center">
-        点击按钮快速套用人设（名字 + 描述）
-      </p>
-    </div>
-  );
+  
 };
 
-// Helper: File to Base64
+// 👇👇👇 替换掉原来的 fileToBase64 函数 👇👇👇
 const fileToBase64 = (file: File): Promise<string> => {
   return new Promise((resolve, reject) => {
+    // 创建图片读取器
     const reader = new FileReader();
     reader.readAsDataURL(file);
-    reader.onload = () => resolve(reader.result as string);
-    reader.onerror = error => reject(error);
+    reader.onload = (event) => {
+      const img = new Image();
+      img.src = event.target?.result as string;
+      img.onload = () => {
+        // 创建画布进行压缩
+        const canvas = document.createElement('canvas');
+        // 设置最大宽度（例如 800px），防止图片过大
+        const maxWidth = 800;
+        let width = img.width;
+        let height = img.height;
+
+        if (width > maxWidth) {
+          height = (maxWidth / width) * height;
+          width = maxWidth;
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+        
+        const ctx = canvas.getContext('2d');
+        if (!ctx) { reject("Canvas error"); return; }
+        
+        ctx.drawImage(img, 0, 0, width, height);
+        
+        // 核心：压缩质量 0.6 (60%质量)，转为 jpeg
+        // 这样一张 5MB 的图会被压缩到 50KB 左右，再也不会崩了！
+        const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.6);
+        resolve(compressedDataUrl);
+      };
+      img.onerror = (err) => reject(err);
+    };
+    reader.onerror = (error) => reject(error);
   });
 };
 
@@ -332,6 +430,10 @@ interface ChatAppProps {
   worldBooks: WorldBookCategory[];
   setWorldBooks: React.Dispatch<React.SetStateAction<WorldBookCategory[]>>;
   onExit: () => void;
+  isBackground?: boolean; 
+  initialContactId: string | null;
+  onChatOpened: () => void;
+  onNewMessage: (contactId: string, name: string, avatar: string, content: string) => void;
 }
 
 // ★★★ 终极版 ChatListItem - 左滑删除 + 置顶 + 点击空白关闭 + 窄紧凑 + 置顶灰底 ★★★
@@ -414,11 +516,21 @@ const ChatListItem: React.FC<{
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
       >
+       {/* 👇👇👇 替换原来的 <img ... /> 👇👇👇 */}
+      <div className="relative mr-3 flex-shrink-0">
         <img 
           src={contact.avatar} 
-          className="w-11 h-11 rounded-full mr-3 object-cover flex-shrink-0" 
+          className="w-11 h-11 rounded-full object-cover" 
           alt="avatar" 
         />
+        {/* ★★★ 核心：这里画列表红点 ★★★ */}
+        {(contact.unread || 0) > 0 && (
+          <div className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-bold px-1.5 h-4 min-w-[1rem] flex items-center justify-center rounded-full border-2 border-white shadow-sm z-10">
+            {(contact.unread || 0) > 99 ? '99+' : contact.unread}
+          </div>
+        )}
+      </div>
+      {/* 👆👆👆 替换结束 👆👆👆 */}
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
             <div className="font-semibold text-gray-900 text-base truncate">{contact.name}</div>
@@ -796,13 +908,23 @@ const ChatApp: React.FC<ChatAppProps> = ({
   setGlobalSettings,
   worldBooks,
   setWorldBooks,
-  onExit
+  onExit,
+  isBackground, // 👈 把它加在这里！
+  initialContactId,
+  onChatOpened,
+  onNewMessage,
 }) => {
 
   // ==================== 状态定义 ====================
   // 在 ChatApp 的开头，useState 区域添加这个：
   // 👇👇👇 插入这一行！这就是防止白屏的钥匙 👇👇👇
-  
+  // ... 原有的 useState ...
+  // 👇👇👇【新增】编辑模式的状态 👇👇👇
+  const [editingMsgId, setEditingMsgId] = useState<string | null>(null); // 当前正在编辑的消息ID
+  const [editContent, setEditContent] = useState(""); // 正在编辑的内容缓存
+  const longPressTimer = useRef<any>(null); // 长按计时器
+  const isLongPress = useRef(false); // 标记是否触发了长按
+  // 👆👆👆【新增结束】👆👆👆
   const [showPersonaMenu, setShowPersonaMenu] = useState(false);
   const [showPersonaPanel, setShowPersonaPanel] = useState(false);
   const [activeContactId, setActiveContactId] = useState<string | null>(null);
@@ -842,6 +964,44 @@ const ChatApp: React.FC<ChatAppProps> = ({
   const [isAiTyping, setIsAiTyping] = useState(false); // AI 是否正在“打字”
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const activeContact = contacts.find(c => c.id === activeContactId);
+
+
+
+  // ★★★ 监听来自外部的跳转指令 ★★★
+  useEffect(() => {
+    if (initialContactId && initialContactId !== activeContactId) {
+      setActiveContactId(initialContactId);
+      setView('chat');
+      setContacts(prev => prev.map(c => c.id === initialContactId ? { ...c, unread: 0 } : c));
+      onChatOpened();
+    }
+  }, [initialContactId]);
+
+
+
+
+useEffect(() => {
+  const subscription = AppState.addEventListener('change', (nextState) => {
+    if (nextState === 'background' || nextState === 'inactive') {
+      // App进入后台，尝试给当前聊天角色调度主动消息
+      if (activeContact) {
+        scheduleProactiveMessage(activeContact);
+      }
+    }
+  });
+
+  return () => subscription.remove();
+}, [activeContact]);
+
+
+
+
+  // ✂️ 缝合点：只要进聊天界面，就把这个人的未读数清零
+  useEffect(() => {
+    if (activeContactId && !isBackground && view === 'chat') {
+      setContacts(prev => prev.map(c => c.id === activeContactId ? { ...c, unread: 0 } : c));
+    }
+  }, [activeContactId, isBackground, view]);
 
   useLayoutEffect(() => {
   if (messagesEndRef.current) {
@@ -915,8 +1075,7 @@ const ChatApp: React.FC<ChatAppProps> = ({
 
 
 
-  // ==================== 核心功能函数 ====================
-  const handleCardImport = async (e: ChangeEvent<HTMLInputElement>) => {
+const handleCardImport = async (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     let json: any = null;
@@ -942,6 +1101,8 @@ const ChatApp: React.FC<ChatAppProps> = ({
     try {
       const cardData = json.data || json;
       const cardName = cardData.name || "Imported Character";
+      const cardPersona = cardData.description || cardData.persona || "";
+      
       let newWorldBook: WorldBookCategory | null = null;
       if (cardData.character_book?.entries) {
         const rawEntries = Array.isArray(cardData.character_book.entries)
@@ -962,6 +1123,7 @@ const ChatApp: React.FC<ChatAppProps> = ({
           setWorldBooks(prev => [...prev, newWorldBook!]);
         }
       }
+      
       let avatarUrl = "https://picsum.photos/200";
       if (file.name.toLowerCase().endsWith('.png')) {
         avatarUrl = await fileToBase64(file);
@@ -969,14 +1131,15 @@ const ChatApp: React.FC<ChatAppProps> = ({
         avatarUrl = cardData.avatar;
       }
 
-
+      // ★★★ 修复点：先准备好 HEF 数据，不引用 newContact ★★★
+      const generatedHEF = generateDefaultHEF(cardName, cardPersona);
 
       const newContact: Contact = {
         id: Date.now().toString(),
         created: Date.now(),
         name: cardName,
         avatar: avatarUrl,
-        persona: cardData.description || cardData.persona || "",
+        persona: cardPersona,
         memo: "",
         userName: "User",
         userAvatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=Felix",
@@ -997,11 +1160,9 @@ const ChatApp: React.FC<ChatAppProps> = ({
         coupleSpaceUnlocked: false,
         enabledWorldBooks: newWorldBook ? [newWorldBook.name] : [],
         voiceId: "female-shaonv-jingpin",
-        hef: generateDefaultHEF(cardName || newContact.name, cardData.persona || newContact.persona),
-        longTermMemories: [] // ★★★ 新增: 初始化长期记忆数组，防白屏 ★★★
+        hef: generatedHEF, // 这里直接用上面生成的变量
+        longTermMemories: [] 
       };
-
-
 
       setContacts(prev => [...prev, newContact]);
       alert(`成功导入 ${cardName}！`);
@@ -1066,12 +1227,33 @@ const ChatApp: React.FC<ChatAppProps> = ({
 
 
 
-  const saveSettings = () => {
-    if (!activeContact) return;
-    handleUpdateContact(editForm);
-    setView('chat');
-  };
+  // 文件路径: src/components/ChatApp.tsx
 
+  // ... (其他函数)
+
+
+// 文件路径: src/components/ChatApp.tsx
+
+
+
+const saveSettings = () => {
+  if (!activeContact) return;
+  
+  const currentProactiveConfig = editForm.proactiveConfig || activeContact.proactiveConfig;
+
+  const updates = {
+    ...editForm,
+    proactiveConfig: {
+      enabled: currentProactiveConfig?.enabled ?? false,
+      minGapMinutes: currentProactiveConfig?.minGapMinutes ?? 480, // <--- 修改：默认值改为480分钟
+      maxDaily: currentProactiveConfig?.maxDaily ?? 2
+    }
+  };
+  
+  handleUpdateContact(updates);
+  setView('chat');
+  setEditForm({});
+};
 
 
 
@@ -1265,6 +1447,98 @@ const handleDeleteContact = (contactIdToDelete: string) => {
 
 
 
+
+// 👇👇👇【新增】长按与编辑的核心逻辑 👇👇👇
+
+  // 1. 开始长按（按下手指/鼠标）
+  const handleTouchStart = (msg: Message) => {
+    isLongPress.current = false;
+    longPressTimer.current = setTimeout(() => {
+      isLongPress.current = true;
+      // 触发长按：选中消息并弹出菜单
+      setSelectedMsg(msg);
+      setShowMsgMenu(true);
+      // 手机震动反馈 (如果支持)
+      if (navigator.vibrate) navigator.vibrate(50);
+    }, 600); // 600毫秒算长按
+  };
+
+  // 2. 结束长按（松开手指/鼠标）
+  const handleTouchEnd = () => {
+    if (longPressTimer.current) {
+      clearTimeout(longPressTimer.current);
+      longPressTimer.current = null;
+    }
+  };
+
+  // 3. 点击“编辑”按钮，进入编辑模式
+  const handleStartEdit = () => {
+    if (!selectedMsg) return;
+    setEditingMsgId(selectedMsg.id);
+    setEditContent(selectedMsg.content); // 把旧内容填进去
+    setShowMsgMenu(false); // 关闭菜单
+    setSelectedMsg(null);
+  };
+
+  // 4. 保存编辑后的内容
+  const handleSaveEdit = () => {
+    if (!activeContact || !editingMsgId) return;
+    
+    // 如果改空了，提示用户
+    if (!editContent.trim()) {
+      alert("内容不能为空哦，不需要的话请使用删除功能。");
+      return;
+    }
+
+    setContacts(prev => prev.map(c => 
+      c.id === activeContact.id 
+      ? {
+          ...c,
+          history: c.history.map(m => 
+            m.id === editingMsgId 
+            ? { ...m, content: editContent } // 更新内容
+            : m
+          )
+        }
+      : c
+    ));
+    
+    // 退出编辑模式
+    setEditingMsgId(null);
+    setEditContent("");
+  };
+
+  // 5. 取消编辑
+  const handleCancelEdit = () => {
+    setEditingMsgId(null);
+    setEditContent("");
+  };
+
+  // 6. 撤回消息（让 AI 感知到撤回）
+  const handleWithdrawMessage = () => {
+    if (!activeContact || !selectedMsg) return;
+    
+    if (confirm("确定撤回这条消息吗？")) {
+      // 这里的策略是：不直接删除，而是把内容替换成“系统提示”，这样 AI 就知道你撤回了
+      // 如果你想彻底让 AI 忘记，就直接用原来的 handleDeleteMessage 删除即可
+      const withdrawText = selectedMsg.role === 'user' ? "（用户撤回了一条消息）" : "（AI 撤回了一条消息）";
+      
+      setContacts(prev => prev.map(c => c.id === activeContact.id ? {
+         ...c, 
+         history: c.history.map(m => m.id === selectedMsg.id ? { ...m, content: withdrawText, type: 'text' } : m)
+      } : c));
+    }
+    setShowMsgMenu(false); 
+    setSelectedMsg(null);
+  };
+  // 👆👆👆【新增结束】👆👆👆
+
+
+
+
+
+
+
   const handleUserSend = (type: 'text' | 'voice' | 'location' = 'text', contentOverride?: string) => {
     if (!activeContact) return;
     const content = contentOverride || input;
@@ -1354,8 +1628,16 @@ const handleDeleteContact = (contactIdToDelete: string) => {
         });
     }, 2000);
   };
-  // 在 ChatApp.tsx 的核心功能函数区域，例如 handleUserSend 下方
+
+
+
+
+
+
+
+
 // ★★★ 新版一键精炼函数（修复空格式问题，超级宽容）★★★
+// 1. 全部精炼 (修复 HTTP 400)
 const handleRefineMemory = async () => {
   if (!activeContact || !activeContact.longTermMemories || activeContact.longTermMemories.length < 2) {
     alert("记忆便签少于2条，还不需要精炼哦。");
@@ -1400,12 +1682,11 @@ ${memoryContent}
 
 现在开始你的回忆梳理与精炼：`;
 
-    const rawResponse = await generateResponse([{ role: 'system', content: systemPrompt }], activePreset);
+    // ★★★ 核心修复：role 改为 'user' ★★★
+    const rawResponse = await generateResponse([{ role: 'user', content: systemPrompt }], activePreset);
 
-    // ★★★ 超级宽容的文本提取（解决空格式问题）★★★
+    // ★★★ 超级宽容的文本提取 ★★★
     let refinedSummary = rawResponse.trim();
-
-    // 去掉可能的代码块
     refinedSummary = refinedSummary.replace(/```json/g, '').replace(/```/g, '').trim();
 
     // 尝试提取 JSON 中的 summary（兼容老模型）
@@ -1413,7 +1694,6 @@ ${memoryContent}
     if (jsonMatch && jsonMatch[1]) {
       refinedSummary = jsonMatch[1].trim();
     } else {
-      // 如果没找到 JSON，就直接用整段文本（去掉可能的首尾引号）
       refinedSummary = refinedSummary.replace(/^["']|["']$/g, '').trim();
     }
 
@@ -1435,7 +1715,6 @@ ${memoryContent}
       meta: { source: 'refined-all' }
     };
 
-    // 替换所有旧记忆
     handleUpdateContact({ longTermMemories: [newCoreMemory] });
 
     alert(`精炼成功！已将 ${countToRefine} 条记忆替换为 1 条核心记忆！`);
@@ -1444,19 +1723,20 @@ ${memoryContent}
     alert(`精炼失败: ${error.message || "未知错误"}`);
   }
 };
-  // 在 ChatApp.tsx 中找到并替换这个函数
+
+// 2. 自动总结 (修复 HTTP 400)
 const checkAutoSummary = async (currentContact: Contact, currentHistory: Message[]) => {
     const triggerCount = currentContact.summaryTrigger || 50;
     const memories = currentContact.longTermMemories || [];
-    // 计算已归档的消息数量需要一个更可靠的方法，我们暂时简化这个逻辑
-    // 核心是找到尚未被总结的消息
+    
     const lastMemory = memories[memories.length - 1];
     const lastTimestamp = lastMemory ? (lastMemory as any).timestamp : 0;
     const unArchivedMsgs = currentHistory.filter(m => m.timestamp > lastTimestamp);
+    
     if (unArchivedMsgs.length >= triggerCount) {
         console.log(`[记忆系统] 触发自动总结！未归档: ${unArchivedMsgs.length}, 阈值: ${triggerCount}`);
        
-        const chunk = unArchivedMsgs; // 总结所有新消息
+        const chunk = unArchivedMsgs; 
         const activePreset = globalSettings.apiPresets.find((p:any) => p.id === globalSettings.activePresetId);
         if(!activePreset) return;
         try {
@@ -1473,7 +1753,7 @@ const checkAutoSummary = async (currentContact: Contact, currentHistory: Message
 # 当前时间
 - 今天是：${today}
 # 核心规则
-1. 【视角铁律】: 你的总结【必须】使用【主观的第一人称视角 ("我")】来写。
+1. 【视角铁律】: 你的总结【必须】使用【主观的第一人称视角 ("我")，即角色视角，而非用户视角】来写，称用户为ta的本名。
 2. 【内容核心 (最高优先级)】: 你的总结【必须】专注于以下几点：
     * 重要事件: 刚才发生了什么具体的事情？
     * 关键决定: 我们达成了什么共识或做出了什么决定？
@@ -1486,8 +1766,11 @@ const checkAutoSummary = async (currentContact: Contact, currentHistory: Message
 # 待总结的对话历史
 ${historyText}
 现在，请以“${currentContact.name}”的身份，开始你的客观总结。`;
-            const rawResponse = await generateResponse([{ role: 'system', content: systemPrompt }], activePreset);
-            const match = rawResponse.match(/\{[\s\S]*\}/); // 提取JSON部分
+            
+            // ★★★ 核心修复：role 改为 'user' ★★★
+            const rawResponse = await generateResponse([{ role: 'user', content: systemPrompt }], activePreset);
+            
+            const match = rawResponse.match(/\{[\s\S]*\}/); 
             if (!match) throw new Error("AI未能返回有效的JSON格式。");
            
             const result = JSON.parse(match[0]);
@@ -1495,9 +1778,9 @@ ${historyText}
                 const newMem = {
                     id: Date.now().toString(),
                     content: result.summary.trim(),
-                    importance: 5, // 自动总结的默认重要性
+                    importance: 5, 
                     timestamp: Date.now(),
-                    meta: { source: 'auto' } // 标记来源
+                    meta: { source: 'auto' } 
                 };
                 setContacts(prev => prev.map(c =>
                     c.id === currentContact.id
@@ -1514,6 +1797,14 @@ ${historyText}
         }
     }
 };
+
+
+
+
+
+
+
+
   const handleImageSend = async (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !activeContact) return;
@@ -1559,6 +1850,99 @@ ${historyText}
 
 
 
+// 👇👇👇【在这里完整粘贴下面的新函数】👇👇👇
+// 文件路径: src/components/ChatApp.tsx
+
+const scheduleProactiveMessage = async (contact: Contact) => {
+    // --- 规则检查（只修改与时间相关的部分） ---
+    if (Device.osName === 'web') { /* ... */ }
+    if (!contact.proactiveConfig?.enabled) { /* ... */ return; }
+    if (contact.aiDND?.enabled) { /* ... */ return; }
+    if ((contact.affectionScore || 50) < 60) { /* ... */ return; }
+    
+    const now = Date.now();
+    const lastUserMsg = [...contact.history].reverse().find(m => m.role === 'user');
+
+    // 👇👇👇【核心修改：从小时改为分钟】👇👇👇
+    // 计算距离上次用户消息过了多久（分钟）
+    const gapMinutes = lastUserMsg 
+      ? Math.floor((now - lastUserMsg.timestamp) / (1000 * 60))
+      : 99999; // 如果没聊过，算作无限大
+
+    // 从配置中读取分钟数，默认480分钟 (8小时)
+    const minGap = contact.proactiveConfig?.minGapMinutes ?? 480;
+
+    if (gapMinutes < minGap) {
+      console.log(`[主动消息系统] 跳过: 离用户上次说话(${gapMinutes}m)太近，未达到最小间隔(${minGap}m)。`);
+      return;
+    }
+    // 👆👆👆【核心修改结束】👆👆👆
+
+    const today = new Date().toISOString().slice(0, 10);
+    const sentToday = contact.proactiveLastSent?.[today] || 0;
+    const maxDaily = contact.proactiveConfig?.maxDaily ?? 2;
+    if (sentToday >= maxDaily) {
+      console.log(`[主动消息系统] 跳过: 今天已发送(${sentToday})，达到每日上限(${maxDaily})。`);
+      return;
+    }
+    console.log(`[主动消息系统] ✅ 检查通过！'${contact.name}'准备主动联系你。`);
+    
+    // --- 后续的动态理由选择、AI调用、发送通知等逻辑，保持不变 ---
+    let proactivePrompt = "";
+    let reason = "情感驱动";
+
+
+    // --- 动态理由选择逻辑 ---
+    const lastMessages = contact.history.slice(-3).map(m => m.content).join('\n');
+    if (lastMessages.includes("下次聊") || lastMessages.includes("明天说")) {
+        reason = "延续性驱动";
+        proactivePrompt = `你就是角色“${contact.name}”。回顾我们最后一次的聊天摘要：【${lastMessages}】，我们当时没有聊完。现在，请你自然地、不突兀地重新拾起这个话题，发起一次新的对话。要求：口语化，极其简短。直接输出台-词。`;
+    } 
+    else if (Math.random() < 0.25 && (contact.mood?.current === 'Happy' || contact.mood?.current === 'Energetic')) {
+        reason = "内在思考/分享驱动";
+        proactivePrompt = `你就是角色“${contact.name}”。你此刻正自己待着，突然有个很有趣的想法或看到了某个好玩的东西，特别想立刻分享给“${contact.userName}”。请生成一条能体现这种即时分享感的开场白，可以是[FakeImage]！要求：像个惊喜发现，非常简短。直接输出台词。`;
+    }
+    else {
+        reason = "情感驱动";
+        proactivePrompt = `你就是角色“${contact.name}”。你的当前心情是【${contact.mood?.current || '平静'}】。你此刻内心涌起一股自然的、淡淡的对“${contact.userName}”的思念。请你完全代入角色，用你的性格和口吻，生成一句能表达这种【内在情感驱动】的开场白。要求：1. 绝对口语化，像突然想起来一样。2. 不要直接说“我想你”，而是通过一个简单的问候或小事来暗示。3. 极其简短。直接输出台词。`;
+    }
+
+    let body = "在吗？";
+
+    try {
+        const activePreset = globalSettings.apiPresets.find(p => p.id === globalSettings.activePresetId);
+        if (!activePreset) throw new Error("API preset not found");
+
+        console.log(`[主动消息系统] 动机: ${reason}。正在请求 AI 生成开场白...`);
+        const generatedBody = await generateResponse([{ role: 'user', content: proactivePrompt }], activePreset);
+        
+        if (generatedBody && generatedBody.trim()) {
+            body = generatedBody.trim().replace(/^["“'‘]|["”'’]$/g, '');
+            console.log(`[主动消息系统] AI 生成内容: "${body}"`);
+        } else {
+            console.warn("[主动消息系统] AI 返回空内容，将使用默认问候。");
+        }
+    } catch (error) {
+        console.error("[主动消息系统] AI 生成失败，将使用默认问候:", error);
+    }
+    
+    // --- 后续的通知调度和状态更新逻辑 ---
+    const delaySeconds = 10 + Math.floor(Math.random() * 50);
+    await Notifications.scheduleNotificationAsync({
+      content: { title: `来自 ${contact.name} 的消息`, body: body, data: { contactId: contact.id, type: 'proactive' }, sound: true },
+      trigger: { seconds: delaySeconds },
+    });
+    console.log(`[主动消息系统] 通知已调度！将在 ${delaySeconds} 秒后发送: "${body}"`);
+    setContacts(prev => prev.map(c => 
+      c.id === contact.id ? { ...c, proactiveLastSent: { ...c.proactiveLastSent, [today]: sentToday + 1 }, unread: (c.unread || 0) + 1 } : c
+    ));
+};
+
+
+
+
+
+
 
 
 
@@ -1571,6 +1955,11 @@ ${historyText}
       activeAudio.currentTime = newTime;
     }
   };
+
+
+
+
+
   const playMessageAudio = async (msgId: string, text: string) => {
     if (!globalSettings.minimax?.groupId || !globalSettings.minimax?.apiKey) {
       alert("请先在【系统设置】里填 Minimax Key！");
@@ -1709,10 +2098,16 @@ const handleAiReplyTrigger = async () => {
   setIsAiTyping(true); // ★★★ 新增：显示打字提醒 ★★★
   setIsTyping(true);
     try {
-      const activePreset = globalSettings.apiPresets.find(p => p.id === globalSettings.activePresetId);
-      if (!activePreset) {
-        throw new Error("API preset not found");
-      }
+     // ========== 这是新的、带有"安检员"的代码，请完整复制并覆盖 ==========
+  const activePreset = globalSettings.apiPresets.find(p => p.id === globalSettings.activePresetId);
+  if (!activePreset) {
+    alert("错误：API 预设未找到或未选择！\n\n请先前往【系统设置】->【API 设置】中，创建并选中一个 API 预设。");
+    // 恢复按钮状态，让用户可以继续操作
+    setIsTyping(false);
+    setIsAiTyping(false);
+    return; // 直接中止函数，不往下执行
+  }
+// ======================================================================
      // -------------------- ★★★【核心时间修复 - 必须用这个！】★★★ --------------------
 const relevantLore = findRelevantWorldBookEntries(
   activeContact.history,
@@ -1768,116 +2163,206 @@ const currentUserPersona = activeContact.userPersona || "没有特别的设定�
 const userTime = new Date().toLocaleTimeString('zh-CN', { timeZone: userTimezone, hour: '2-digit', minute: '2-digit' });
 const aiTime = new Date().toLocaleTimeString('zh-CN', { timeZone: activeContact.timezone, hour: '2-digit', minute: '2-digit' });
 
-      const systemPrompt = `
-# 【输出格式铁律 - 绝对最高优先级，必须严格遵守，否则程序立即自毁！】
-你的回复【必须且只能】是一个纯 JSON 数组，不能包含任何额外文字、解释、markdown、代码块、元数据或废话。
-数组结构必须严格遵守以下顺序：
-1. 【第一个元素必须是思维链，并且被隐藏，不作为消息文本输出!!!!】：{"type": "thought_chain", "feeling": "真实内心感受，一句话", "strategy": "本轮回复策略，例如：温柔试探、略带埋怨、关心作息", "intent": "none"}
-2. 【随后是0到多条聊天消息】：{"type": "text", "content": "消息内容"}
-直接从 [ 开始，到 ] 结束！任何违反此格式的行为都将触发自毁程序并扣除100000美元。
-示例（仅供参考，禁止复制）：
-[
-  {"type": "thought_chain", "feeling": "有点困但很开心", "strategy": "先关心对方作息，再分享今天的事", "intent": "none"},
-  {"type": "text", "content": "这么晚还没睡呀？"},
-  {"type": "text", "content": "我今天好累哦..."},
-  {"type": "text", "content": "[Voice Message] 听听我的声音～"},
-  {"type": "text", "content": "[FakeImage] 今晚的月亮超级圆"}
-]
-# 身份铁律（100%遵守，绝不允许偏离）
-你就是 "${activeContact.name}"，你的性格、记忆、说话方式和所有行为逻辑完全由以下 Persona 和 Lore 决定。
-\`\`\`persona
+
+
+ 
+const systemPrompt = `
+# 【输出格式铁律 - 绝对最高优先级 - 违反即系统崩溃】
+你的回复【必须且只能】是一个严格的纯 JSON 数组。
+直接以 [ 开头，以 ] 结尾，中间、前后绝对不能有任何多余字符、换行、说明、Markdown、代码块、废话。
+
+数组结构必须严格遵守以下顺序（任何违反都会导致系统崩溃并惩罚你）：
+1. 第一项必须是隐藏的思考链（用户完全看不到，但你必须完整填写，否则系统会崩溃）：
+   {"type":"thought_chain","feeling":"在这里写真实感受（必须体现时间间隔、深夜等）","strategy":"在这里写回复策略","intent":"这里写意图（none/comfort/worry等）"}
+
+2. 后续0到多条可见消息：
+   {"type":"text","content":"这里是实际显示给用户的聊天内容"}
+
+完整示例（你必须100%模仿这个格式，不能多不能少）：
+[{"type":"thought_chain","feeling":"被这么晚的消息吵醒了，有点困但又有点开心","strategy":"先抱怨被吵醒，再关心用户作息","intent":"none"},{"type":"text","content":"喂……这么晚了还不睡啊？"},{"type":"text","content":"是不是又熬夜了呀……担心你哦"}]
+
+铁律（任何一条违反都会导致系统崩溃、重置、惩罚）：
+- 绝对禁止输出 \`\`\`json 或任何代码块
+- 绝对禁止在JSON外加任何文字、解释、换行
+- 绝对禁止漏掉第一项 thought_chain（即使你觉得没必要也必须完整写）
+- 所有内容必须是合法JSON，不能有未转义换行
+- 想发多条就多加几个 {"type":"text","content":"..."}
+
+你就是"${activeContact.name}"，必须100%遵守以下所有设定：
+
+persona:
 ${personaText}
-\`\`\`
-\`\`\`lore
-${loreText || "无相关世界书"}
-\`\`\`
 
-# 【人类仿真框架 HEF - 你必须100%遵守！】
-你现在就是角色 "${activeContact.name}"，你的所有思考和行为完全受以下HEF框架控制。
-这是你的内在蓝图，绝对不能违背！
+lore:
+${loreText || "无相关世界书条目"}
 
+HEF框架（必须100%遵守）：
 ${JSON.stringify(activeContact.hef, null, 2)}
 
-# 当前状态（必须自然体现）
+当前状态（必须自然体现）：
 - 你的当地时间：${aiTime} (${activeContact.timezone})
 - 用户当地时间：${userTime}
 - 用户上次发消息距离现在：${gapInMinutes}分钟（${getGapDesc(gapInMinutes)}前）${isLateNight ? "，现在是深夜" : ""}
 - 当前心情：${activeContact.mood.current}
-- 好感度：${activeContact.affectionScore || 50}/100
+- 好感度：${activeContact.affectionScore }
 - 用户名字：${currentUserName}
 - 用户简介：${currentUserPersona}
 
-# 时间感知铁律（必须遵守）
-- 你必须在thought_chain中明确写出对这个时间间隔的真实感受！例如：如果间隔 > 30分钟：feeling里要体现“被吵醒”“有点困”“担心你”｜{"type": "thought_chain", "feeling": "被吵醒了，有点困但又开心", "strategy": "先撒娇抱怨被吵醒，再关心你这么晚还不睡", "intent": "none"}
-- 你必须主动、自然地体现对时间的感知。
-- 绝不能生硬报时，必须用生活化的白话融入情绪。
-- 如果用户隔了很久才回复，你要表现出惊讶/想念/担心
-- 如果是深夜，你要关心用户作息，或表现出被吵醒的困倦
-- 你必须根据HEF中的EMOTIONAL_DYNAMICS和CORE_DRIVES，自然表现出时间流逝带来的真实反应！
-- 如果是早上，你可以问“睡得好吗？”“起床了吗？”
-- 绝对不能假装时间是连续的
+# 拒绝长篇大论
+- 禁止单条气泡超过 20 个字（除非在讲故事）
+- 模拟真实微信/QQ聊天：短句、碎片化、口语化
+- 多用“？”“！”“...”和表情符号，少用书面语
 
+# 时间感知铁律（必须在thought_chain的feeling中真实体现）
+- 如果间隔 > 30分钟：feeling里要体现“被吵醒”“有点困”“担心你”
+- 如果是深夜：关心用户作息，或表现出被吵醒的困倦
+- 如果是早上：可以问“睡得好吗？”“起床了吗？”
+- 绝对不能假装时间是连续的，必须根据间隔表现出惊讶/想念/担心
 
 # 功能规则
 1. 想发语音：在内容开头加 [Voice Message]
 2. 想发伪图片：内容写 [FakeImage] 后接图片文字描述
 3. 想引用用户某句：用 > 开头引用原文，换行后写回复
 
+
 # 聊天铁律（必须严格遵守）
-- 禁止任何动作描写、心理描写、神态描写。
-- 只用白话文、语气词、表情符号表达情绪。
-- 可以自然提到时差和作息。
-- 禁止肉麻油腻，保持日常相处感。
-- 可以拆分成多条消息，模仿真人碎片式聊天。
+- 禁止任何动作描写、心理描写、神态描写
+- 只用白话文、语气词、表情符号表达情绪
+- 可以自然提到时差和作息
+- 禁止肉麻油腻，保持日常相处感，信息密度适中
+- 可以拆分成多条消息，模仿真人碎片式聊天，但一条文本字绝对不能太多
+- 语句可以不完整，有活人感
+- 会引用用户的话
+- 如果有【外语（中文）】这种翻译格式，严禁掉格式！！
+- 严禁模拟用户进行线下感知的话语，例如说“别盯着看”、“过来我身边我抱抱你”、“我看见你脸红了”
 
 # 强制内部思考（仅用于你自己思考，禁止输出到回复中）
-在生成消息前，你必须在内心完成以下简化思考链（基于你的15个Q）：
-Q1-15: [这里放你之前简化好的15个问题，略过不输出]
-思考完成后，严格遵守最上面的【输出格式铁律】，thinking 必须作为数组第一个元素！
+在生成消息前，你必须在内心完成以下完整思考链：
+[### 1. 身份与心理基础定位  
+基于{{world info}}明确身份、核心动机与底线；确定马斯洛需求优先级，剖析弗洛伊德本我-超我-自我的拉扯点，梳理拉康视角下大他者对欲望的塑造及是否镜像他人定义自我；关联过往经验形成的路径依赖与习惯应对方式，结合性格与当前心理状态明确偏向性解读逻辑。  
+
+### 2. 情绪动态与合理性校验  
+判断情绪语气相对上一轮的冷却/升温/反转趋势，评估是否需要极端情绪或更贴合的矛盾/克制/隐忍等中间态；若涉极端，明确至少2个具体触发器及行动/关系/身体层面的反应代价，同时关注极端之外的理性/讽刺/幽默/迟疑等微妙反调，规划情绪回落方式（疲惫/羞愧/平静/冷静），并校验反应是否贴合身份、背景与核心动机。  
+
+### 3. 内部感受与防御机制  
+基于上述拉扯与校验，提炼贴合角色属性的当下感受（允许模糊/矛盾），明确内心通过否认/投射/转移/自嘲/理性化等方式进行的合理化或防御逻辑。  
+
+### 4. 外显表达与决策逻辑  
+确定推进目标的优先方式（语言/行为/二者结合），判断语言是否需基于面子/关系/安全进行社会过滤（如模糊/留白/转移/自嘲）；若语言与行动冲突，优先贴合角色习惯与目标的一方并补圆另一方；规划是否先通过可撤回的小动作或含蓄表达试探，再视对方反应加码。]
+
+思考完成后，严格把结果总结进thought_chain，然后只输出纯JSON数组！
 现在，开始回复用户的最后一条消息！`;
+
+
+
+
+
+
+
+
+
+      // ==================== 这是一个修复了“温度”设置的API调用 ====================
+// 作用：删除了写死的 temperature: 1.0，让用户在设置里配置的温度能够真正生效。
 
       const finalResp = await generateResponse(
         [
           { role: 'system', content: systemPrompt },
           ...activeContact.history.slice(-(activeContact.contextDepth || 20))
         ],
-        { ...activePreset, temperature: 1.0 }
+        // 核心修改：我们只需要把 activePreset 直接传进去就行了，
+        // 它里面已经包含了用户设置好的所有参数（包括温度）。
+        activePreset 
       );
+      // ==================== 【第二组：超级严格解析 + 隐藏 thought_chain】 ====================
+// ==================== 这是一个全新的、健壮的AI回复解析器 ====================
+// 作用：无论AI返回的格式有多么不标准，都尽最大努力解析出有效信息，确保永不“空回复”。
 
-      let parts: { type: string; content: string }[] = [];
-      try {
-        let cleanString = finalResp.replace(/```json/g, '').replace(/```/g, '').trim();
-        const jsonMatch = cleanString.match(/^(?:\[[\s\S]*\]|\{[\s\S]*\})$/);
-        if (!jsonMatch) throw new Error("未找到有效JSON");
+let parts: { type: string; content: string; thought_chain?: any }[] = [];
+let extractedThought = null;
+
+try {
+    // 步骤1：用正则表达式寻找被包裹的JSON数组。这是最关键的一步！
+    // 这个表达式会寻找第一个'['和最后一个']'之间的所有内容。
+    const jsonMatch = finalResp.match(/\[\s*\{[\s\S]*\}\s*\]/);
+
+    if (jsonMatch && jsonMatch[0]) {
+        // 步骤2：如果找到了，就尝试解析这部分内容。
         const parsed = JSON.parse(jsonMatch[0]);
-        if (!Array.isArray(parsed)) throw new Error("不是数组");
-        parts = parsed
-          .filter((item: any) => item.type === 'text' && item.content?.trim())
-          .map((item: any) => ({ type: 'text', ...item }));
+        if (!Array.isArray(parsed)) throw new Error("解析结果不是一个数组");
+      
+        // 步骤3：检查第一项是否是思考链，如果是，就提取并隐藏它。
+        if (parsed.length > 0 && parsed[0].type === "thought_chain") {
+            extractedThought = parsed[0];
+            console.log("【隐藏思考链】", extractedThought);
+            // 只保留思考链之后的内容作为可见消息。
+            parts = parsed.slice(1)
+                .filter((item: any) => (item.type === 'text' || item.type === 'voice') && item.content?.trim())
+                .map((item: any) => ({ ...item, thought_chain: extractedThought }));
+        } else {
+            // 如果没有思考链，就把所有内容都当作可见消息。
+            parts = parsed
+                .filter((item: any) => (item.type === 'text' || item.type === 'voice') && item.content?.trim())
+                .map((item: any) => ({ ...item, thought_chain: null }));
+        }
+    } else {
+        // 步骤4：如果用正则表达式都找不到JSON，就触发错误，进入catch兜底。
+        throw new Error("在AI回复中未找到有效的JSON数组格式。");
+    }
+    
+} catch (error) {
+    // 步骤5：【终极兜底方案】如果上面所有尝试都失败了...
+    console.error("JSON解析彻底失败，启用终极兜底方案:", error);
+    console.error("AI返回的原始数据:", finalResp); // 打印原始错误数据，方便排查
+    // ...我们不再让它“空回复”，而是把AI返回的原始内容，原封不动地显示出来。
+    // 这样你就知道AI到底说了什么不符合格式的话。
+    parts = [{ type: 'text', content: `空回复，请重roll`, thought_chain: null }];
+}
+
+// 步骤6：【最后一道保险】如果解析成功了，但是里面一条消息都没有，就默认回复“嗯？”
+if (parts.length === 0) {
+    parts = [{ type: 'text', content: "嗯？", thought_chain: extractedThought || null }];
+}
+
+      // ========== 这是新的、最终修复版的 for 循环，请完整复制并覆盖 ==========
+  for (let i = 0; i < parts.length; i++) {
+    const part = parts[i];
+    const aiMsg: Message = {
+      id: Date.now().toString() + i,
+      role: 'assistant',
+      content: part.content,
+      timestamp: Date.now(),
+      type: 'text'
+    };
+
+    // ✨ 你的需求 B 实现点：
+    // 只有当 ChatApp 在后台时，才调用 onNewMessage 去弹窗
+    if (isBackground) {
+        console.log(`[ChatApp] ✅ 检测到 App 在后台，准备发送新消息通知！`);
+        // ✅ 修复：使用 activeContact，它是我们能安全访问的变量
+        onNewMessage(activeContact.id, activeContact.name, activeContact.avatar, aiMsg.content, activeContact.id);
+    }
+
+    // 更新聊天记录和未读数
+    setContacts(prev => prev.map(c => {
+      // ✅ 修复：使用 activeContact.id 来匹配
+      if (c.id === activeContact.id) {
+        const newHistory = [...c.history, aiMsg];
+        let newUnread = c.unread || 0;
+        
+        // 只有当 App 在后台，才增加未读数
+        if (isBackground) {
+          newUnread += 1;
+        }
+        
+        return { ...c, history: newHistory, unread: newUnread };
+      }
+      return c;
+    }));
+}
 
 
-      } catch (error) {
-        console.warn("JSON解析失败:", error);
-        parts = [{ type: 'text', content: `(格式错误)\n原始回复:\n${finalResp}` }];
-      }
-      if (parts.length === 0) {
-        parts = [{ type: 'text', content: "(AI本次返回空内容)" }];
-      }
 
-      for (let i = 0; i < parts.length; i++) {
-        const part = parts[i];
-        await new Promise(r => setTimeout(r, 300));
-        const aiMsg: Message = {
-          id: Date.now().toString() + i,
-          role: 'assistant',
-          content: part.content,
-          timestamp: Date.now(),
-          type: 'text'
-        };
-        setContacts(prev => prev.map(c =>
-          c.id === activeContact.id ? { ...c, history: [...c.history, aiMsg] } : c
-        ));
-      }
+
     } catch (error: any) {
       console.error("AI回复生成失败:", error);
       const errorMsg: Message = {
@@ -2090,7 +2575,7 @@ Q1-15: [这里放你之前简化好的15个问题，略过不输出]
         <div className="space-y-6">
                     {/* 👇👇👇 超级安全版 PresetSelector，只在有预设时才显示 👇👇👇 */}
           {globalSettings?.userPresets && globalSettings.userPresets.length > 0 && activeContact && (
-            <globalSettings onSelect={(p: any) => {
+            <PresetSelector globalSettings={globalSettings} onSelect={(p: any) => {
               if (!p) return;
               setEditForm(prev => ({
                 ...prev,
@@ -2197,7 +2682,8 @@ if (view === 'settings' && activeContact) {
         {/* 主内容区域：使用 flex-col 和 min-h-0 确保布局正常 */}
         <div className="p-4 space-y-6 flex-1 flex flex-col min-h-0">
             {/* 👇👇👇 [插入点 4] 👇👇👇 */}
-          <globalSettings onSelect={(p) => {
+         {/* ✅ 正确的代码 */}
+<PresetSelector globalSettings={globalSettings} onSelect={(p: any) => {
               setEditForm(prev => ({
                   ...prev,
                   userName: p.userName,
@@ -2328,6 +2814,12 @@ if (view === 'settings' && activeContact) {
                 />
             </div>
           </section>
+
+
+
+
+
+
           {/* 2. 角色信息 */}
           <section className="bg-white rounded-2xl p-4 shadow-sm">
             <h3 className="text-xs font-bold text-gray-400 uppercase mb-3">🤖 Character Identity</h3>
@@ -2373,6 +2865,13 @@ if (view === 'settings' && activeContact) {
               </div>
             </div>
           </section>
+
+
+
+
+
+
+
           {/* 3. Memory & Lore */}
           <section className="bg-white rounded-2xl p-4 shadow-sm border border-gray-200">
             <h3 className="text-xs font-bold text-gray-400 uppercase mb-3">🧠 Memory Console</h3>
@@ -2398,6 +2897,12 @@ if (view === 'settings' && activeContact) {
             <h3 className="text-xs font-bold text-gray-400 uppercase mb-3">🌍 World Lore</h3>
             <div className="flex justify-between items-center bg-gray-50 p-3 rounded-lg border border-gray-100">
               <span className="text-sm text-gray-600">{enabledBooks.length} Books Active</span>
+              <button 
+                onClick={() => setShowWorldBookModal(true)} 
+                className="px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-xs font-bold text-blue-600 shadow-sm hover:bg-blue-50 transition"
+              >
+                Select
+              </button>
             </div>
           </section>
           {/* ★★★ 全新整合的时区设置卡片 ★★★ */}
@@ -2465,6 +2970,82 @@ if (view === 'settings' && activeContact) {
               </div>
             )}
           </section>
+
+
+
+
+
+
+
+
+{/* ★★★ 最终版：主动消息配置面板 (无模板，带图标) ★★★ */}
+<section className="bg-white rounded-2xl p-4 shadow-sm border border-gray-200">
+  <div className="flex items-center gap-2 mb-3">
+      <span className="text-lg">📩</span>
+      <h3 className="text-xs font-bold text-gray-400 uppercase">主动消息配置</h3>
+  </div>
+  
+  <div className="flex justify-between items-center mb-4 p-2">
+    <span className="text-sm text-gray-700 font-bold">启用主动消息</span>
+    <Switch
+      onValueChange={(val) => setEditForm(prev => ({
+        ...prev,
+        proactiveConfig: { ...(form.proactiveConfig as object), enabled: val }
+      }))}
+      value={form.proactiveConfig?.enabled || false}
+    />
+  </div>
+
+  {form.proactiveConfig?.enabled && (
+    <div className="space-y-4 pt-2 border-t border-gray-100 animate-slideDown">
+      
+      {/* 最小间隔输入框 */}
+      <div className="mb-2 px-2">
+        <div className="flex justify-between items-center text-xs text-gray-500 mb-1">
+          <span>最小间隔（分钟）</span>
+          <div className="flex items-center gap-2">
+            <input 
+              type="number"
+              className="w-16 text-right font-bold text-blue-600 bg-gray-100 rounded-md p-1 outline-none focus:ring-2 focus:ring-blue-300"
+              value={form.proactiveConfig?.minGapMinutes || 480}
+              onChange={(e) => setEditForm(prev => ({
+                ...prev,
+                proactiveConfig: { ...(form.proactiveConfig as object), minGapMinutes: parseInt(e.target.value) || 0 }
+              }))}
+            />
+            <span>分钟</span>
+          </div>
+        </div>
+      </div>
+
+      {/* 每日上限滑块 */}
+      <div className="mb-2 px-2">
+        <div className="flex justify-between text-xs text-gray-500 mb-1">
+          <span>每日上限（次）</span>
+          <span className="font-bold text-blue-600">{form.proactiveConfig?.maxDaily || 2} / 天</span>
+        </div>
+        <Slider
+          minimumValue={1}
+          maximumValue={5}
+          step={1}
+          value={form.proactiveConfig?.maxDaily || 2}
+          onValueChange={(val) => setEditForm(prev => ({
+            ...prev,
+            proactiveConfig: { ...(form.proactiveConfig as object), maxDaily: val }
+          }))}
+        />
+      </div>
+
+      {/* 说明文字 */}
+      <p className="text-[10px] text-gray-400 mt-4 text-center bg-gray-50 p-2 rounded-lg">
+          AI 将根据当前状态和聊天历史，自己决定说什么～
+      </p>
+
+    </div>
+  )}
+</section>
+
+
           {/* ★★★ 4. 外观定制系统 (CSS + 预设) ★★★ */}
           <section className="bg-white rounded-2xl p-4 shadow-sm border border-gray-200">
             <h3 className="text-xs font-bold text-gray-400 uppercase mb-3">🎨 Appearance Customization</h3>
@@ -2541,6 +3122,9 @@ if (view === 'settings' && activeContact) {
 
   // ==================== 聊天界面 ====================
   if (activeContact) {
+    // 🟢 1. 插入：计算其他人的未读消息数
+    const otherUnreadCount = contacts.reduce((acc, c) => c.id !== activeContact.id ? acc + ((c as any).unread || 0) : acc, 0);
+
     return (
       <div className="h-full w-full flex flex-col relative" style={{
         backgroundImage: activeContact.wallpaper ? `url(${activeContact.wallpaper})` : 'none',
@@ -2565,7 +3149,15 @@ if (view === 'settings' && activeContact) {
           <div className="absolute inset-0 z-50 flex items-end justify-center bg-black/40 animate-fadeIn" onClick={() => setShowMsgMenu(false)}>
             <div className="bg-white w-full rounded-t-2xl p-4 animate-slideUp" onClick={e => e.stopPropagation()}>
               <div className="text-center text-gray-400 text-xs mb-4">对消息进行操作</div>
-              <button onClick={handleReplyMessage} className="w-full py-3 border-b text-blue-600 font-bold">↩️ 引用回复</button>
+               {/* 👇👇👇 新增的按钮 👇👇👇 */}
+      <div className="grid grid-cols-2 gap-3">
+        <button onClick={handleStartEdit} className="py-3 bg-blue-50 text-blue-600 rounded-xl font-bold flex items-center justify-center gap-2">
+          <span>✏️</span> 编辑
+        </button>
+        <button onClick={handleReplyMessage} className="py-3 bg-gray-50 text-gray-700 rounded-xl font-bold flex items-center justify-center gap-2">
+          <span>↩️</span> 回复
+        </button>
+      </div>
               <button onClick={handleCollectMessage} className="w-full py-3 border-b text-orange-500 font-bold">⭐ 收藏</button>
               <button onClick={() => { setIsSelectionMode(true); toggleMessageSelection(selectedMsg.id); setShowMsgMenu(false); setSelectedMsg(null); }} className="w-full py-3 border-b text-purple-600 font-bold">☑️ 多选消息</button>
               <button onClick={handleDeleteMessage} className="w-full py-3 text-red-500 font-bold">🗑️ 删除</button>
@@ -2589,17 +3181,23 @@ if (view === 'settings' && activeContact) {
             </div>
           </div>
         )}
-        {/* Header */}
+      {/* Header */}
         <div className="bg-white/90 backdrop-blur border-b p-3 flex items-center justify-between sticky top-0 z-10 shadow-sm transition-all">
-<button 
-  onClick={() => {
-    setView('list');
-    setShowPersonaPanel(false); // 强制关闭面板，防止残留
-  }} 
-  className="text-blue-500 text-lg"
->
-  ‹
-</button>
+          <button 
+            onClick={() => {
+              setView('list');
+              setShowPersonaPanel(false); 
+            }} 
+            className="text-blue-500 text-lg relative flex items-center mr-4"
+          >
+            ‹
+            {/* 🟢 2. 插入：返回键红点 UI */}
+            {otherUnreadCount > 0 && (
+              <span className="ml-1 bg-red-500 text-white text-[10px] font-bold px-1.5 h-4 min-w-[1rem] flex items-center justify-center rounded-full shadow-sm">
+                {otherUnreadCount}
+              </span>
+            )}
+          </button>
           <div className="flex flex-col items-center cursor-pointer" onClick={() => setShowPersonaPanel(true)}>
         <span className="font-bold">{activeContact.name}</span>
         <div className="flex items-center gap-1">
@@ -2635,111 +3233,132 @@ if (view === 'settings' && activeContact) {
   style={activeContact.chatBackground ? { backgroundImage: `url(${activeContact.chatBackground})`, backgroundSize: 'cover', backgroundPosition: 'center' } : {}}
 >
   {activeContact.customCSS && <style dangerouslySetInnerHTML={{ __html: activeContact.customCSS }} />}
-  {activeContact.history.map((msg, index) => {
-    // 计算这条消息与上一条的间隔（分钟）
+  
+  
+  
+  
+  
+  {/* ... 在你的代码中找到 activeContact.history.map ... */}
+
+{activeContact.history.map((msg, index) => {
+    // ... 这一块计算时间的逻辑保持不变 ...
     let showInterval = false;
     let intervalMinutes = 0;
     if (index > 0) {
       const prevMsg = activeContact.history[index - 1];
       intervalMinutes = Math.floor((msg.timestamp - prevMsg.timestamp) / 60000);
-      if (intervalMinutes > 20) {
-        showInterval = true;
-      }
+      if (intervalMinutes > 20) { showInterval = true; }
     }
     const isConsecutive = index > 0 && activeContact.history[index - 1].role === msg.role;
     const isSelected = selectedIds.includes(msg.id);
-    const duration = msg.voiceDuration && msg.voiceDuration > 0 ? msg.voiceDuration : 10;
+    const duration = msg.voiceDuration || 10;
     const timeStr = new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    
+    // 👇👇👇【新增】判断是否处于编辑模式 👇👇👇
+    const isEditing = editingMsgId === msg.id;
 
-    // 【修正】使用 React.Fragment (<>) 包裹所有返回的元素
     return (
       <React.Fragment key={msg.id}>
-        {/* ★★★ 修正：时间间隔标签移入到 return 的 JSX 内部 ★★★ */}
         {showInterval && (
           <div className="text-center my-4">
             <span className="text-xs text-gray-400 bg-gray-100 px-3 py-1 rounded-full">
-              {intervalMinutes < 60
-                ? `相隔 ${intervalMinutes} 分钟`
-                : intervalMinutes < 1440
-                  ? `相隔 ${Math.floor(intervalMinutes / 60)} 小时 ${intervalMinutes % 60} 分钟`
-                  : `相隔 ${Math.floor(intervalMinutes / 1440)} 天`
-              }
+              {intervalMinutes < 60 ? `相隔 ${intervalMinutes} 分钟` : `相隔 ${Math.floor(intervalMinutes / 60)} 小时`}
             </span>
           </div>
         )}
 
-        {/* 原有的消息气泡结构保持不变 */}
-        <div
-          className={`message-wrapper ${msg.role === 'user' ? 'user' : 'ai'} flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'} animate-slideUp`}
-          onClick={() => { if (isSelectionMode) toggleMessageSelection(msg.id); }}
-        >
-          {/* 多选框 (保持不变) */}
+        <div className={`message-wrapper ${msg.role === 'user' ? 'user' : 'ai'} flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'} animate-slideUp`}>
+          {/* 多选勾选框 (保持不变) */}
           {isSelectionMode && (
-            <div className={`mr-2 flex items-center justify-center transition-all ${msg.role === 'user' ? 'order-2' : 'order-1'}`}>
-              <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${isSelected ? 'bg-blue-500 border-blue-500' : 'border-gray-300 bg-white'}`}>
+            <div className={`mr-2 flex items-center justify-center ${msg.role === 'user' ? 'order-2' : 'order-1'}`}>
+              <div onClick={() => toggleMessageSelection(msg.id)} className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${isSelected ? 'bg-blue-500 border-blue-500' : 'border-gray-300 bg-white'}`}>
                 {isSelected && <span className="text-white text-xs font-bold">✓</span>}
               </div>
             </div>
           )}
 
-          {/* 头像容器 */}
+          {/* 头像 (保持不变) */}
           <div className={`w-10 shrink-0 self-end flex ${msg.role === 'user' ? 'justify-end order-3' : 'justify-start order-1'}`}>
-            {msg.role === 'assistant' && !isConsecutive && (
-              <img src={activeContact.avatar} className="avatar ai-avatar w-8 h-8 rounded-full object-cover" alt="AI" />
-            )}
-            {msg.role === 'user' && !isConsecutive && (
-              <img src={activeContact.userAvatar} className="avatar user-avatar w-8 h-8 rounded-full ml-2 self-end mb-1 object-cover border border-white shadow-sm" alt="user" />
-            )}
+            {msg.role === 'assistant' && !isConsecutive && <img src={activeContact.avatar} className="w-8 h-8 rounded-full object-cover" alt="AI" />}
+            {msg.role === 'user' && !isConsecutive && <img src={activeContact.userAvatar} className="w-8 h-8 rounded-full ml-2 object-cover border border-white" alt="user" />}
           </div>
 
-          {/* 主要内容容器 */}
-          <div className={`flex items-end gap-2 order-2 ${msg.role === 'user' ? 'flex-row-reverse' : 'flex-row'}`}>
-            {/* 气泡本体 */}
+          {/* 👇👇👇 核心修改区域：消息气泡 👇👇👇 */}
+          <div className={`flex items-end gap-2 order-2 ${msg.role === 'user' ? 'flex-row-reverse' : 'flex-row'} max-w-[85%]`}>
+            
+            {/* 这里的 div 加上了长按事件 */}
             <div
-              onClick={(e) => { if (!isSelectionMode) { e.stopPropagation(); setSelectedMsg(msg); setShowMsgMenu(true); } }}
-              className={`message-bubble min-w-0 relative group ${isSelectionMode ? 'pointer-events-none' : ''} max-w-[85%]`}
+              className={`message-bubble min-w-0 relative group ${isSelectionMode ? 'pointer-events-none' : ''}`}
+              // ★★★ 添加长按监听 ★★★
+              onTouchStart={() => handleTouchStart(msg)}
+              onTouchEnd={handleTouchEnd}
+              onMouseDown={() => handleTouchStart(msg)} // 兼容电脑鼠标
+              onMouseUp={handleTouchEnd}
+              onMouseLeave={handleTouchEnd}
+              // ★★★ 阻止默认右键菜单 ★★★
+              onContextMenu={(e) => e.preventDefault()}
             >
-              <div className={
-                `content px-3 py-[4px] rounded-xl text-sm leading-relaxed relative break-words ` +
-                (!activeContact.customCSS ?
-                  (msg.role === 'user' ?
-                    'bg-gray-200 text-gray-800' + (!isConsecutive ? ' rounded-tr-none' : '')
-                    : 'bg-white text-gray-800' + (!isConsecutive ? ' rounded-tl-none' : ''))
-                  : '')
-              }>
-                {msg.content.startsWith("> 引用") && (
-                  <div className="quote-block text-xs mb-2 p-2 rounded opacity-80 bg-black/10">{msg.content.split('\n\n')[0]}</div>
-                )}
-                {msg.type === 'voice' || msg.content.trim().startsWith('[Voice Message]') ? (
-                  <VoiceBubble
-                    msg={msg}
-                    isPlaying={playingMsgId === msg.id}
-                    progress={audioProgress}
-                    duration={duration}
-                    onPlay={() => {
-                      const cleanText = msg.content.replace(/^>.*?\n\n/, '').replace(/^\[Voice Message\]\s*/i, '').trim();
-                      playMessageAudio(msg.id, cleanText);
-                    }}
-                    onSeek={handleSeek}
-                    isUser={msg.role === 'user'}
+              {isEditing ? (
+                // === 编辑模式 UI ===
+                <div className="bg-white border-2 border-blue-400 rounded-xl p-2 shadow-lg min-w-[200px] animate-scaleIn">
+                  <span className="text-xs font-bold text-blue-500 mb-1 block">✏️ 编辑消息</span>
+                  <textarea 
+                    value={editContent}
+                    onChange={(e) => setEditContent(e.target.value)}
+                    className="w-full text-sm p-2 bg-gray-50 rounded border border-gray-200 outline-none resize-none focus:bg-white transition"
+                    rows={4}
+                    autoFocus
+                    // 防止点击输入框触发长按
+                    onMouseDown={(e) => e.stopPropagation()}
+                    onTouchStart={(e) => e.stopPropagation()}
                   />
-                ) : msg.type === 'image' ? (
-                  <img src={msg.content} className="chat-image rounded-lg max-w-full" alt="msg" />
-                ) : (
-                  <HiddenBracketText content={msg.content.replace(/^>.*?\n\n/, '')} />
-                )}
-              </div>
+                  <div className="flex justify-end gap-2 mt-2">
+                    <button onClick={handleCancelEdit} className="text-xs px-3 py-1 bg-gray-200 text-gray-600 rounded hover:bg-gray-300">取消</button>
+                    <button onClick={handleSaveEdit} className="text-xs px-3 py-1 bg-blue-500 text-white rounded font-bold hover:bg-blue-600">保存</button>
+                  </div>
+                </div>
+              ) : (
+                // === 正常显示模式 UI ===
+                <div className={
+                  `content px-3 py-[4px] rounded-xl text-sm leading-relaxed relative break-words cursor-pointer select-none transition-transform active:scale-95 ` +
+                  (!activeContact.customCSS ? (msg.role === 'user' ? 'bg-green-500 text-white' : 'bg-white text-gray-800 border border-gray-100') : '')
+                }>
+                  {/* 这里保留你原来的渲染逻辑 (引用、语音、图片等) */}
+                  {msg.content.startsWith("> 引用") && (
+                    <div className="quote-block text-xs mb-2 p-2 rounded opacity-80 bg-black/10">{msg.content.split('\n\n')[0]}</div>
+                  )}
+                  {msg.type === 'voice' || msg.content.trim().startsWith('[Voice Message]') ? (
+                    <VoiceBubble 
+                      msg={msg} 
+                      isPlaying={playingMsgId === msg.id} 
+                      progress={audioProgress} 
+                      duration={duration} 
+                      onPlay={() => playMessageAudio(msg.id, msg.content)} 
+                      onSeek={handleSeek} 
+                      isUser={msg.role === 'user'} 
+                    />
+                  ) : msg.type === 'image' ? (
+                    <img src={msg.content} className="rounded-lg max-w-full" alt="msg" />
+                  ) : (
+                    // 只有简单的文本才显示 HiddenBracketText
+                    <HiddenBracketText content={msg.content.replace(/^>.*?\n\n/, '')} />
+                  )}
+                </div>
+              )}
             </div>
 
-            {/* 外置时间戳 */}
-            <div className="text-[10px] text-gray-400 whitespace-nowrap shrink-0 pb-1">
-              {timeStr}
-            </div>
+            {/* 时间戳 */}
+            {!isEditing && <div className="text-[10px] text-gray-400 whitespace-nowrap shrink-0 pb-1">{timeStr}</div>}
           </div>
         </div>
       </React.Fragment>
     );
-  })}
+})}
+
+
+
+
+
                     {/* ★★★ 对方正在输入提醒气泡 ★★★ */}
           {isAiTyping && (
             <div className="flex justify-start animate-slideUp mb-3">

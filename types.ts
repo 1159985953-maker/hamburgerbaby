@@ -6,6 +6,12 @@ export interface Song {
   cover: string; // 封面
 }
 // --- 缝合：升级版收藏条目接口 ---
+
+
+
+
+
+
 export interface FavoriteEntry {
   id: string;
   // 单条模式用 msg，打包模式用 messages
@@ -59,6 +65,7 @@ export interface Contact {
   // User Identity 
   userName: string;
   userAvatar: string;
+  
   userPersona: string;
   
   // Chat Data
@@ -76,6 +83,7 @@ export interface Contact {
   // Advanced Memory Settings
   contextDepth: number;
   summaryTrigger: number;
+  unread?: number; // 👈 加上这一行！
   
   coupleSpaceUnlocked: boolean;
   
@@ -95,38 +103,33 @@ export interface Contact {
   };
   // ... 其他字段 ...
   
-  // ★★★ 新增：自定义外观 ★★★
-  customCSS?: string;       // 当前使用的 CSS 代码
-  chatBackground?: string;  // 聊天背景图 URL
-hef: {
-    CORE_DRIVES: {
-      primary_motive: string;          // e.g. "Connection"
-      values: string[];                // e.g. ["Kindness", "Art"]
-    };
-    EMOTIONAL_DYNAMICS: {
-      baseline_mood: string;           // e.g. "Calm"
-      resilience: number;              // 1-10，内核强度，替代之前的 core_strength
-    };
-    RELATIONAL_MASKS: {
-      default_style: string;           // e.g. "Gentle"
-      conflict_style: string;          // e.g. "Avoidant"
-    };
-    CULTURE_SCRIPTS: {
-      core_values: string[];
-      pet_phrases?: string[];          // 常用口头禅
-    };
-    INDIVIDUAL_VARIATION: {
-      personality_big5: {
-        openness: number;
-        conscientiousness: number;
-        extraversion: number;
-        agreeableness: number;
-        neuroticism: number;
-      };
-      speech_style: string;            // e.g. "温柔带点撒娇"
-    };
-    // 其他字段可后续补充
+
+
+
+// ===== 系统 #13 & #6: 主动消息与 AI 状态 =====
+// ===== 系统 #13 & #6: 主动消息与 AI 状态 =====
+  
+  // AI 的勿扰/下线状态
+  aiDND?: {
+    enabled: boolean;
+    until: number; // 时间戳
   };
+
+  // 用户定义的主动消息配置 (无模板版)
+  proactiveConfig?: {
+    enabled: boolean;
+minGapMinutes: number; // <--- 把原来的 minGapHours: number; 替换成这一行
+    maxDaily: number;
+  };
+
+  // 系统记录的主动消息发送历史
+  proactiveLastSent?: {
+    [date: string]: number;
+  };
+  
+
+
+
 
   // ===== 新增：关系与好感系统 =====
   affectionScore: number;              // 0-100
@@ -386,3 +389,7 @@ export interface HEF {
 
 // 在 Contact 接口里保持：
 hef: HEF;
+
+
+
+
