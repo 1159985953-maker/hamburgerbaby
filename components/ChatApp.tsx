@@ -2614,178 +2614,79 @@ if (parts.length === 0) {
     );
   }
 if (view === 'settings' && activeContact) {
-  const form = { ...activeContact, ...editForm };
-  const enabledBooks = form.enabledWorldBooks || [];
-    // --- 新增：预设管理逻辑 ---
-    const handleSavePreset = () => {
-      if (!presetName.trim()) return alert("请输入预设名称！");
-      const cssToSave = editForm.customCSS || form.customCSS || "";
-      if (!cssToSave) return alert("当前没有 CSS 代码可保存！");
-      const newPreset = {
-        id: Date.now().toString(),
-        name: presetName,
-        css: cssToSave
-      };
-      // 更新全局设置 (保存到内存中)
-      if (!globalSettings.themePresets) globalSettings.themePresets = [];
-      globalSettings.themePresets.push(newPreset);
-      setPresetName("");
-      alert(`预设 "${newPreset.name}" 保存成功！`);
-    };
-    const handleLoadPreset = (presetId) => {
-      const preset = globalSettings.themePresets?.find(p => p.id === presetId);
-      if (preset) {
-        setEditForm({ ...editForm, customCSS: preset.css });
-        setSelectedPresetId(presetId);
-      }
-    };
-    const handleDeletePreset = () => {
-      if (!selectedPresetId) return;
-      if (!globalSettings.themePresets) return;
-      const idx = globalSettings.themePresets.findIndex(p => p.id === selectedPresetId);
-      if (idx > -1) {
-        globalSettings.themePresets.splice(idx, 1);
-        setSelectedPresetId("");
-        setEditForm({ ...editForm, customCSS: "" });
-      }
-    };
-    return (
-      <div className="h-full w-full bg-gray-100 flex flex-col overflow-y-auto animate-slideInRight relative">
-        {/* 模态框 */}
-        {showMemoryModal && (
-          <div className="absolute inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-            <div className="bg-white w-full h-[80%] rounded-2xl flex flex-col shadow-2xl animate-scaleIn">
-              <div className="p-4 border-b flex justify-between items-center"><h3 className="font-bold text-lg">🧠 Long-Term Memory</h3><button onClick={() => setShowMemoryModal(false)} className="text-gray-400">✕</button></div>
-              <div className="flex-1 p-4 bg-yellow-50"><textarea className="w-full h-full bg-transparent outline-none resize-none text-sm font-mono leading-relaxed" value={tempSummary} onChange={(e) => setTempSummary(e.target.value)} placeholder="Summary..." /></div>
-              <div className="p-4 border-t"><button onClick={handleMemorySave} className="w-full bg-green-500 text-white py-3 rounded-xl font-bold">Save</button></div>
-            </div>
-          </div>
-        )}
-        {showWorldBookModal && (
-          <div className="absolute inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-            <div className="bg-white w-full max-h-[70%] rounded-2xl flex flex-col shadow-2xl animate-scaleIn">
-              <div className="p-4 border-b flex justify-between items-center"><h3 className="font-bold text-lg">📚 Select Lorebooks</h3><button onClick={() => setShowWorldBookModal(false)} className="text-gray-400">✕</button></div>
-              <div className="flex-1 overflow-y-auto p-2">
-                {worldBooks.map(wb => (
-                  <div key={wb.id} onClick={() => toggleWorldBook(wb.name)} className={`p-4 mb-2 rounded-xl border flex items-center justify-between cursor-pointer transition ${enabledBooks.includes(wb.name) ? 'bg-orange-50 border-orange-400' : 'bg-white border-gray-200'}`}>
-                    <span className="font-bold text-sm">{wb.name}</span>{enabledBooks.includes(wb.name) && <span className="text-orange-500 font-bold">✓</span>}
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        )}
-        <div className="bg-white p-4 shadow-sm flex items-center sticky top-0 z-20">
-          <button onClick={() => setView('chat')} className="text-blue-500 text-lg mr-4">‹ Back</button>
-          <h2 className="font-bold text-lg">Chat Settings</h2>
-        </div>
-        {/* 主内容区域：使用 flex-col 和 min-h-0 确保布局正常 */}
-        <div className="p-4 space-y-6 flex-1 flex flex-col min-h-0">
-            {/* 👇👇👇 [插入点 4] 👇👇👇 */}
-         {/* ✅ 正确的代码 */}
-<PresetSelector globalSettings={globalSettings} onSelect={(p: any) => {
-              setEditForm(prev => ({
-                  ...prev,
-                  userName: p.userName,
-                  userAvatar: p.userAvatar,
-                  userPersona: p.description
-              }));
-              alert(`已切换为: ${p.userName} (记得点底部 Save)`);
-          }} />
-          {/* 👆👆👆 [插入结束] 👆👆👆 */}
-         {/* 1. 基础信息 (终极版：带折叠、带删除、带保存) */}
-          <section className="bg-white rounded-2xl p-4 shadow-sm transition-all border border-gray-100">
-           
-            {/* --- 顶部标题栏 + 开关按钮 --- */}
-            <div className="flex justify-between items-center mb-4">
-                <h3 className="text-xs font-bold text-gray-400 uppercase">👤 My Persona</h3>
-                <button
-                    onClick={() => setShowPersonaMenu(!showPersonaMenu)}
-                    className={`text-[10px] px-3 py-1.5 rounded-full font-bold transition-all flex items-center gap-1 ${showPersonaMenu ? 'bg-blue-100 text-blue-600' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}
-                >
-                    {showPersonaMenu ? '▲ 收起面板' : '⚙️ 管理 / 切换人设'}
-                </button>
-            </div>
-            {/* --- 折叠区域 (点开才显示) --- */}
-            {showPersonaMenu && (
-                <div className="mb-6 p-4 bg-blue-50/50 rounded-xl border border-blue-100 border-dashed animate-slideDown">
-                    <div className="flex justify-between items-center mb-3">
-                        <span className="text-[10px] text-blue-400 font-bold">点击左侧套用，点击 × 删除：</span>
-                        <span className="text-[10px] text-blue-300">{globalSettings.userPresets?.length || 0} 个预设</span>
-                    </div>
-                   
-                    <div className="flex flex-wrap gap-2">
-                        {/* 1. 渲染已有的人设胶囊 [名字 | ×] */}
-                        {globalSettings.userPresets?.map((p: any) => (
-                            <div key={p.id} className="flex items-center bg-white border border-blue-200 rounded-lg overflow-hidden shadow-sm hover:shadow-md transition group">
-                                {/* 左边：套用按钮 */}
-                                <button
-                                    onClick={() => {
-                                        setEditForm({
-                                            ...editForm,
-                                            userName: p.userName,
-                                            userAvatar: p.userAvatar,
-                                            userPersona: p.description
-                                        });
-                                        setShowPersonaMenu(false); // 选完自动收起，体验丝滑
-                                        alert(`✅ 已变身: ${p.name}`);
-                                    }}
-                                    className="px-3 py-1.5 text-blue-600 text-xs font-bold hover:bg-blue-50 active:bg-blue-100 transition border-r border-blue-100"
-                                    title={`描述: ${p.description}`}
-                                >
-                                    {p.name}
-                                </button>
-                                {/* 右边：删除按钮 */}
-                                <button
-                                    onClick={(e) => {
-                                        e.stopPropagation();
-                                        if (confirm(`🗑️ 确定要删除人设 "${p.name}" 吗？`)) {
-                                            setGlobalSettings((prev: any) => ({
-                                                ...prev,
-                                                userPresets: prev.userPresets.filter((up: any) => up.id !== p.id)
-                                            }));
-                                        }
-                                    }}
-                                    className="px-2 py-1.5 text-gray-300 hover:text-red-500 hover:bg-red-50 transition text-xs font-bold"
-                                    title="删除此预设"
-                                >
-                                    ×
-                                </button>
-                            </div>
-                        ))}
-                        {/* 2. 空状态提示 */}
-                        {(!globalSettings.userPresets || globalSettings.userPresets.length === 0) && (
-                            <span className="text-xs text-gray-400 py-1">暂无预设，填好信息后点右边保存 👉</span>
-                        )}
-                        {/* 3. [+ 保存当前] 按钮 */}
-                        <button
-                            onClick={() => {
-                                const currentName = editForm.userName || activeContact.userName;
-                                const currentDesc = editForm.userPersona || activeContact.userPersona;
-                               
-                                if(!currentName) return alert("名字都没填，存个寂寞呀！");
-                                const pName = prompt("给这个新马甲起个名 (如: 侦探):", currentName);
-                                if(pName) {
-                                    const newPreset = {
-                                        id: Date.now().toString(),
-                                        name: pName,
-                                        userName: currentName,
-                                        userAvatar: editForm.userAvatar || activeContact.userAvatar,
-                                        description: currentDesc
-                                    };
-                                    setGlobalSettings((prev: any) => ({
-                                        ...prev,
-                                        userPresets: [...(prev.userPresets||[]), newPreset]
-                                    }));
-                                }
-                            }}
-                            className="px-3 py-1.5 bg-blue-500 text-white text-xs font-bold rounded-lg shadow-sm hover:bg-blue-600 active:scale-95 transition flex items-center gap-1 ml-auto"
-                        >
-                            <span>+</span> 保存当前设定
-                        </button>
-                    </div>
+        const form = { ...activeContact, ...editForm };
+        const enabledBooks = form.enabledWorldBooks || [];
+
+        // --- 新增：预设管理逻辑（保持不变）---
+        const handleSavePreset = () => {
+          if (!presetName.trim()) return alert("请输入预设名称！");
+          const cssToSave = editForm.customCSS || form.customCSS || "";
+          if (!cssToSave) return alert("当前没有 CSS 代码可保存！");
+          const newPreset = {
+            id: Date.now().toString(),
+            name: presetName,
+            css: cssToSave
+          };
+          if (!globalSettings.themePresets) globalSettings.themePresets = [];
+          globalSettings.themePresets.push(newPreset);
+          setPresetName("");
+          alert(`预设 "${newPreset.name}" 保存成功！`);
+        };
+
+        const handleLoadPreset = (presetId) => {
+          const preset = globalSettings.themePresets?.find(p => p.id === presetId);
+          if (preset) {
+            setEditForm({ ...editForm, customCSS: preset.css });
+            setSelectedPresetId(presetId);
+          }
+        };
+
+        const handleDeletePreset = () => {
+          if (!selectedPresetId) return;
+          if (!globalSettings.themePresets) return;
+          const idx = globalSettings.themePresets.findIndex(p => p.id === selectedPresetId);
+          if (idx > -1) {
+            globalSettings.themePresets.splice(idx, 1);
+            setSelectedPresetId("");
+            setEditForm({ ...editForm, customCSS: "" });
+          }
+        };
+
+        return (
+          <div className="h-full w-full bg-gray-100 flex flex-col overflow-hidden">
+            {/* 沉浸式 Header */}
+            <SafeAreaHeader
+              title="Chat Settings"
+              left={<button onClick={() => setView('chat')} className="text-blue-500 text-2xl -ml-2">‹</button>}
+            />
+
+            {/* 模态框保持不变 */}
+            {showMemoryModal && (
+              <div className="absolute inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+                <div className="bg-white w-full h-[80%] rounded-2xl flex flex-col shadow-2xl animate-scaleIn">
+                  <div className="p-4 border-b flex justify-between items-center"><h3 className="font-bold text-lg">🧠 Long-Term Memory</h3><button onClick={() => setShowMemoryModal(false)} className="text-gray-400">✕</button></div>
+                  <div className="flex-1 p-4 bg-yellow-50"><textarea className="w-full h-full bg-transparent outline-none resize-none text-sm font-mono leading-relaxed" value={tempSummary} onChange={(e) => setTempSummary(e.target.value)} placeholder="Summary..." /></div>
+                  <div className="p-4 border-t"><button onClick={handleMemorySave} className="w-full bg-green-500 text-white py-3 rounded-xl font-bold">Save</button></div>
                 </div>
+              </div>
             )}
+            {showWorldBookModal && (
+              <div className="absolute inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+                <div className="bg-white w-full max-h-[70%] rounded-2xl flex flex-col shadow-2xl animate-scaleIn">
+                  <div className="p-4 border-b flex justify-between items-center"><h3 className="font-bold text-lg">📚 Select Lorebooks</h3><button onClick={() => setShowWorldBookModal(false)} className="text-gray-400">✕</button></div>
+                  <div className="flex-1 overflow-y-auto p-2">
+                    {worldBooks.map(wb => (
+                      <div key={wb.id} onClick={() => toggleWorldBook(wb.name)} className={`p-4 mb-2 rounded-xl border flex items-center justify-between cursor-pointer transition ${enabledBooks.includes(wb.name) ? 'bg-orange-50 border-orange-400' : 'bg-white border-gray-200'}`}>
+                        <span className="font-bold text-sm">{wb.name}</span>{enabledBooks.includes(wb.name) && <span className="text-orange-500 font-bold">✓</span>}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* 主内容区：加 pt-20 防止被 Header 遮挡 */}
+            <div className="flex-1 overflow-y-auto p-4 pt-20 space-y-6">
             {/* --- 下面是常规输入框 (头像/名字/描述) --- */}
             <div className="flex items-center gap-4 mb-4">
               <div className="w-16 h-16 rounded-full overflow-hidden relative border border-gray-100 bg-gray-50 group hover:shadow-md transition">
