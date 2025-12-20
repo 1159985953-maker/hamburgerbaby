@@ -1,23 +1,21 @@
+// ==================== 【vite.config.ts 正确修复版】 ====================
+// 这是一组完全修复白屏的配置
+// 直接复制整个文件内容，覆盖你原来的 vite.config.ts
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 
 export default defineConfig({
-  base: '/hamburgerbaby/', // 你的基础路径，保留
+  base: '/',  // ← 改成这个！根路径，不要加项目名
   plugins: [react()],
-
-  // 👇👇👇 新增下面这些配置来解决报错 👇👇👇
   resolve: {
     alias: {
-      // 关键操作：把 'react-native' 指向 'react-native-web'
-      // 这样 Vite 就不会去读那个报错的文件，而是去读网页兼容版
+      // 保留你原来的兼容配置
       'react-native': 'react-native-web',
     },
   },
   optimizeDeps: {
-    // 告诉构建工具，不要去预处理 react-native，直接跳过
     exclude: ['react-native'],
     esbuildOptions: {
-      // 处理一些 .js 文件里夹杂 jsx 的情况
       loader: {
         '.js': 'jsx',
       },
