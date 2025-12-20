@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import SafeAreaHeader from './SafeAreaHeader';  // ← 确保路径正确（如果在 components 同级）
 import { WorldBookCategory, WorldBookEntry } from '../types';
 
 interface WorldBookAppProps {
@@ -32,7 +33,7 @@ const WorldBookApp: React.FC<WorldBookAppProps> = ({ worldBooks, setWorldBooks, 
     if (manageMode) {
       setSelectedEntries(prev => ({
         ...prev,
-        [catId]: prev[catId]?.includes(entryId) 
+        [catId]: prev[catId]?.includes(entryId)
           ? prev[catId].filter(id => id !== entryId)
           : [...(prev[catId] || []), entryId]
       }));
@@ -61,7 +62,7 @@ const WorldBookApp: React.FC<WorldBookAppProps> = ({ worldBooks, setWorldBooks, 
     const count = selectedEntries[catId]?.length || 0;
     if (count === 0) return;
     if (!confirm(`确定删除 ${count} 条目吗？`)) return;
-    setWorldBooks(prev => prev.map(c => 
+    setWorldBooks(prev => prev.map(c =>
       c.id === catId ? { ...c, entries: c.entries.filter(e => !selectedEntries[catId]?.includes(e.id)) } : c
     ));
     setSelectedEntries(prev => ({ ...prev, [catId]: [] }));
@@ -74,7 +75,6 @@ const WorldBookApp: React.FC<WorldBookAppProps> = ({ worldBooks, setWorldBooks, 
       entries: {}
     };
     let index = 0;
-
     selectedCats.forEach(catId => {
       const cat = worldBooks.find(c => c.id === catId);
       if (!cat) return;
@@ -86,7 +86,6 @@ const WorldBookApp: React.FC<WorldBookAppProps> = ({ worldBooks, setWorldBooks, 
         };
       });
     });
-
     Object.keys(selectedEntries).forEach(catId => {
       const cat = worldBooks.find(c => c.id === catId);
       if (!cat) return;
@@ -100,12 +99,10 @@ const WorldBookApp: React.FC<WorldBookAppProps> = ({ worldBooks, setWorldBooks, 
         };
       });
     });
-
     if (index === 0) {
       alert("没有选中任何内容");
       return;
     }
-
     const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -124,11 +121,11 @@ const WorldBookApp: React.FC<WorldBookAppProps> = ({ worldBooks, setWorldBooks, 
 
   const saveEdit = () => {
     if (!editingEntry) return;
-    setWorldBooks(prev => prev.map(c => 
+    setWorldBooks(prev => prev.map(c =>
       c.id === editingEntry.catId ? {
         ...c,
-        entries: c.entries.map(e => 
-          e.id === editingEntry.entry.id 
+        entries: c.entries.map(e =>
+          e.id === editingEntry.entry.id
             ? { ...e, name: editName.trim() || "未命名条目", content: editContent }
             : e
         )
@@ -137,13 +134,10 @@ const WorldBookApp: React.FC<WorldBookAppProps> = ({ worldBooks, setWorldBooks, 
     setEditingEntry(null);
   };
 
-  // 新建条目（支持自动归类或新建分类）
   const createNewEntry = () => {
     if (!newEntryContent.trim()) return;
     let targetCat = worldBooks.find(c => c.name.toLowerCase() === newEntryCatName.toLowerCase().trim());
-
     if (!targetCat) {
-      // 新建分类
       targetCat = {
         id: Date.now().toString(),
         name: newEntryCatName.trim(),
@@ -151,18 +145,15 @@ const WorldBookApp: React.FC<WorldBookAppProps> = ({ worldBooks, setWorldBooks, 
       };
       setWorldBooks(prev => [...prev, targetCat]);
     }
-
     const newEntry: WorldBookEntry = {
       id: Date.now().toString(),
       keys: [],
       content: newEntryContent.trim(),
       name: newEntryName.trim() || "未命名条目"
     };
-
-    setWorldBooks(prev => prev.map(c => 
+    setWorldBooks(prev => prev.map(c =>
       c.id === targetCat!.id ? { ...c, entries: [...c.entries, newEntry] } : c
     ));
-
     setShowNewEntryModal(false);
     setNewEntryCatName("");
     setNewEntryName("");
@@ -170,34 +161,37 @@ const WorldBookApp: React.FC<WorldBookAppProps> = ({ worldBooks, setWorldBooks, 
     alert(`条目已添加到分类 "${targetCat.name}"`);
   };
 
+  // 你的原导入逻辑（保留占位）
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    // 你的原导入逻辑完全保留
-    // ... (保持不变)
+    // 这里放你原来的导入逻辑
+    console.log("导入文件", e.target.files);
   };
 
   return (
     <div className="h-full w-full bg-gray-100 flex flex-col">
-      {/* Header */}
-      <div className="bg-white border-b border-gray-200 px-5 py-4 flex items-center justify-between">
-        <button onClick={onClose} className="text-gray-700 font-medium">关闭</button>
-        <h1 className="font-bold text-lg text-gray-900">世界书</h1>
-        <div className="flex items-center gap-5">
-          <label className="cursor-pointer text-gray-600 text-lg hover:text-gray-900">
-            📥
-            <input type="file" accept=".json" onChange={handleFileUpload} className="hidden" />
-          </label>
-          <button onClick={() => setManageMode(!manageMode)} className="text-gray-700 font-medium hover:text-gray-900">
-            {manageMode ? '完成' : '管理'}
-          </button>
-          {!manageMode && (
-            <button onClick={() => setShowNewEntryModal(true)} className="text-gray-700 text-2xl hover:text-gray-900">+</button>
-          )}
-        </div>
-      </div>
+      {/* 统一的沉浸式 Header */}
+      <SafeAreaHeader
+        title="世界书"
+        left={<button onClick={onClose} className="text-gray-700 font-medium">关闭</button>}
+        right={
+          <div className="flex items-center gap-5">
+            <label className="cursor-pointer text-gray-600 text-lg hover:text-gray-900">
+              📥
+              <input type="file" accept=".json" onChange={handleFileUpload} className="hidden" />
+            </label>
+            <button onClick={() => setManageMode(!manageMode)} className="text-gray-700 font-medium hover:text-gray-900">
+              {manageMode ? '完成' : '管理'}
+            </button>
+            {!manageMode && (
+              <button onClick={() => setShowNewEntryModal(true)} className="text-gray-700 text-2xl hover:text-gray-900">+</button>
+            )}
+          </div>
+        }
+      />
 
-      {/* 多选操作栏 */}
+      {/* 多选操作栏（保持原样，但位置下移） */}
       {manageMode && getSelectedCount() > 0 && (
-        <div className="bg-gray-800 text-white px-5 py-4 flex items-center justify-between">
+        <div className="bg-gray-800 text-white px-5 py-4 flex items-center justify-between z-10 shadow-lg">
           <span className="font-medium">已选 {getSelectedCount()} 项</span>
           <div className="flex gap-4">
             <button onClick={exportSelected} className="bg-white text-gray-800 px-5 py-2 rounded font-medium hover:bg-gray-100">
@@ -213,18 +207,18 @@ const WorldBookApp: React.FC<WorldBookAppProps> = ({ worldBooks, setWorldBooks, 
         </div>
       )}
 
-      {/* 分类列表 */}
-      <div className="flex-1 overflow-y-auto p-5 space-y-5">
+      {/* 分类列表内容区：顶部留出 Header 高度 */}
+      <div className="flex-1 overflow-y-auto p-5 pt-20">  {/* pt-20 防止内容被 Header 遮挡 */}
         {worldBooks.length === 0 ? (
           <div className="text-center text-gray-500 py-24">
             暂无世界书分类
           </div>
         ) : (
           worldBooks.map(cat => (
-            <div key={cat.id} className="bg-white rounded-xl border border-gray-200">
-              <div 
+            <div key={cat.id} className="bg-white rounded-xl border border-gray-200 mb-5 shadow-sm">
+              <div
                 onClick={() => toggleCat(cat.id)}
-                className={`px-5 py-4 flex items-center justify-between cursor-pointer transition-all ${
+                className={`px-5 py-4 flex items-center justify-between cursor-pointer transition-all rounded-t-xl ${
                   selectedCats.includes(cat.id) ? 'bg-gray-100' : 'hover:bg-gray-50'
                 }`}
               >
@@ -264,7 +258,7 @@ const WorldBookApp: React.FC<WorldBookAppProps> = ({ worldBooks, setWorldBooks, 
                       ))}
                       {manageMode && (selectedEntries[cat.id]?.length || 0) > 0 && (
                         <div className="px-5 py-3 border-t border-gray-200">
-                          <button 
+                          <button
                             onClick={() => deleteEntriesInCat(cat.id)}
                             className="w-full bg-red-600 text-white py-3 rounded font-medium hover:bg-red-700"
                           >
@@ -281,7 +275,7 @@ const WorldBookApp: React.FC<WorldBookAppProps> = ({ worldBooks, setWorldBooks, 
         )}
       </div>
 
-      {/* 新建条目弹窗 */}
+      {/* 新建条目弹窗（保持不变） */}
       {showNewEntryModal && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl w-full max-w-lg shadow-2xl">
@@ -331,7 +325,7 @@ const WorldBookApp: React.FC<WorldBookAppProps> = ({ worldBooks, setWorldBooks, 
         </div>
       )}
 
-      {/* 编辑条目卡片（大小严格限制在页面内） */}
+      {/* 编辑条目弹窗（保持不变） */}
       {editingEntry && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl w-full max-w-lg shadow-2xl flex flex-col" style={{ maxHeight: '90vh' }}>

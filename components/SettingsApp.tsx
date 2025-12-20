@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { GlobalSettings, ApiPreset, Contact, WorldBookCategory } from '../types';
+import SafeAreaHeader from '@/components/SafeAreaHeader';
 
 interface SettingsAppProps {
   settings: GlobalSettings;
@@ -178,12 +179,12 @@ const SettingsApp: React.FC<SettingsAppProps> = ({
   };
 
   return (
-    <div className="h-full w-full bg-gray-100 flex flex-col overflow-hidden animate-slideInRight">
+    <div className="h-full w-full bg-gray-100 flex flex-col overflow-hidden pt-16"> {/* 加 pt-16 */}
       {/* 顶部标题栏 */}
-      <div className="bg-white p-4 flex items-center shadow-sm">
-        <button onClick={onClose} className="text-blue-500 mr-4 text-lg font-bold">‹ 返回</button>
-        <h1 className="font-bold text-xl flex-1 text-center mr-10">系统设置</h1>
-      </div>
+      <SafeAreaHeader
+  title="系统设置"
+  left={<button onClick={onClose} className="text-blue-500 text-2xl -ml-2">‹</button>}
+/>
 
       {/* 标签页切换 */}
       <div className="flex bg-white border-b">

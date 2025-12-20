@@ -1,5 +1,7 @@
 import React from 'react';
+import SafeAreaHeader from './SafeAreaHeader';  // ← 确保路径正确（如果组件在 components 同级目录）
 import { GlobalSettings } from '../types';
+import SafeAreaHeader from '@/components/SafeAreaHeader';
 
 interface WallpaperAppProps {
   settings: GlobalSettings;
@@ -17,41 +19,48 @@ const WallpaperApp: React.FC<WallpaperAppProps> = ({ settings, setSettings, onCl
   ];
 
   const handleUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-      const file = e.target.files?.[0];
-      if (!file) return;
-      const reader = new FileReader();
-      reader.onload = (ev) => {
-          if (ev.target?.result) {
-              setSettings(s => ({...s, wallpaper: ev.target!.result as string}));
-          }
-      };
-      reader.readAsDataURL(file);
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      if (ev.target?.result) {
+        setSettings(s => ({ ...s, wallpaper: ev.target!.result as string }));
+      }
+    };
+    reader.readAsDataURL(file);
   };
 
   return (
-    <div className="h-full w-full bg-black flex flex-col animate-slideUp">
-      <div className="p-4 flex items-center justify-between text-white z-10">
-        <button onClick={onClose} className="text-lg">✕</button>
-        <h1 className="font-bold">Wallpapers</h1>
-        <div className="w-6"></div>
-      </div>
-      
-      <div className="flex-1 overflow-y-auto p-4 grid grid-cols-2 gap-4">
+    <div className="h-full w-full bg-black flex flex-col">
+      {/* 统一的沉浸式 Header */}
+      <SafeAreaHeader
+        title="Wallpapers"
+        left={<button onClick={onClose} className="text-white text-2xl">✕</button>}
+        backgroundClass="bg-black/70 backdrop-blur-md text-white border-b border-white/10"
+      />
+
+      {/* 内容区：顶部留出安全区 + Header 高度 */}
+      <div className="flex-1 overflow-y-auto p-4 pt-20">  {/* pt-20 保证内容不被 Header 遮挡 */}
+        <div className="grid grid-cols-2 gap-4">
           {presets.map((url, i) => (
-              <div 
-                key={i} 
-                className={`aspect-[9/16] rounded-xl overflow-hidden cursor-pointer border-4 ${settings.wallpaper === url ? 'border-blue-500' : 'border-transparent'}`}
-                onClick={() => setSettings(s => ({...s, wallpaper: url}))}
-              >
-                  <img src={url} className="w-full h-full object-cover" />
-              </div>
+            <div
+              key={i}
+              className={`aspect-[9/16] rounded-xl overflow-hidden cursor-pointer border-4 transition-all ${
+                settings.wallpaper === url ? 'border-blue-500 shadow-lg' : 'border-transparent'
+              }`}
+              onClick={() => setSettings(s => ({ ...s, wallpaper: url }))}
+            >
+              <img src={url} className="w-full h-full object-cover" alt={`Preset ${i + 1}`} />
+            </div>
           ))}
-          
-          <label className="aspect-[9/16] bg-gray-800 rounded-xl flex flex-col items-center justify-center cursor-pointer border-4 border-dashed border-gray-600 hover:border-gray-400">
-              <span className="text-3xl mb-2">📷</span>
-              <span className="text-xs text-gray-400">Upload</span>
-              <input type="file" onChange={handleUpload} className="hidden" accept="image/*" />
+
+          {/* 上传自定义壁纸 */}
+          <label className="aspect-[9/16] bg-gray-800 rounded-xl flex flex-col items-center justify-center cursor-pointer border-4 border-dashed border-gray-600 hover:border-gray-400 transition-all">
+            <span className="text-3xl mb-2">📷</span>
+            <span className="text-xs text-gray-400">Upload</span>
+            <input type="file" onChange={handleUpload} className="hidden" accept="image/*" />
           </label>
+        </div>
       </div>
     </div>
   );

@@ -4,6 +4,9 @@ import TranslationText from './TranslationText';
 import { generateResponse } from '../services/apiService';
 import { summarizeHistory } from '../services/geminiService';
 import { generateMinimaxAudio, fetchMinimaxVoices, getBuiltInMinimaxVoices, MinimaxVoice } from '../services/ttsService';
+import SafeAreaHeader from '@/components/SafeAreaHeader';
+
+
 
 
 
@@ -2396,25 +2399,22 @@ if (parts.length === 0) {
   // ==================== 视图部分 ====================
   if (view === 'list') {
     return (
-      <div className="h-full w-full bg-gray-50 flex flex-col relative">
-        <div className="bg-white p-4 flex justify-between items-center shadow-sm">
-          <button onClick={onExit} className="text-blue-500 font-medium">Exit</button>
-          <h1 className="font-bold text-lg">
-            {navTab === 'chats' ? 'Chats' : navTab === 'moments' ? 'Moments' : 'Favorites'}
-          </h1>
-          <div className="flex items-center gap-4">
-            {/* 只有在聊天 Tab 才显示导入和添加 */}
-            {navTab === 'chats' && (
-              <React.Fragment>
-                <label className="text-blue-500 text-xl cursor-pointer" title="Import Character Card">
-                  📥
-                  <input type="file" className="hidden" accept=".json,.png" onChange={handleCardImport} />
-                </label>
-                <button onClick={() => { setEditForm({}); setView('create'); }} className="text-blue-500 text-2xl leading-none">+</button>
-              </React.Fragment>
-            )}
-          </div>
-        </div>
+      <div className="h-full w-full bg-gray-50 flex flex-col relative pt-16"> {/* 加了 pt-16 */}
+        <SafeAreaHeader
+  title={navTab === 'chats' ? 'Chats' : navTab === 'moments' ? 'Moments' : 'Favorites'}
+  left={<button onClick={onExit} className="text-blue-500 font-medium text-lg">Exit</button>}
+  right={
+    navTab === 'chats' && (
+      <div className="flex items-center gap-4">
+        <label className="text-blue-500 text-xl cursor-pointer" title="Import Character Card">
+          📥
+          <input type="file" className="hidden" accept=".json,.png" onChange={handleCardImport} />
+        </label>
+        <button onClick={() => { setEditForm({}); setView('create'); }} className="text-blue-500 text-2xl leading-none">+</button>
+      </div>
+    )
+  }
+/>
         {/* 列表内容区域 */}
         <div className="flex-1 overflow-y-auto pb-16"> {/* 留出底部导航空间 */}
           {/* 1. 聊天列表 */}

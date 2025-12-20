@@ -272,7 +272,7 @@ const [jumpToContactId, setJumpToContactId] = useState<string | null>(null);
         className="h-full w-full bg-cover bg-center flex flex-col p-6 text-white relative animate-fadeIn transition-all duration-500"
         style={{ backgroundImage: `url(${globalSettings.wallpaper})` }}
       >
-        <div className="flex justify-between text-xs font-medium mb-8 pt-2">
+        <div className="flex justify-between text-xs font-medium mb-8 pt-12">
           <span>{new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}</span>
           <div className="flex gap-1"><span>5G</span><span>🔋 100%</span></div>
         </div>
