@@ -23,11 +23,19 @@ export interface FavoriteEntry {
   category: string;
   timestamp: number;
 }
+
+
+
+
 export interface ThemePreset {
   id: string;
   name: string;
   css: string;
 }
+
+
+
+
 export interface Message {
   id: string;
   role: 'user' | 'assistant' | 'system';

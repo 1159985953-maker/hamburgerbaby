@@ -13,13 +13,20 @@
 <script src="https://cdn.tailwindcss.com"></script>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap');
-body { 
+/* ========== 这是一组修复顶部状态栏遮挡的核心 CSS ========== */
+/* 作用：给整个页面顶部添加安全区padding，避免header被iPhone状态栏（时间、电量）挡住 */
+/* 同时保留你原来的底部处理，并兼容所有设备（非iPhone上值为0，不影响） */
+body {
   font-family: 'Inter', sans-serif;
   margin: 0;
   padding: 0;
-  /* 关键：使用 env() 处理手机底部安全区（如iPhone刘海/首页条） */
-  padding-bottom: env(safe-area-inset-bottom);
+  /* 关键：同时处理顶部和底部安全区 */
+  padding-top: env(safe-area-inset-top);        /* 新增：避开顶部状态栏 */
+  padding-bottom: env(safe-area-inset-bottom); /* 原有：避开底部首页条 */
+  padding-left: env(safe-area-inset-left);     /* 可选：左右刘海区，避免横屏时内容被挡 */
+  padding-right: env(safe-area-inset-right);   /* 可选：同上 */
 }
+/* ========== 修复结束 ========== */
 
 /* Hide scrollbar */
 .no-scrollbar::-webkit-scrollbar { display: none; }
