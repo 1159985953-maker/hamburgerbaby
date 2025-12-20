@@ -4,7 +4,7 @@ import TranslationText from './TranslationText';
 import { generateResponse } from '../services/apiService';
 import { summarizeHistory } from '../services/geminiService';
 import { generateMinimaxAudio, fetchMinimaxVoices, getBuiltInMinimaxVoices, MinimaxVoice } from '../services/ttsService';
-import SafeAreaHeader from '@/components/SafeAreaHeader';
+import SafeAreaHeader from './SafeAreaHeader';  // ← 确保路径正确（如果在 components 同级）
 
 
 

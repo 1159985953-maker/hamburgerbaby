@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { GlobalSettings, ApiPreset, Contact, WorldBookCategory } from '../types';
-import SafeAreaHeader from '@/components/SafeAreaHeader';
+import SafeAreaHeader from './SafeAreaHeader';  // ← 确保路径正确（如果在 components 同级）
 
 interface SettingsAppProps {
   settings: GlobalSettings;

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { DiaryEntry, QAEntry, LoveLetter, Contact } from '../types'; 
 import { generateDailyDiary, generateDailyQuestion } from '../services/geminiService';
-import SafeAreaHeader from '@/components/SafeAreaHeader';
+import SafeAreaHeader from './SafeAreaHeader';  // ← 确保路径正确（如果在 components 同级）
 
 interface CoupleSpaceProps {
   // 注意：App.tsx 传进来的是经过防御处理的 safeProfile，本质是 Contact 类型

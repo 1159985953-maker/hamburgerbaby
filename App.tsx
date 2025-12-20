@@ -6,6 +6,7 @@ import WorldBookApp from './components/WorldBookApp';
 import WallpaperApp from './components/WallpaperApp';
 import localforage from 'localforage';
 import { Contact, GlobalSettings, WorldBookCategory, Message } from './types';
+import SafeAreaHeader from './SafeAreaHeader';  // ← 确保路径正确（如果在 components 同级）
 
 // ==================== 1. 辅助函数 (保持不变) ====================
 
