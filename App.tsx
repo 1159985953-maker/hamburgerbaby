@@ -334,44 +334,7 @@ const [jumpToContactId, setJumpToContactId] = useState<string | null>(null);
     );
   };
 
-  // 8. 白屏救援
-  if (isLoaded && contacts.length === 0) {
-    return (
-      <div className="h-screen w-screen bg-black flex flex-col items-center justify-center text-white p-6">
-        <h1 className="text-3xl font-bold mb-4">欢迎回来</h1>
-        <p className="mb-6 text-gray-400 text-center">似乎没有检测到角色数据，<br/>是否恢复初始状态？</p>
-        <button
-          onClick={() => {
-            setContacts(INITIAL_CONTACTS);
-            window.location.reload();
-          }}
-          className="px-6 py-3 bg-blue-600 rounded-full font-bold shadow-lg hover:bg-blue-500 transition mb-12"
-        >
-          🚀 开始新旅程
-        </button>
-        <div className="mt-8 border-t border-gray-800 pt-8 w-full max-w-xs text-center">
-          <p className="text-xs text-red-500/50 mb-2">DEBUG ZONE</p>
-          <button
-            onClick={async () => {
-              if (confirm("⚠️ 确定要彻底清空所有数据并重置吗？")) {
-                try {
-                  await localforage.clear();
-                  localStorage.clear();
-                  alert("已重置，即将重启...");
-                  window.location.reload();
-                } catch (e) {
-                  alert("重置失败");
-                }
-              }
-            }}
-            className="text-xs text-red-500 underline hover:text-red-400"
-          >
-            强制清空所有缓存 (救砖)
-          </button>
-        </div>
-      </div>
-    );
-  }
+  
 
 // 9. 主渲染 JSX
   return (
