@@ -2716,36 +2716,132 @@ if (view === 'settings' && activeContact) {
 
       {/* 主内容区 */}
       <div className="flex-1 overflow-y-auto p-4 pt-20 space-y-6">
-        {/* 1. My Persona */}
+                {/* 1. My Persona - 可折叠预设管理版 */}
         <section className="bg-white rounded-2xl p-4 shadow-sm transition-all border border-gray-100">
-          <div className="flex items-center gap-4 mb-6">
-            <div className="w-16 h-16 rounded-full overflow-hidden relative border border-gray-100 bg-gray-50 group hover:shadow-md transition">
-              <img src={editForm.userAvatar || form.userAvatar} className="w-full h-full object-cover" alt="user" />
-              <input type="file" onChange={(e) => handleImageUpload(e, 'userAvatar')} className="absolute inset-0 opacity-0 cursor-pointer" title="Change Avatar" />
+          {/* 可点击的折叠标题栏 */}
+          <div
+            className="flex items-center justify-between cursor-pointer select-none mb-4 pb-3 border-b border-gray-100"
+            onClick={() => setShowPersonaMenu(!showPersonaMenu)}
+          >
+            <div className="flex items-center gap-3">
+              <span className="text-lg">👤</span>
+              <h3 className="font-bold text-gray-800">My Persona</h3>
+              {globalSettings?.userPresets && globalSettings.userPresets.length > 0 && (
+                <span className="text-xs bg-blue-100 text-blue-600 px-2 py-0.5 rounded-full">
+                  {globalSettings.userPresets.length} 个预设
+                </span>
+              )}
             </div>
-            <div className="flex-1">
-              <label className="text-xs text-gray-500 font-bold ml-1">My Name</label>
-              <input
-                type="text"
-                value={editForm.userName !== undefined ? editForm.userName : form.userName}
-                onChange={e => setEditForm({ ...editForm, userName: e.target.value })}
-                className="w-full border-b p-2 outline-none text-sm font-bold bg-transparent focus:border-blue-500 transition"
-                placeholder="User"
+            <span className={`text-xl transition-transform ${showPersonaMenu ? 'rotate-180' : ''}`}>
+              ▼
+            </span>
+          </div>
+
+          {/* 折叠内容：只有展开时才显示 */}
+          {showPersonaMenu && (
+            <div className="animate-slideDown space-y-4">
+              {/* 预设胶囊列表 */}
+              <div>
+                <div className="flex flex-wrap gap-2">
+                  {globalSettings?.userPresets?.map((p: any) => (
+                    <div
+                      key={p.id}
+                      className="relative group bg-blue-50 border border-blue-200 rounded-full px-4 py-2 text-xs font-medium text-blue-700 cursor-pointer hover:bg-blue-100 transition"
+                      onClick={() => {
+                        setEditForm(prev => ({
+                          ...prev,
+                          userName: p.userName || form.userName,
+                          userAvatar: p.userAvatar || form.userAvatar,
+                          userPersona: p.description || form.userPersona
+                        }));
+                        alert(`已加载预设: ${p.name}`);
+                      }}
+                    >
+                      <span>{p.name}</span>
+                      {/* hover 删除叉叉 */}
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (confirm(`确定删除预设 "${p.name}" 吗？`)) {
+                            setGlobalSettings(prev => ({
+                              ...prev,
+                              userPresets: prev.userPresets?.filter((preset: any) => preset.id !== p.id) || []
+                            }));
+                            alert(`预设 "${p.name}" 已删除`);
+                          }
+                        }}
+                        className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white rounded-full flex items-center justify-center text-xs opacity-0 group-hover:opacity-100 transition shadow-md hover:bg-red-600"
+                      >
+                        ×
+                      </button>
+                    </div>
+                  ))}
+
+                  {/* 保存当前按钮 */}
+                  <button
+                    onClick={() => {
+                      const name = prompt("保存当前设置为预设，输入名称:", "新预设");
+                      if (!name?.trim()) return;
+                      const newPreset = {
+                        id: Date.now().toString(),
+                        name: name.trim(),
+                        userName: editForm.userName !== undefined ? editForm.userName : form.userName,
+                        userAvatar: editForm.userAvatar || form.userAvatar,
+                        description: editForm.userPersona !== undefined ? editForm.userPersona : form.userPersona
+                      };
+                      setGlobalSettings(prev => ({
+                        ...prev,
+                        userPresets: [...(prev.userPresets || []), newPreset]
+                      }));
+                      alert(`预设 "${name.trim()}" 保存成功！`);
+                    }}
+                    className="px-4 py-2 bg-blue-500 text-white rounded-full text-xs font-bold shadow hover:bg-blue-600 transition flex items-center gap-1"
+                  >
+                    <span>+</span> 保存当前
+                  </button>
+                </div>
+
+                {/* 无预设提示 */}
+                {(!globalSettings?.userPresets || globalSettings.userPresets.length === 0) && (
+                  <div className="text-center text-xs text-gray-400 mt-3 italic">
+                    暂无预设，填写后可点击“+ 保存当前”创建
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* 下面是固定的头像 + 名字 + 描述（不受折叠影响） */}
+          <div className={`transition-all ${showPersonaMenu ? 'mt-6' : ''}`}>
+            <div className="flex items-center gap-4 mb-6">
+              <div className="w-16 h-16 rounded-full overflow-hidden relative border border-gray-100 bg-gray-50 group hover:shadow-md transition">
+                <img src={editForm.userAvatar || form.userAvatar} className="w-full h-full object-cover" alt="user" />
+                <input type="file" onChange={(e) => handleImageUpload(e, 'userAvatar')} className="absolute inset-0 opacity-0 cursor-pointer" title="Change Avatar" />
+              </div>
+              <div className="flex-1">
+                <label className="text-xs text-gray-500 font-bold ml-1">My Name</label>
+                <input
+                  type="text"
+                  value={editForm.userName !== undefined ? editForm.userName : form.userName}
+                  onChange={e => setEditForm({ ...editForm, userName: e.target.value })}
+                  className="w-full border-b p-2 outline-none text-sm font-bold bg-transparent focus:border-blue-500 transition"
+                  placeholder="User"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="text-xs text-gray-500 font-bold ml-1">My Description</label>
+              <textarea
+                rows={3}
+                value={editForm.userPersona !== undefined ? editForm.userPersona : form.userPersona}
+                onChange={e => setEditForm({ ...editForm, userPersona: e.target.value })}
+                className="w-full border p-3 rounded-xl text-sm mt-1 bg-gray-50 text-xs focus:bg-white focus:ring-2 focus:ring-blue-100 outline-none transition resize-none"
+                placeholder="描述一下你自己，AI 会看到的..."
               />
             </div>
           </div>
-          <div>
-            <label className="text-xs text-gray-500 font-bold ml-1">My Description</label>
-            <textarea
-              rows={3}
-              value={editForm.userPersona !== undefined ? editForm.userPersona : form.userPersona}
-              onChange={e => setEditForm({ ...editForm, userPersona: e.target.value })}
-              className="w-full border p-3 rounded-xl text-sm mt-1 bg-gray-50 text-xs focus:bg-white focus:ring-2 focus:ring-blue-100 outline-none transition resize-none"
-              placeholder="描述一下你自己，AI 会看到的..."
-            />
-          </div>
         </section>
-
         {/* 2. 角色信息 */}
         <section className="bg-white rounded-2xl p-4 shadow-sm">
           <h3 className="text-xs font-bold text-gray-400 uppercase mb-3">🤖 Character Identity</h3>
