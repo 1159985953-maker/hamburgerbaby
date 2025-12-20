@@ -2,58 +2,47 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
+<!-- ==================== 关键：完美自适应 + 全屏填充 ==================== -->
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-<title>hamburgerphone</title>
-
-<!-- ==================== 强制全屏关键代码 ==================== -->
-<!-- 让Safari支持全屏（隐藏地址栏和工具栏） -->
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<!-- 让Chrome/Edge等浏览器支持全屏 -->
 <meta name="mobile-web-app-capable" content="yes">
-<!-- 主题色（可选，让状态栏更好看） -->
 <meta name="theme-color" content="#111827">
 
+<title>hamburgerphone</title>
 <script src="https://cdn.tailwindcss.com"></script>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap');
-body { font-family: 'Inter', sans-serif; }
+body { 
+  font-family: 'Inter', sans-serif;
+  margin: 0;
+  padding: 0;
+  /* 关键：使用 env() 处理手机底部安全区（如iPhone刘海/首页条） */
+  padding-bottom: env(safe-area-inset-bottom);
+}
 
-/* Hide scrollbar for Chrome, Safari and Opera */
-.no-scrollbar::-webkit-scrollbar {
-  display: none;
-}
-/* Hide scrollbar for IE, Edge and Firefox */
-.no-scrollbar {
-  -ms-overflow-style: none; /* IE and Edge */
-  scrollbar-width: none; /* Firefox */
-}
+/* Hide scrollbar */
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
 .app-icon-shadow {
   box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
 }
 
-/* ==================== 强制全屏样式 ==================== */
-html, body {
+/* ==================== 强制100%高度填充全屏 ==================== */
+html, body, #root {
   height: 100%;
+  height: 100dvh; /* 关键！动态视口高度，完美适配所有手机（包括iPhone底部条） */
   width: 100%;
   margin: 0;
   padding: 0;
   overflow: hidden;
-  background: #111827; /* 和你的bg-gray-900一致 */
-}
-#root {
-  height: 100%;
-  width: 100%;
-  overflow: hidden;
+  background: #f3f4f6; /* 和你的聊天背景一致 */
 }
 
-/* 强制隐藏地址栏：打开后自动滚动一点 */
-@media screen and (max-width: 768px) {
-  body {
-    position: fixed;
-    width: 100%;
-    height: 100%;
-  }
+#root > div {
+  height: 100%;
+  width: 100%;
 }
 </style>
 
@@ -70,26 +59,16 @@ html, body {
 <link rel="stylesheet" href="/index.css">
 </head>
 
-<body class="bg-gray-900 h-screen w-screen overflow-hidden flex justify-center items-center">
+<body class="bg-gray-100">
   <div id="root"></div>
-  
-  <!-- ==================== 强制隐藏地址栏脚本 ==================== -->
+
+  <!-- 强制隐藏地址栏 -->
   <script>
-    // 页面加载完成后，滚动一点点来触发浏览器隐藏地址栏
-    window.addEventListener('load', function() {
-      setTimeout(function() {
-        window.scrollTo(0, 1);
-      }, 0);
-    });
-    
-    // 防止用户手动滚动露出地址栏
-    window.addEventListener('orientationchange', function() {
-      setTimeout(function() {
-        window.scrollTo(0, 1);
-      }, 500);
+    window.addEventListener('load', () => {
+      setTimeout(() => window.scrollTo(0, 1), 100);
     });
   </script>
-  
+
   <script type="module" src="/index.tsx"></script>
 </body>
 </html>
