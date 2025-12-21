@@ -1,7 +1,7 @@
 import React from 'react';
 import SafeAreaHeader from './SafeAreaHeader';  // ← 确保路径正确（如果组件在 components 同级目录）
 import { GlobalSettings } from '../types';
-import SafeAreaHeader from './SafeAreaHeader';  // ← 确保路径正确（如果在 components 同级）
+
 
 interface WallpaperAppProps {
   settings: GlobalSettings;

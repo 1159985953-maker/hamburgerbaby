@@ -972,18 +972,51 @@ const ChatApp: React.FC<ChatAppProps> = ({
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [isAiTyping, setIsAiTyping] = useState(false); // AI 是否正在“打字”
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const activeContact = contacts.find(c => c.id === activeContactId);
 
+  
+// 文件路径: src/components/ChatApp.tsx
+
+  // ▼▼▼▼▼▼▼▼▼▼▼▼ 替换开始：安全获取当前角色 + 防白屏逻辑 ▼▼▼▼▼▼▼▼▼▼▼▼
+  // 1. 尝试找到当前角色
+  let activeContact = contacts.find(c => c.id === activeContactId);
+
+  // 2. ★★★ 防白屏补丁 ★★★
+  // 如果当前是【聊天模式】，但【角色不存在】(比如被删了)，强制标记为 undefined，防止渲染报错
+  if (view === 'chat' && !activeContact) {
+    activeContact = undefined; 
+  }
+
+  // 3. 自动跳转：如果当前聊天的角色没了，自动踢回列表页
+  useEffect(() => {
+    // 如果视图是聊天，且 ID 对应的角色在联系人列表里找不到
+    if (view === 'chat' && activeContactId && !contacts.find(c => c.id === activeContactId)) {
+      console.log("当前角色已消失，自动返回列表");
+      setActiveContactId(null);
+      setView('list');
+    }
+  }, [contacts, activeContactId, view]);
+  // ▲▲▲▲▲▲▲▲▲▲▲▲ 替换结束 ▲▲▲▲▲▲▲▲▲▲▲▲
+
+
+
+  
 
 // 文件路径: src/components/ChatApp.tsx
 
 // 在 const ChatApp = ... 里面，所有 useState 下面，插入这一行：
 const isBackgroundRef = useRef(isBackground); // ★★★ 1. 追踪后台状态的 Ref
-
+ const viewRef = useRef(view);               // 盯着现在的页面状态
+  const activeContactIdRef = useRef(activeContactId); // 盯着现在正在跟谁聊
 // 然后紧接着加上这个 useEffect，确保它永远是最新的：
 useEffect(() => {
   isBackgroundRef.current = isBackground;
 }, [isBackground]);
+useEffect(() => { viewRef.current = view; }, [view]);
+  useEffect(() => { activeContactIdRef.current = activeContactId; }, [activeContactId]);
+
+
+
+
 
 
 // 文件路径: src/components/ChatApp.tsx
@@ -1001,13 +1034,14 @@ useEffect(() => {
 }, [contacts]); // 只要 contacts 变了，就检查一下有没有任务
 
 
-  // ★★★ 监听来自外部的跳转指令 ★★★
+  // ★★★ 监听来自外部的跳转指令 (强制跳转修复版) ★★★
   useEffect(() => {
-    if (initialContactId && initialContactId !== activeContactId) {
-      setActiveContactId(initialContactId);
-      setView('chat');
-      setContacts(prev => prev.map(c => c.id === initialContactId ? { ...c, unread: 0 } : c));
-      onChatOpened();
+    // 只要外界传来了 ID，不管当前是不是这个人，都强制进聊天窗口！
+    if (initialContactId) {
+      setActiveContactId(initialContactId); // 1. 选中这个人
+      setView('chat');                      // 2. ★★★ 关键：强制把视图切成聊天窗口 (之前可能卡在 list 了) ★★★
+      setContacts(prev => prev.map(c => c.id === initialContactId ? { ...c, unread: 0 } : c)); // 3. 清除未读
+      onChatOpened();                       // 4. 告诉外面：跳转完成
     }
   }, [initialContactId]);
 
@@ -2565,9 +2599,20 @@ Lore: ${loreText || "无"}
     }));
 
     // ★★★ 核心修复：更新状态时，同时更新好感度 ★★★
-    setContacts(prev => prev.map(c => {
+setContacts(prev => prev.map(c => {
       if (c.id === activeContact.id) {
-        // 计算新好感度，限制在 0-100 之间
+        // 1. 定义“正在读”：不在后台 && 在聊天界面 && 正在聊的人就是这个人
+        const isReading = !isBackgroundRef.current && viewRef.current === 'chat' && activeContactIdRef.current === c.id;
+        
+        // 2. 如果没在读，就加红点！
+        const newUnreadCount = isReading ? 0 : (c.unread || 0) + newMessages.length;
+
+
+
+
+
+
+
         const oldScore = c.affectionScore || 50;
         const newScore = Math.min(100, Math.max(0, oldScore + scoreChange));
         
@@ -2579,10 +2624,15 @@ Lore: ${loreText || "无"}
         else if (newScore < 95) newStatus = 'Close Friend';
         else newStatus = 'Intimate';
 
+
+
+
+
+        
         return { 
           ...c, 
           history: [...currentHistory, ...newMessages], 
-          unread: isBackgroundRef.current ? (c.unread || 0) + newMessages.length : (c.unread || 0),
+unread: newUnreadCount, // <--- 使用新的红点计数
           // 更新好感度和关系
           affectionScore: newScore,
           relationshipStatus: newStatus
@@ -2591,6 +2641,17 @@ Lore: ${loreText || "无"}
       return c;
     }));
     
+
+const isReadingNow = !isBackgroundRef.current && viewRef.current === 'chat' && activeContactIdRef.current === activeContact.id;
+    
+    if (!isReadingNow && newMessages.length > 0) {
+      const lastMsg = newMessages[newMessages.length - 1];
+      onNewMessage(activeContact.id, activeContact.name, activeContact.avatar, lastMsg.content, activeContact.id);
+    }
+
+
+
+
     // 如果切后台了，发通知
     if (isBackgroundRef.current && newMessages.length > 0) {
       const lastMsg = newMessages[newMessages.length - 1];
