@@ -135,40 +135,74 @@ const [jumpToContactId, setJumpToContactId] = useState<string | null>(null);
 
 
   
-  // ========== 这是新的、清理好的 "初始化读取" 代码，请完整复制并覆盖 ==========
+  // ========== 【终极数据修复版】useEffect - 解决 history.slice 崩溃 ==========
   // 1. 初始化读取 localforage
   useEffect(() => {
     const loadData = async () => {
       try {
-        const savedContacts = await localforage.getItem<Contact[]>('contacts');
-        if (savedContacts && savedContacts.length > 0) {
-          setContacts(savedContacts);
+        console.log("正在从数据库加载数据...");
+        
+        // 并行读取所有数据
+        const [savedContacts, savedSettings, savedBooks] = await Promise.all([
+          localforage.getItem<Contact[]>('contacts'),
+          localforage.getItem<GlobalSettings>('globalSettings'),
+          localforage.getItem<WorldBookCategory[]>('worldBooks')
+        ]);
+
+        // ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
+        // ★★★ 核心修复：在这里对加载的数据进行“安检” ★★★
+        // ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
+        if (savedContacts && Array.isArray(savedContacts) && savedContacts.length > 0) {
+          
+          const repairedContacts = savedContacts.map(contact => {
+            // 对每一个加载的 contact 对象进行检查和修复
+            return {
+              ...contact, // 先继承所有已有的属性
+
+              // 关键检查点：如果 history 不存在或不是数组，就强制给它一个空数组
+              history: Array.isArray(contact.history) ? contact.history : [],
+              
+              // 【预防性修复】把所有可能是数组的字段都检查一遍，永绝后患！
+              longTermMemories: Array.isArray(contact.longTermMemories) ? contact.longTermMemories : [],
+              enabledWorldBooks: Array.isArray(contact.enabledWorldBooks) ? contact.enabledWorldBooks : [],
+              playlist: Array.isArray(contact.playlist) ? contact.playlist : [],
+              schedule: Array.isArray(contact.schedule) ? contact.schedule : [],
+              
+              // 【预防性修复】确保关键对象存在
+              mood: contact.mood || { current: "Content", energyLevel: 80, lastUpdate: Date.now() },
+              hef: contact.hef || {},
+            };
+          });
+
+          console.log(`数据修复完成，载入 ${repairedContacts.length} 个联系人。`);
+          setContacts(repairedContacts); // ★★★ 使用修复后的健康数据！ ★★★
+
         } else {
-          // 如果没有保存的角色，就加载一个初始角色，防止白屏
+          // 如果本地没有任何数据，就加载初始角色，保证程序能运行
+          console.log("未找到本地数据，初始化默认角色...");
           setContacts(INITIAL_CONTACTS);
         }
         
-        const savedSettings = await localforage.getItem<GlobalSettings>('globalSettings');
+        // 其他数据的加载保持不变
         if (savedSettings) {
           setGlobalSettings(savedSettings);
         }
         
-        const savedBooks = await localforage.getItem<WorldBookCategory[]>('worldBooks');
         if (savedBooks) {
           setWorldBooks(savedBooks);
         }
+
       } catch (err) {
-        console.error("读取数据库失败:", err);
-        // 如果读取失败，也加载初始角色
+        console.error("读取数据库失败，这是一个严重错误:", err);
+        // 如果读取彻底失败，也加载初始角色以防白屏
         setContacts(INITIAL_CONTACTS);
       } finally {
         setIsLoaded(true);
       }
     };
+
     loadData();
   }, []);
-// ======================================================================
-
 
 
 
@@ -428,12 +462,16 @@ onExit={() => setCurrentApp('home')}
               userName: target.userName || "Darling",
               diaries: target.diaries || [],
               coupleSpaceUnlocked: target.coupleSpaceUnlocked || false,
-              history: target.history || [],
+history: Array.isArray(target.history) ? target.history : [],
               summary: target.summary || "",
             };
-            const recentHistory = (target.history || []).slice(-5)
-              .map((msg: any) => `${msg.role === 'user' ? target.userName : target.name}: ${msg.content || ''}`)
-              .join('\n');
+// 这是安全的 recentHistory 计算代码
+const recentHistory = Array.isArray(target.history) && target.history.length > 0
+  ? target.history
+      .slice(-5)
+      .map((msg: any) => `${msg?.role === 'user' ? target.userName : target.name}: ${msg?.content || ''}`)
+      .join('\n')
+  : "暂无历史对话";
             const chatMemorySummary = `长期记忆总结: ${target.summary || '无'}\n最近对话:\n${recentHistory}`;
             
             return (
