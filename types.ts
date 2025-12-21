@@ -281,6 +281,41 @@ export interface DiaryEntry {
   images?: string[]; // 支持日记配图
 }
 
+
+export interface Widget {
+  id: string;
+  icon: string;      // 图片 URL 或 emoji
+  text: string;      // 显示文字
+  url: string;       // 点击跳转（或 app 名称）
+  bgColor?: string;  // 可选背景色
+}
+
+export interface GlobalSettings {
+  wallpaper: string;
+  apiPresets: ApiPreset[];
+  activePresetId: string;
+  systemTimezone: string;
+  userTimezone: string;
+  appearance: {
+    bubbleColorUser: string;
+    bubbleColorAI: string;
+    fontSize: string;
+    showStatusBar: boolean;
+  };
+  themePresets: any[]; // 你原来的
+  widgets: Widget[];   // ← 新增！
+}
+export interface PhotoFrame {
+  id: string;
+  photo: string;
+}
+
+export interface GlobalSettings {
+  // ... 原有
+  photoFrames: PhotoFrame[];  // 两个照片框：top + left
+  avatar: string;  // 右上小头像
+}
+
 export interface LoveLetter {
   id: string;
   title: string;

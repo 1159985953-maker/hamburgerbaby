@@ -1584,6 +1584,13 @@ setContacts(prev => prev.map(c => {
   return c;
 }));
 
+
+
+
+
+
+
+
 const isReadingNow = !isBackgroundRef.current && viewRef.current === 'chat' && activeContactIdRef.current === activeContact.id;
     
     if (!isReadingNow && newMessages.length > 0) {

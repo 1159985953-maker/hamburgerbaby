@@ -3,7 +3,7 @@ import ChatApp from './components/ChatApp';
 import CoupleSpace from './components/CoupleSpace';
 import SettingsApp from './components/SettingsApp';
 import WorldBookApp from './components/WorldBookApp';
-import WallpaperApp from './components/WallpaperApp';
+import WallpaperApp from './components/AppearanceApp';
 import localforage from 'localforage';
 import { Contact, GlobalSettings, WorldBookCategory, Message } from './types';
 console.log('React version:', React.version);  // 只应该打印一次
@@ -133,14 +133,29 @@ const App: React.FC = () => {
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [isLoaded, setIsLoaded] = useState(false);
   const [worldBooks, setWorldBooks] = useState<WorldBookCategory[]>([]);
-  const [globalSettings, setGlobalSettings] = useState<GlobalSettings>({
-    wallpaper: "#f9fafb",
-    apiPresets: [], activePresetId: "",
-    systemTimezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-    userTimezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-    appearance: { bubbleColorUser: '', bubbleColorAI: '', fontSize: 'text-sm', showStatusBar: true },
-    themePresets: []
-  });
+const [globalSettings, setGlobalSettings] = useState<GlobalSettings>({
+  wallpaper: "https://images.unsplash.com/photo-1557683316-973673baf926",
+  apiPresets: [],
+  activePresetId: "",
+  systemTimezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+  userTimezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+  appearance: { bubbleColorUser: '', bubbleColorAI: '', fontSize: 'text-sm', showStatusBar: true },
+  themePresets: [],
+  widgets: [  // ← 默认小组件（可自定义）
+    { id: 'chat', icon: "https://picsum.photos/100", text: "Chat", url: "chat" },
+    { id: 'couple', icon: "https://picsum.photos/100", text: "Couple", url: "coupleSpace" },
+    { id: 'book', icon: "https://picsum.photos/100", text: "Book", url: "worldbook" },
+    { id: 'theme', icon: "https://picsum.photos/100", text: "Theme", url: "wallpaper" },
+    { id: 'settings', icon: "https://picsum.photos/100", text: "Settings", url: "settings" }
+    
+  ],
+  photoFrames: [
+    { id: 'top', photo: "https://picsum.photos/800/300?random=1" },
+    { id: 'left', photo: "https://picsum.photos/400/400?random=2" }
+  ],
+  avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=User"  // 默认头像
+
+});
 
   // --- 1. 强力加载逻辑 (防白屏核心) ---
   useEffect(() => {
@@ -153,6 +168,22 @@ const App: React.FC = () => {
           localforage.getItem<GlobalSettings>('globalSettings'),
           localforage.getItem<WorldBookCategory[]>('worldBooks')
         ]);
+
+
+        // 恢复设置
+// 恢复设置
+if (savedSettings) {
+  setGlobalSettings({
+    ...savedSettings,
+    // 强制补 photoFrames（如果旧数据没有，就用默认两个照片框）
+    photoFrames: savedSettings.photoFrames || [
+      { id: 'top', photo: "https://picsum.photos/800/300?random=1" },  // 大长方形
+      { id: 'left', photo: "https://picsum.photos/400/400?random=2" }   // 小正方形
+    ],
+    avatar: savedSettings.avatar || "https://api.dicebear.com/7.x/avataaars/svg?seed=User"
+    
+  });
+}
 
 // 文件路径: src/App.tsx
 // 位置：useEffect(() => { const loadData = async ... }, []); 里面的 `// 恢复联系人` 部分
@@ -298,61 +329,156 @@ useEffect(() => {
   };
 
   // --- 6. 渲染桌面 ---
-  const renderHome = () => {
-    return (
-      <div
-        className="h-full w-full bg-cover bg-center flex flex-col p-6 text-white relative animate-fadeIn transition-all duration-500"
-        style={{ backgroundImage: `url(${globalSettings.wallpaper})` }}
-      >
-        <div className="flex justify-between text-xs font-medium mb-8 pt-12">
-          <span>{new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}</span>
-          <div className="flex gap-1"><span>5G</span><span>🔋 100%</span></div>
+const renderHome = () => {
+  const topFrame = globalSettings.photoFrames?.find(f => f.id === 'top')?.photo || "https://picsum.photos/800/300";
+const leftFrame = globalSettings.photoFrames?.find(f => f.id === 'left')?.photo || "https://picsum.photos/400/400";
+const avatar = globalSettings.avatar || "https://api.dicebear.com/7.x/avataaars/svg?seed=User";
+
+  return (
+    <div
+      className="h-full w-full bg-cover bg-center flex flex-col relative overflow-hidden"
+      style={{ backgroundImage: `url(${globalSettings.wallpaper})` }}
+    >
+      {/* 刘海 + 状态栏 */}
+      <div className="absolute top-0 left-0 right-0 h-16 bg-black/30 backdrop-blur-md flex items-end justify-between px-6 pb-2 text-white/90 z-10">
+        <span className="text-sm">5G</span>
+        <span className="text-sm">🔋 100%</span>
+      </div>
+
+      {/* 顶部大长方形照片框 + 右上小头像 */}
+      <div className="relative pt-16 px-6 pb-4">
+        <div className="relative rounded-3xl overflow-hidden shadow-2xl border-8 border-white/80">
+          {/* 照片框（点击换照片） */}
+          <img src={topFrame} className="w-full h-48 object-cover" alt="Top Frame" />
+          <label className="absolute inset-0 flex items-center justify-center bg-black/40 cursor-pointer opacity-0 hover:opacity-100 transition-opacity">
+            <span className="text-white text-2xl">📷 更换</span>
+            <input
+              type="file"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) {
+                  const reader = new FileReader();
+                  reader.onload = (ev) => {
+                    if (ev.target?.result) {
+                      setGlobalSettings(prev => ({
+                        ...prev,
+                        photoFrames: prev.photoFrames.map(f => f.id === 'top' ? { ...f, photo: ev.target!.result as string } : f)
+                      }));
+                    }
+                  };
+                  reader.readAsDataURL(file);
+                }
+              }}
+              className="hidden"
+              accept="image/*"
+            />
+          </label>
         </div>
-        <div className="mb-12 text-center drop-shadow-md">
-          <h1 className="text-6xl font-light tracking-tighter">
-            {new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false })}
-          </h1>
-          <p className="text-sm font-medium opacity-90">
-            {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
-          </p>
+
+        {/* 右上小头像（可换） */}
+        <label className="absolute top-20 right-6 w-16 h-16 rounded-full overflow-hidden border-4 border-white/80 shadow-xl cursor-pointer">
+          <img src={avatar} className="w-full h-full object-cover" alt="Avatar" />
+          <input
+            type="file"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) {
+                const reader = new FileReader();
+                reader.onload = (ev) => {
+                  if (ev.target?.result) {
+                    setGlobalSettings(prev => ({ ...prev, avatar: ev.target!.result as string }));
+                  }
+                };
+                reader.readAsDataURL(file);
+              }
+            }}
+            className="hidden"
+            accept="image/*"
+          />
+        </label>
+      </div>
+
+      {/* 中间部分：左边小照片框 + 右边四个小图标 */}
+      <div className="flex-1 flex px-6 py-8 gap-6">
+        {/* 左边小正方形照片框 */}
+        <div className="w-1/3 aspect-square rounded-3xl overflow-hidden shadow-2xl border-8 border-white/80 relative">
+          <img src={leftFrame} className="w-full h-full object-cover" alt="Left Frame" />
+          <label className="absolute inset-0 flex items-center justify-center bg-black/40 cursor-pointer opacity-0 hover:opacity-100 transition-opacity">
+            <span className="text-white text-2xl">📷 更换</span>
+            <input
+              type="file"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) {
+                  const reader = new FileReader();
+                  reader.onload = (ev) => {
+                    if (ev.target?.result) {
+                      setGlobalSettings(prev => ({
+                        ...prev,
+                        photoFrames: prev.photoFrames.map(f => f.id === 'left' ? { ...f, photo: ev.target!.result as string } : f)
+                      }));
+                    }
+                  };
+                  reader.readAsDataURL(file);
+                }
+              }}
+              className="hidden"
+              accept="image/*"
+            />
+          </label>
         </div>
-        
-        <div className="grid grid-cols-4 gap-x-4 gap-y-8">
-          {/* Chat Icon with Badge */}
-          <div className="flex flex-col items-center gap-2 cursor-pointer group relative" onClick={() => setCurrentApp('chat')}>
-            <div className="w-14 h-14 bg-gradient-to-b from-green-400 to-green-600 rounded-2xl flex items-center justify-center text-3xl app-icon-shadow group-hover:scale-105 transition duration-300">💬</div>
-            {contacts.reduce((sum, c) => sum + ((c as any).unread || 0), 0) > 0 && (
-              <div className="absolute top-0 right-2 bg-red-500 text-white text-[10px] font-bold px-1.5 h-5 min-w-[1.25rem] flex items-center justify-center rounded-full border-2 border-black/20 shadow-sm z-10">
-                {contacts.reduce((sum, c) => sum + ((c as any).unread || 0), 0) > 99 ? '99+' : contacts.reduce((sum, c) => sum + ((c as any).unread || 0), 0)}
-              </div>
-            )}
-            <span className="text-[11px] font-medium text-shadow opacity-90">Chat</span>
+
+        {/* 右边四个小图标 */}
+        <div className="flex-1 grid grid-cols-2 gap-4">
+          <div className="flex flex-col items-center gap-1 cursor-pointer group" onClick={() => setCurrentApp('chat')}>
+            <div className="w-12 h-12 bg-gradient-to-br from-green-400 to-green-600 rounded-2xl flex items-center justify-center text-3xl shadow-lg group-hover:scale-110 transition-transform">
+              💬
+            </div>
+            <span className="text-white text-xs font-medium drop-shadow-md">Chat</span>
           </div>
 
-          <div className="flex flex-col items-center gap-2 cursor-pointer group" onClick={() => setCurrentApp('coupleSpace')}>
-            <div className="w-14 h-14 bg-gradient-to-b from-pink-400 to-pink-600 rounded-2xl flex items-center justify-center text-3xl app-icon-shadow group-hover:scale-105 transition duration-300">❤️</div>
-            <span className="text-[11px] font-medium text-shadow opacity-90">Couple</span>
+          <div className="flex flex-col items-center gap-1 cursor-pointer group" onClick={() => setCurrentApp('worldbook')}>
+            <div className="w-12 h-12 bg-gradient-to-br from-orange-400 to-orange-600 rounded-2xl flex items-center justify-center text-3xl shadow-lg group-hover:scale-110 transition-transform">
+              📕
+            </div>
+            <span className="text-white text-xs font-medium drop-shadow-md">Book</span>
           </div>
-          <div className="flex flex-col items-center gap-2 cursor-pointer group" onClick={() => setCurrentApp('worldbook')}>
-            <div className="w-14 h-14 bg-gradient-to-b from-orange-400 to-orange-600 rounded-2xl flex items-center justify-center text-3xl app-icon-shadow group-hover:scale-105 transition duration-300">📕</div>
-            <span className="text-[11px] font-medium text-shadow opacity-90">Book</span>
+
+          <div className="flex flex-col items-center gap-1 cursor-pointer group" onClick={() => setCurrentApp('coupleSpace')}>
+            <div className="w-12 h-12 bg-gradient-to-br from-pink-400 to-pink-600 rounded-2xl flex items-center justify-center text-3xl shadow-lg group-hover:scale-110 transition-transform">
+              ❤️
+            </div>
+            <span className="text-white text-xs font-medium drop-shadow-md">Couple</span>
           </div>
-          <div className="flex flex-col items-center gap-2 cursor-pointer group opacity-90">
-            <div className="w-14 h-14 bg-white rounded-2xl flex items-center justify-center text-3xl app-icon-shadow group-hover:scale-105 transition duration-300">📖</div>
-            <span className="text-[11px] font-medium text-shadow opacity-90">Diary</span>
-          </div>
-          <div className="flex flex-col items-center gap-2 cursor-pointer group" onClick={() => setCurrentApp('wallpaper')}>
-            <div className="w-14 h-14 bg-gradient-to-b from-purple-400 to-indigo-600 rounded-2xl flex items-center justify-center text-3xl app-icon-shadow group-hover:scale-105 transition duration-300">🎨</div>
-            <span className="text-[11px] font-medium text-shadow opacity-90">Theme</span>
-          </div>
-          <div className="flex flex-col items-center gap-2 cursor-pointer group" onClick={() => setCurrentApp('settings')}>
-            <div className="w-14 h-14 bg-gray-700 rounded-2xl flex items-center justify-center text-3xl app-icon-shadow group-hover:scale-105 transition duration-300">⚙️</div>
-            <span className="text-[11px] font-medium text-shadow opacity-90">Settings</span>
+
+          <div className="flex flex-col items-center gap-1 cursor-pointer group" onClick={() => setCurrentApp('diary')}>
+            <div className="w-12 h-12 bg-gradient-to-br from-blue-400 to-blue-600 rounded-2xl flex items-center justify-center text-3xl shadow-lg group-hover:scale-110 transition-transform">
+              📖
+            </div>
+            <span className="text-white text-xs font-medium drop-shadow-md">Diary</span>
           </div>
         </div>
       </div>
-    );
-  };
+
+      {/* 最下面两个图标（再往下移一点） */}
+      <div className="pb-28 px-6 flex justify-center gap-16">
+        <div className="flex flex-col items-center gap-1 cursor-pointer group" onClick={() => setCurrentApp('settings')}>
+          <div className="w-12 h-12 bg-gradient-to-br from-gray-600 to-gray-800 rounded-2xl flex items-center justify-center text-3xl shadow-lg group-hover:scale-110 transition-transform">
+            ⚙️
+          </div>
+          <span className="text-white text-xs font-medium drop-shadow-md">Settings</span>
+        </div>
+
+        <div className="flex flex-col items-center gap-1 cursor-pointer group" onClick={() => setCurrentApp('wallpaper')}>
+          <div className="w-12 h-12 bg-gradient-to-br from-purple-500 to-indigo-600 rounded-2xl flex items-center justify-center text-3xl shadow-lg group-hover:scale-110 transition-transform">
+            🎨
+          </div>
+          <span className="text-white text-xs font-medium drop-shadow-md">Theme</span>
+        </div>
+      </div>
+    </div>
+  );
+};
 
 
   // ==================== 7. 主渲染 JSX ====================
