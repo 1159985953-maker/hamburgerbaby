@@ -375,8 +375,7 @@ const avatar = globalSettings.avatar || "https://api.dicebear.com/7.x/avataaars/
         </div>
 
         {/* 右上小头像（可换） */}
-        <label className="top-16 m-16 absolute rounded-full w-20 h-20 overflow-hidden border-20 border-white/80 shadow-xl cursor-pointer"
-
+       <label className="absolute top-28 left-1/2 -translate-x-1/2 w-20 h-20 rounded-full overflow-hidden border-4 border-white/80 shadow-2xl cursor-pointer z-10"
   >
           <img src={avatar} className="w-full h-full object-cover" alt="Avatar" />
           <input
