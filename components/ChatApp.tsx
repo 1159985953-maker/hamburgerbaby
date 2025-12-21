@@ -975,6 +975,31 @@ const ChatApp: React.FC<ChatAppProps> = ({
   const activeContact = contacts.find(c => c.id === activeContactId);
 
 
+// 文件路径: src/components/ChatApp.tsx
+
+// 在 const ChatApp = ... 里面，所有 useState 下面，插入这一行：
+const isBackgroundRef = useRef(isBackground); // ★★★ 1. 追踪后台状态的 Ref
+
+// 然后紧接着加上这个 useEffect，确保它永远是最新的：
+useEffect(() => {
+  isBackgroundRef.current = isBackground;
+}, [isBackground]);
+
+
+// 文件路径: src/components/ChatApp.tsx
+
+// ★★★ 3. 新增监听器：一旦发现 pendingProactive 为 true，立即执行发送 ★★★
+useEffect(() => {
+  contacts.forEach(contact => {
+    // 如果这个角色被标记了“待发送”，并且还没有被正在处理（防止重复）
+    if (contact.pendingProactive) {
+       // 为了防止快速重复触发，我们可以在这里做一个简单的防抖，或者依靠 setContacts 的原子性
+       // 这里直接调用，因为我们在 scheduleProactiveMessage 里清除了标记
+       scheduleProactiveMessage(contact);
+    }
+  });
+}, [contacts]); // 只要 contacts 变了，就检查一下有没有任务
+
 
   // ★★★ 监听来自外部的跳转指令 ★★★
   useEffect(() => {
@@ -1898,91 +1923,115 @@ ${historyText}
 // 👇👇👇【在这里完整粘贴下面的新函数】👇👇👇
 // 文件路径: src/components/ChatApp.tsx
 
+// 文件路径: src/components/ChatApp.tsx
+
+// ★★★ 2. 修复版主动消息生成函数 ★★★
+// 文件路径: src/components/ChatApp.tsx
+
+// ★★★ 修复版：读人设 + 读语言格式 + 读好感度 的主动消息函数 ★★★
 const scheduleProactiveMessage = async (contact: Contact) => {
-    // --- 规则检查（只修改与时间相关的部分） ---
-    if (Device.osName === 'web') { /* ... */ }
-    if (!contact.proactiveConfig?.enabled) { /* ... */ return; }
-    if (contact.aiDND?.enabled) { /* ... */ return; }
-    if ((contact.affectionScore || 50) < 60) { /* ... */ return; }
+    // 1. 再次检查硬性条件（防止意外触发）
+    // 如果你在测试，可以暂时注释掉下面这行；正式用的时候记得打开！
+    // if ((contact.affectionScore || 50) < 60) return; 
+
+    console.log(`[ChatApp] 收到主动消息指令: ${contact.name}`);
+
+    // 2. 准备上下文：人设、历史风格、好感度
+    const recentHistory = contact.history.slice(-5).map(m => 
+        `${m.role === 'user' ? 'User' : contact.name}: ${m.content}`
+    ).join('\n');
     
-    const now = Date.now();
-    const lastUserMsg = [...contact.history].reverse().find(m => m.role === 'user');
+    const currentMood = contact.mood?.current || "平静";
+    const affection = contact.affectionScore || 50;
 
-    // 👇👇👇【核心修改：从小时改为分钟】👇👇👇
-    // 计算距离上次用户消息过了多久（分钟）
-    const gapMinutes = lastUserMsg 
-      ? Math.floor((now - lastUserMsg.timestamp) / (1000 * 60))
-      : 99999; // 如果没聊过，算作无限大
+    // 3. 构建超级详细的 Prompt
+    const proactivePrompt = `
+# Roleplay Instructions
+You are the character "${contact.name}".
+**Persona (Character Settings):**
+${contact.persona}
 
-    // 从配置中读取分钟数，默认480分钟 (8小时)
-    const minGap = contact.proactiveConfig?.minGapMinutes ?? 480;
+**Current Status:**
+- Mood: ${currentMood}
+- Affection Level: ${affection}/100
+- Relationship: ${contact.relationshipStatus || 'Friend'}
 
-    if (gapMinutes < minGap) {
-      console.log(`[主动消息系统] 跳过: 离用户上次说话(${gapMinutes}m)太近，未达到最小间隔(${minGap}m)。`);
-      return;
-    }
-    // 👆👆👆【核心修改结束】👆👆👆
+**Recent Chat History (For Style Mimicry):**
+${recentHistory}
 
-    const today = new Date().toISOString().slice(0, 10);
-    const sentToday = contact.proactiveLastSent?.[today] || 0;
-    const maxDaily = contact.proactiveConfig?.maxDaily ?? 2;
-    if (sentToday >= maxDaily) {
-      console.log(`[主动消息系统] 跳过: 今天已发送(${sentToday})，达到每日上限(${maxDaily})。`);
-      return;
-    }
-    console.log(`[主动消息系统] ✅ 检查通过！'${contact.name}'准备主动联系你。`);
-    
-    // --- 后续的动态理由选择、AI调用、发送通知等逻辑，保持不变 ---
-    let proactivePrompt = "";
-    let reason = "情感驱动";
+# Task
+You are initiating a NEW conversation with the user after a break.
+Please generate a short, natural opening line based on your Persona and Mood.
 
+# ⚠️ CRITICAL LANGUAGE & FORMAT RULES (MUST FOLLOW) ⚠️
+1. **Analyze the "Recent Chat History" above carefully.** 
+2. **MIMIC THE LANGUAGE STYLE EXACTLY.** 
+   - If the history uses "Korean text + Chinese translation", you MUST output in that EXACT format.
+   - If the history is purely English, use English.
+   - If the history is purely Chinese, use Chinese.
+3. **DO NOT** break character. If you are cold, be cold. If you are cute, be cute.
+4. Keep it short (under 30 words).
+5. Output **ONLY** the message content. Do not output JSON.
 
-    // --- 动态理由选择逻辑 ---
-    const lastMessages = contact.history.slice(-3).map(m => m.content).join('\n');
-    if (lastMessages.includes("下次聊") || lastMessages.includes("明天说")) {
-        reason = "延续性驱动";
-        proactivePrompt = `你就是角色“${contact.name}”。回顾我们最后一次的聊天摘要：【${lastMessages}】，我们当时没有聊完。现在，请你自然地、不突兀地重新拾起这个话题，发起一次新的对话。要求：口语化，极其简短。直接输出台-词。`;
-    } 
-    else if (Math.random() < 0.25 && (contact.mood?.current === 'Happy' || contact.mood?.current === 'Energetic')) {
-        reason = "内在思考/分享驱动";
-        proactivePrompt = `你就是角色“${contact.name}”。你此刻正自己待着，突然有个很有趣的想法或看到了某个好玩的东西，特别想立刻分享给“${contact.userName}”。请生成一条能体现这种即时分享感的开场白，可以是[FakeImage]！要求：像个惊喜发现，非常简短。直接输出台词。`;
-    }
-    else {
-        reason = "情感驱动";
-        proactivePrompt = `你就是角色“${contact.name}”。你的当前心情是【${contact.mood?.current || '平静'}】。你此刻内心涌起一股自然的、淡淡的对“${contact.userName}”的思念。请你完全代入角色，用你的性格和口吻，生成一句能表达这种【内在情感驱动】的开场白。要求：1. 绝对口语化，像突然想起来一样。2. 不要直接说“我想你”，而是通过一个简单的问候或小事来暗示。3. 极其简短。直接输出台词。`;
-    }
+# Scenario Selection (Choose one based on context)
+- If Affection > 80: You missed the user and want to share something small.
+- If Affection < 40: You are bored or slightly annoyed they left.
+- Otherwise: You just saw something interesting or want to continue a previous topic.
 
-    let body = "在吗？";
+Now, generate the opening line:
+`;
+
+    let body = "";
 
     try {
         const activePreset = globalSettings.apiPresets.find(p => p.id === globalSettings.activePresetId);
         if (!activePreset) throw new Error("API preset not found");
 
-        console.log(`[主动消息系统] 动机: ${reason}。正在请求 AI 生成开场白...`);
+        console.log(`[ChatApp] 正在依据人设生成主动消息...`);
         const generatedBody = await generateResponse([{ role: 'user', content: proactivePrompt }], activePreset);
         
         if (generatedBody && generatedBody.trim()) {
+            // 去掉可能产生的引号
             body = generatedBody.trim().replace(/^["“'‘]|["”'’]$/g, '');
-            console.log(`[主动消息系统] AI 生成内容: "${body}"`);
-        } else {
-            console.warn("[主动消息系统] AI 返回空内容，将使用默认问候。");
+            console.log(`[ChatApp] 生成结果: ${body}`);
         }
     } catch (error) {
-        console.error("[主动消息系统] AI 生成失败，将使用默认问候:", error);
+        console.error("生成失败:", error);
+        return; // 失败就不发了
     }
     
-    // --- 后续的通知调度和状态更新逻辑 ---
-    const delaySeconds = 10 + Math.floor(Math.random() * 50);
-    await Notifications.scheduleNotificationAsync({
-      content: { title: `来自 ${contact.name} 的消息`, body: body, data: { contactId: contact.id, type: 'proactive' }, sound: true },
-      trigger: { seconds: delaySeconds },
-    });
-    console.log(`[主动消息系统] 通知已调度！将在 ${delaySeconds} 秒后发送: "${body}"`);
-    setContacts(prev => prev.map(c => 
-      c.id === contact.id ? { ...c, proactiveLastSent: { ...c.proactiveLastSent, [today]: sentToday + 1 }, unread: (c.unread || 0) + 1 } : c
-    ));
-};
+    // 如果生成内容为空，直接中止
+    if (!body) return;
 
+    // 生成消息对象
+    const newMsg: Message = {
+        id: Date.now().toString(),
+        role: 'assistant',
+        content: body,
+        timestamp: Date.now(),
+        type: 'text'
+    };
+
+    const today = new Date().toISOString().slice(0, 10);
+    const sentToday = contact.proactiveLastSent?.[today] || 0;
+
+    // 更新状态
+    setContacts(prev => prev.map(c => {
+      if (c.id === contact.id) {
+          return { 
+             ...c, 
+             history: [...c.history, newMsg],
+             pendingProactive: false, // 关闭标记
+             proactiveLastSent: { ...c.proactiveLastSent, [today]: sentToday + 1 }, 
+             unread: (c.unread || 0) + 1 
+          };
+      }
+      return c;
+    }));
+
+    // 触发通知
+    onNewMessage(contact.id, contact.name, contact.avatar, body, activeContactId || "");
+};
 
 
 
@@ -2127,26 +2176,17 @@ const findRelevantWorldBookEntries = (
 
 
 
-
-
-
-
-// ========== 【终极修复版】handleAiReplyTrigger (保留你所有细节，只增加重roll支持) ==========
-
-
+// ========== 【修复版】handleAiReplyTrigger (顺序修正+判责逻辑) ==========
 const handleAiReplyTrigger = async (historyOverride?: Message[]) => {
-  // 在函数第一行插入
-if (!activeContact || !Array.isArray(activeContact.history)) {
-  console.error("history 不是数组！", activeContact);
-  setIsTyping(false);
-  setIsAiTyping(false);
-  return; // 直接退出，防止崩溃
-}
-  if (!activeContact) {
-    alert("请先选择一个联系人！");
+  // 1. 基础安全检查
+  if (!activeContact || !Array.isArray(activeContact.history)) {
+    console.error("Critical Error: activeContact or history is invalid", activeContact);
+    setIsTyping(false);
+    setIsAiTyping(false);
     return;
   }
-  // ★★★ 修复：如果是重roll (historyOverride存在)，则无视 isTyping ★★★
+  
+  // 重roll逻辑：如果是重roll (historyOverride存在)，则无视 isTyping
   if (isTyping && !historyOverride) return;
 
   setIsAiTyping(true);
@@ -2155,51 +2195,57 @@ if (!activeContact || !Array.isArray(activeContact.history)) {
   try {
     const activePreset = globalSettings.apiPresets.find(p => p.id === globalSettings.activePresetId);
     if (!activePreset) {
-      alert("错误：API 预设未找到或未选择！\n\n请先前往【系统设置】->【API 设置】中，创建并选中一个 API 预设。");
+      alert("错误：API 预设未找到");
       setIsTyping(false);
       setIsAiTyping(false);
       return;
     }
-    
-    // ★★★ 核心修复：这是本次修改的灵魂！优先使用传入的“干净历史” ★★★
-const currentHistory = Array.isArray(historyOverride) 
-  ? historyOverride 
-  : (Array.isArray(activeContact.history) ? activeContact.history : []);
 
-    // ▼▼▼ 以下是你原来的所有代码，一个字都没删，只是把 activeContact.history 换成了 currentHistory ▼▼▼
-    
-const relevantLore = findRelevantWorldBookEntries(
-  currentHistory,  // 现在是安全的数组
-  worldBooks,
-  activeContact.enabledWorldBooks || []
-);
-    const personaText = activeContact.persona;
-    const loreText = relevantLore.length > 0
-      ? relevantLore.map(e => `- ${e.keys.join(', ')}: ${e.content}`).join('\n')
-      : "无相关世界书条目";
-
-    const userTimezone = globalSettings.userTimezone || Intl.DateTimeFormat().resolvedOptions().timeZone;
-
-    // 1. 确保拿到最新的历史记录
-    // ▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼ 替换开始 ▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼
-
-    // 1. 确保拿到最新的历史记录
-    // ▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼ 替换开始 ▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼
-
+    // =============================================================
+    // ★★★ 变量定义区 (防止 ReferenceError) ★★★
+    // =============================================================
     const now = Date.now();
+    const userTimezone = globalSettings.userTimezone || Intl.DateTimeFormat().resolvedOptions().timeZone;
+    const aiTimezone = activeContact.timezone || "Asia/Seoul";
+    
+    // 格式化时间字符串
+    const userTime = new Date().toLocaleTimeString('zh-CN', { timeZone: userTimezone, hour: '2-digit', minute: '2-digit' });
+    const aiTime = new Date().toLocaleTimeString('zh-CN', { timeZone: aiTimezone, hour: '2-digit', minute: '2-digit' });
+    const isLateNight = new Date().getHours() >= 23 || new Date().getHours() < 6;
 
-    // 1. 【核心修复】寻找最大时间断层 (Max Gap)
-    // 为什么改这里？因为如果你连发了3条消息，旧代码只对比最后两条（间隔0分钟），会漏掉昨晚到现在的14小时。
-    // 现在我们往回查最近 5 条，只要其中有两条之间断层很大，就被捕捉。
+    // 准备历史记录
+    const currentHistory = Array.isArray(historyOverride) 
+      ? historyOverride 
+      : (activeContact.history || []); // 确保是数组
+
+    // 准备 Lore 和 Persona
+    const relevantLore = findRelevantWorldBookEntries(currentHistory, worldBooks, activeContact.enabledWorldBooks || []);
+    const loreText = relevantLore.map(e => `- ${e.keys.join(', ')}: ${e.content}`).join('\n');
+    
+    const currentUserName = activeContact.userName || "User";
+    const currentUserPersona = activeContact.userPersona || "无特别设定";
+    const lateNightHint = isLateNight ? "（现在是深夜）" : "";
+
+
+// =============================================================
+    // ★★★ 核心修复：寻找最近的“时间断崖”并定责 (防翻旧账版) ★★★
+    // =============================================================
     let maxGapMinutes = 0;
     let isDifferentDay = false;
     
-    // 检查范围：最近 5 条消息
-    const checkCount = Math.min(currentHistory.length, 5); 
+    // 判责状态
+    let isAiIgnoredUser = false; // AI 已读不回
+    let isUserLateReply = false; // 用户迟回
+
+    // ★★★ 新增标记：断层之后，AI 是否已经回过话了？ ★★★
+    let hasAiRespondedAfterGap = false;
+
+    // 我们倒着查，寻找最近的一次超过 2 小时的大断层
+    // 检查最近 15 条消息
+    const checkCount = Math.min(currentHistory.length, 15); 
     
-    // 从后往前遍历
     for (let i = 0; i < checkCount - 1; i++) {
-        // 倒序获取消息索引
+        // 倒序索引：curr 是较新的，prev 是较旧的
         const currIndex = currentHistory.length - 1 - i;
         const prevIndex = currIndex - 1;
         
@@ -2207,50 +2253,102 @@ const relevantLore = findRelevantWorldBookEntries(
             const currMsg = currentHistory[currIndex];
             const prevMsg = currentHistory[prevIndex];
             
-            // 计算两条消息之间的物理间隔
+            // 1. 【防翻旧账检测】
+            // 如果我们在倒序检查时，先遇到了 AI 发的消息，说明 AI 在这个时间点之后已经活跃过了。
+            // 那么更早之前的断层就可以被视为“已处理”。
+            if (currMsg.role === 'assistant') {
+                hasAiRespondedAfterGap = true;
+            }
+
+            // 2. 计算时间差
             const gap = Math.floor((currMsg.timestamp - prevMsg.timestamp) / 60000);
             
-            // 只要发现更大的间隔，就更新 maxGapMinutes
-            if (gap > maxGapMinutes) {
+            // 3. 发现大断层 (超过2小时)
+            if (gap > 120) {
+                // ★★★ 关键判断：如果断层后 AI 已经回过话了，就跳过这个断层！ ★★★
+                if (hasAiRespondedAfterGap) {
+                    console.log(`[判责跳过] 发现旧断层(${gap}min)，但AI后续已回复过，翻篇不提。`);
+                    // 继续往前找，看看有没有更新的断层（通常不会有了），或者直接忽略
+                    continue; 
+                }
+
+                // 只有当 AI 还没回过话（即这是新鲜的事故现场），才记录这个断层
                 maxGapMinutes = gap;
-                // 顺便检查是否跨天
+                
                 const d1 = new Date(currMsg.timestamp);
                 const d2 = new Date(prevMsg.timestamp);
                 if (d1.getDate() !== d2.getDate()) isDifferentDay = true;
+
+                // ★★★ 判责 ★★★
+                if (prevMsg.role === 'user') {
+                    // 断层前是用户 -> 断层 -> AI 至今未回 -> AI 全责
+                    isAiIgnoredUser = true;
+                } else if (prevMsg.role === 'assistant') {
+                    // 断层前是AI -> 断层 -> 用户才回 -> 用户迟到
+                    isUserLateReply = true;
+                }
+                
+                // 找到这个未处理的新鲜断层后，立刻停止
+                break; 
             }
         }
     }
 
-    // 还有一种情况：第一条新消息距离现在很久（比如你打开窗口思考了很久没发）
-    if (currentHistory.length > 0) {
+    // 补漏：如果最近没有历史断层，检查一下“当下”距离“最后一条消息”是否很久
+    // 且最后一条是用户发的（说明 AI 还没回）
+    if (maxGapMinutes === 0 && currentHistory.length > 0) {
          const lastMsg = currentHistory[currentHistory.length - 1];
-         // 只有当最后一条是 AI 发的时，才计算这个 gap（避免用户刚发的消息 gap 为 0）
-         if (lastMsg.role === 'assistant') {
-             const lastGap = Math.floor((now - lastMsg.timestamp) / 60000);
-             if (lastGap > maxGapMinutes) maxGapMinutes = lastGap;
+         // 如果最后一条是用户发的，且隔了很久，说明 AI 现在还没回
+         if (lastMsg.role === 'user') {
+             const silenceGap = Math.floor((now - lastMsg.timestamp) / 60000);
+             if (silenceGap > 120) {
+                 maxGapMinutes = silenceGap;
+                 isAiIgnoredUser = true;
+             }
          }
     }
-    
-    // 强制修正：如果检测到跨天，至少算480分钟(8小时)
-    if (isDifferentDay && maxGapMinutes < 480) maxGapMinutes = 480;
 
-    console.log(`[时间感知] 这一轮检测到的最大断层: ${maxGapMinutes}分钟`);
 
-    // 定义时间描述文案 (喂给 AI 的定值)
+
+
+    // 生成时间描述
     let gapDescription = "刚刚";
     if (maxGapMinutes > 10) gapDescription = `${maxGapMinutes}分钟`;
     if (maxGapMinutes > 60) gapDescription = `${Math.floor(maxGapMinutes / 60)}小时`;
     if (maxGapMinutes > 1440) gapDescription = "好几天";
     if (isDifferentDay) gapDescription += " (已跨天)";
 
-    // 准备 Prompt 变量 (保持不变)
-    const isLateNight = new Date().getHours() >= 23 || new Date().getHours() < 6;
-    const currentUserName = activeContact.userName || "User";
-    const currentUserPersona = activeContact.userPersona || "没有特别的设定。";
-    const userTime = new Date().toLocaleTimeString('zh-CN', { timeZone: userTimezone, hour: '2-digit', minute: '2-digit' });
-    const aiTime = new Date().toLocaleTimeString('zh-CN', { timeZone: activeContact.timezone, hour: '2-digit', minute: '2-digit' });
+    console.log(`[判责结果] 间隔:${gapDescription}, AI已读不回:${isAiIgnoredUser}`);
 
-    // 2. System Prompt (核心修改：加入了 time_gap 字段要求)
+    // =============================================================
+    // ★★★ 生成给 AI 的强制指令 (Blame Instruction) ★★★
+    // =============================================================
+    let blameInstruction = "";
+    
+    if (isAiIgnoredUser) {
+        // 情况 A：AI 的锅 (你的情况)
+        blameInstruction = `
+【⚠️ 严重警告：检测到“已读不回”行为 ⚠️】
+事实如下：
+1. 用户在 ${gapDescription} 前发了上一条消息。
+2. 你(AI)一直没回（可能睡着了或没看到）。
+3. 现在用户又发了一条消息（追问/喂/质疑）。
+!!! 绝对禁止 !!!：不准问“你昨晚去哪了”、“你怎么才回”，因为没回消息的人是你！
+✅ 必须执行：必须先为你的“已读不回”道歉或找借口（如“刚睡醒”、“刚才在忙”），态度要软化。
+`;
+    } else if (isUserLateReply) {
+        // 情况 B：用户的锅
+        blameInstruction = `
+【时间流逝】距离上次对话已过 ${gapDescription}。
+是用户消失了这么久才回你。你可以表现出惊讶、撒娇（“怎么才理我”）或询问他去哪了。
+`;
+    } else {
+        blameInstruction = "时间连贯，正常对话。";
+    }
+
+
+    
+// 3. System Prompt
     const systemPrompt = `
 # 【输出格式铁律 - 绝对最高优先级 - 违反即系统崩溃】
 
@@ -2260,19 +2358,21 @@ const relevantLore = findRelevantWorldBookEntries(
 数组结构必须严格遵守以下顺序（任何违反都会导致系统崩溃并惩罚你）：
 1. 第一项必须是隐藏的思考链（用户完全看不到，但你必须完整填写，否则系统会崩溃）：
 2.你的 JSON 第一项 thought_chain 必须包含一个 "time_gap" 字段。
-你必须在这个字段里，复述系统检测到的时间间隔：【 ${gapDescription} 】。
+你必须在这个字段里，复述系统检测到的时间间隔：【 ${gapDescription} 】和 "affection_score_change" (好感度变化值)。
 
 格式示例：
 [
   {
     "type": "thought_chain",
     "time_gap": "${gapDescription}", 
-    "feeling": "基于${gapDescription}间隔的真实感受...",
+    "affection_score_change": 1,  // 整数，范围 -5 到 +5
+    "feeling": "...",
     "strategy": "...",
     "intent": "..."
   },
   { "type": "text", "content": "..." }
 ]
+
 
 
 铁律（任何一条违反都会导致系统崩溃、重置、惩罚）：
@@ -2282,17 +2382,15 @@ const relevantLore = findRelevantWorldBookEntries(
 - 所有内容必须是合法JSON，不能有未转义换行
 - 想发多条就多加几个 {"type":"text","content":"..."}
 
+# 核心身份
+你就是"${activeContact.name}"。
+HEF: ${JSON.stringify(activeContact.hef, null, 2)}
+Persona: ${activeContact.persona}
+Lore: ${loreText || "无"}
 
-你就是"${activeContact.name}"，必须100%遵守以下所有设定：
-
-persona:
-${personaText}
-
-lore:
-${loreText || "无相关世界书条目"}
-
-HEF框架（必须100%遵守）：
-${JSON.stringify(activeContact.hef, null, 2)}
+# 【⚠️ 强制时空坐标 ⚠️】
+系统检测到：距离上一条消息（无论谁发的）已过去：>>> ${gapDescription} <<<
+>>> 责任判定指令：${blameInstruction} <<<
 
 当前状态（必须自然体现）：
 - 你的当地时间：${aiTime} (${activeContact.timezone})
@@ -2303,16 +2401,40 @@ ${JSON.stringify(activeContact.hef, null, 2)}
 - 用户名字：${currentUserName}
 - 用户简介：${currentUserPersona}
 
-# 拒绝长篇大论
-- 禁止单条气泡超过 20 个字（除非在讲故事）
-- 模拟真实微信/QQ聊天：短句、碎片化、口语化
-- 多用“？”“！”“...”和表情符号，少用书面语
 
-# 时间感知铁律【超高优先级】
-1. 你必须在 thought_chain 里填入 "${gapDescription}"。
-2. 如果时间间隔超过 1 小时，**严禁**延续上一轮的语境（例如昨晚说"去睡觉"，现在下午了就不能再说"快去睡"）。
-3. 如果是"累死了"这种消息，且间隔了多个小时，说明是今天累到了，而不是上一轮时间累到了。
-4. 必须根据间隔表现出惊讶、想念或担心。
+# ❤️ 好感度评分系统 (Affection Logic)
+请根据用户刚才发的那一句话，判断你的好感度应该如何变化：
+- **大幅加分 (+3 ~ +5)**: 用户做了极度触动你、让你感到被深爱、送了贵重礼物(剧情)、或深刻理解你的事。
+- **小幅加分 (+1 ~ +2)**: 正常的开心聊天、关心、幽默、日常陪伴。
+- **不加不减 (0)**: 普通的陈述、无聊的对话、没看懂的话。
+- **小幅扣分 (-1 ~ -2)**: 用户敷衍、无理取闹、让你感到轻微不适。
+- **大幅扣分 (-3 ~ -5)**: 用户辱骂、背叛、触碰底线、极度冷漠。
+
+
+# 🚫 拒绝“演讲型”回复 (非常重要!!!)
+你现在是在聊天/吵架，不是在发表逻辑严密的演讲！
+1. **禁止** 单条气泡超过 20 个字（除非在讲故事）
+2. **禁止** 像写检讨书一样逻辑完善（第一点、第二点、第三点...）。
+3. **禁止** 过度解释。被骂了就认错，或者委屈，不要分析前因后果！
+4. 模拟真实微信/QQ聊天：说话要**碎片化、短句、口语化，**，不要把所有心里话一口气全吐出来，留点给下一句。
+5. 多用“？”“！”“...”和表情符号，少用书面语
+
+# 🚫 防幻觉铁律 (Anti-Hallucination)
+1. **严禁编造记忆**：如果【长期记忆】或【聊天记录】里没有提到的重大事件（比如结婚、去过某个地方），绝对不要假装发生过。
+2. **尊重上下文**：回复必须紧扣用户的上一句话和当前的语境，不要突然跳跃到不相关的话题。
+3. **不知道就说不知道**：如果用户问一个你记忆里没有的细节，不要瞎编，可以用模糊的方式带过，或者撒娇糊弄过去。
+
+
+# 时间感知逻辑 (必须执行)
+1. 你的 thought_chain 必须复述间隔：${gapDescription}。
+2. 严格遵守【责任判定指令】。如果是你没回消息，绝对不能指责用户。
+3. 【语境过期铁律】：如果间隔超过 1 小时，上一条消息的“状态”即刻作废。
+   - 例子：如果用户上一条是凌晨1点说的"我好困"，而现在是下午4点，说明由于时间流逝，当时没回消息，现在**不能**再问"你困吗"。
+   - 你应该意识到：是你自己（或用户）隔了很久没回消息。
+   - 正确反应：无视上一条的"困/晚安"话题，开启新话题，或者解释为什么这么久才回，或者问候下午好。
+4. 如果是"累死了"这种消息，且间隔了多个小时，说明是今天累到了，而不是上一轮时间累到了。
+5. 必须根据间隔表现出惊讶、想念或担心。
+
 
 # 功能规则
 1. 想发语音：在内容开头加 [Voice Message]
@@ -2350,7 +2472,13 @@ ${JSON.stringify(activeContact.hef, null, 2)}
     
     // ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲ 替换结束 ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲
 
-    // 3. 构建消息列表并插入“系统强制提示”
+
+
+
+
+
+
+// 3. 构建消息列表并插入“系统强制提示”
     const recentHistorySlice = Array.isArray(currentHistory)
       ? (Array.isArray(currentHistory) ? currentHistory.slice(-(activeContact?.contextDepth || 20)) : [])
       : [];
@@ -2361,12 +2489,12 @@ ${JSON.stringify(activeContact.hef, null, 2)}
     ];
 
     // ★★★ 注入：如果在聊天列表中检测到大间隔，插入系统提示 ★★★
-    // 插入位置：在最后一条消息（用户最新发的）之前
-if (maxGapMinutes > 120 || isDifferentDay) {
+    // 只有当存在大间隔时才插入，加强提醒
+    if (maxGapMinutes > 120 || isDifferentDay) {
         // 构建提示语
         const timeInjection = {
             role: 'system',
-            content: `[系统强制提示]: ⚠️ 注意！距离上一条消息已经过去了 ${gapDescription}。现在的具体时间是 ${aiTime}。上一段对话早已结束，请务必忽略上文的语境惯性（如昨晚在睡觉），基于“现在”的新时间点，对用户的下一句话做出反应！`
+            content: `[系统强制提示]: ⚠️ 注意！距离上一条消息已经过去了 ${gapDescription}。现在的具体时间是 ${aiTime}。上一段对话早已结束，请务必忽略上文的语境惯性，基于“现在”的新时间点反应！`
         };
         
         // 确保列表里至少有一条用户消息，才插在它前面
@@ -2387,13 +2515,10 @@ if (maxGapMinutes > 120 || isDifferentDay) {
 
 
 
-
-
-
-
-    // ▼▼▼ 以下是你原来的解析和消息入库逻辑，也完全保留 ▼▼▼
+    // ▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼ 解析与更新逻辑 (含好感度) ▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼
     let parts: { type: string; content: string; thought_chain?: any }[] = [];
-    let extractedThought = null;
+    let extractedThought: any = null;
+    let scoreChange = 0; // 默认不变化
 
     try {
         const jsonMatch = finalResp.match(/\[\s*\{[\s\S]*\}\s*\]/);
@@ -2401,9 +2526,20 @@ if (maxGapMinutes > 120 || isDifferentDay) {
         if (jsonMatch && jsonMatch[0]) {
             const parsed = JSON.parse(jsonMatch[0]);
             if (!Array.isArray(parsed)) throw new Error("解析结果不是一个数组");
+            
+            // 1. 提取思考链和好感度变化
             if (parsed.length > 0 && parsed[0].type === "thought_chain") {
                 extractedThought = parsed[0];
                 console.log("【隐藏思考链】", extractedThought);
+                
+                // ★★★ 核心：获取好感度变化值 ★★★
+                if (typeof extractedThought.affection_score_change === 'number') {
+                    scoreChange = Math.round(extractedThought.affection_score_change);
+                    if (scoreChange !== 0) {
+                        console.log(`❤️ 好感度变化: ${scoreChange > 0 ? '+' : ''}${scoreChange}`);
+                    }
+                }
+
                 parts = parsed.slice(1).filter((item: any) => (item.type === 'text' || item.type === 'voice') && item.content?.trim()).map((item: any) => ({ ...item, thought_chain: extractedThought }));
             } else {
                 parts = parsed.filter((item: any) => (item.type === 'text' || item.type === 'voice') && item.content?.trim()).map((item: any) => ({ ...item, thought_chain: null }));
@@ -2412,42 +2548,56 @@ if (maxGapMinutes > 120 || isDifferentDay) {
             throw new Error("在AI回复中未找到有效的JSON数组格式。");
         }
     } catch (error) {
-        console.error("JSON解析彻底失败，启用终极兜底方案:", error);
-        console.error("AI返回的原始数据:", finalResp);
-        parts = [{ type: 'text', content: `空回复，请重roll`, thought_chain: null }];
+        console.error("JSON解析失败，启用兜底:", error);
+        parts = [{ type: 'text', content: finalResp.replace(/```json|```/g, ''), thought_chain: null }];
     }
 
     if (parts.length === 0) {
-        parts = [{ type: 'text', content: "嗯？", thought_chain: extractedThought || null }];
+        parts = [{ type: 'text', content: "...", thought_chain: extractedThought || null }];
     }
     
-    // ★★★ 核心修复：把 for 循环改成更安全的消息数组生成 ★★★
     const newMessages: Message[] = parts.map((part, i) => ({
-      id: Date.now().toString() + i + Math.random(), // 防止ID冲突
+      id: Date.now().toString() + i + Math.random(),
       role: 'assistant',
       content: part.content,
-      timestamp: Date.now() + (i * 50), // 错开时间戳
-      type: 'text', // 你的 message 接口目前只认 text
-      // (可选) thought_chain: part.thought_chain 
+      timestamp: Date.now() + (i * 50),
+      type: 'text',
     }));
 
-    // ★★★ 核心修复：批量更新状态，必须基于 cleanHistory 来追加 ★★★
+    // ★★★ 核心修复：更新状态时，同时更新好感度 ★★★
     setContacts(prev => prev.map(c => {
       if (c.id === activeContact.id) {
+        // 计算新好感度，限制在 0-100 之间
+        const oldScore = c.affectionScore || 50;
+        const newScore = Math.min(100, Math.max(0, oldScore + scoreChange));
+        
+        // 简单的关系阶段自动升级逻辑 (可选)
+        let newStatus = c.relationshipStatus;
+        if (newScore < 30) newStatus = 'Conflict';
+        else if (newScore < 60) newStatus = 'Acquaintance';
+        else if (newScore < 80) newStatus = 'Friend';
+        else if (newScore < 95) newStatus = 'Close Friend';
+        else newStatus = 'Intimate';
+
         return { 
           ...c, 
-          // 直接用 currentHistory 拼接新消息，100% 准确
           history: [...currentHistory, ...newMessages], 
-          unread: isBackground ? (c.unread || 0) + newMessages.length : (c.unread || 0)
+          unread: isBackgroundRef.current ? (c.unread || 0) + newMessages.length : (c.unread || 0),
+          // 更新好感度和关系
+          affectionScore: newScore,
+          relationshipStatus: newStatus
         };
       }
       return c;
     }));
     
-    if (isBackground && newMessages.length > 0) {
+    // 如果切后台了，发通知
+    if (isBackgroundRef.current && newMessages.length > 0) {
       const lastMsg = newMessages[newMessages.length - 1];
       onNewMessage(activeContact.id, activeContact.name, activeContact.avatar, lastMsg.content, activeContact.id);
     }
+    // ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲ 解析逻辑结束 ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲
+
 
 
   } catch (error: any) {
@@ -3447,7 +3597,9 @@ if (view === 'settings' && activeContact) {
       intervalMinutes = Math.floor((msg.timestamp - prevMsg.timestamp) / 60000);
       if (intervalMinutes > 20) { showInterval = true; }
     }
-    const isConsecutive = index > 0 && activeContact.history[index - 1].role === msg.role;
+// 只有当角色相同，且【没有显示时间分割线】时，才算是连续消息（才隐藏头像）
+// 这样一旦出现“相隔 19 小时”，头像就会强制显示，视觉上断开连接
+const isConsecutive = index > 0 && activeContact.history[index - 1].role === msg.role && !showInterval;
     const isSelected = selectedIds.includes(msg.id);
     const duration = msg.voiceDuration || 10;
     const timeStr = new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });

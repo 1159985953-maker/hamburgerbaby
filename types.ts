@@ -135,6 +135,7 @@ minGapMinutes: number; // <--- 把原来的 minGapHours: number; 替换成这一
     [date: string]: number;
   };
   
+pendingProactive?: boolean; // ★★★ 新增：标记是否正在等待发送主动消息
 
 
 

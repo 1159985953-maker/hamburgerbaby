@@ -252,39 +252,82 @@ const [jumpToContactId, setJumpToContactId] = useState<string | null>(null);
 
 // ========== 这是新的、修复好的 "全局主动消息监视器" 代码 ==========
 // ★★★ 全局主动消息监视器 (Watchdog for Scene A) ★★★
-      useEffect(() => {
-        const checkProactiveMessages = () => {
-          // ✅ 修复点：增加了 currentApp !== 'home' 的判断，只有在主屏幕才触发思考
-          if (globalNotification || !isLoaded || contacts.length === 0 || currentApp !== 'home') {
-            return;
-          }
-    
-          for (const contact of contacts) {
-            // ✅ 修复点：确保所有检查都使用正确的 `contact` 变量
-            if (!contact.proactiveConfig?.enabled || contact.aiDND?.enabled || (contact.affectionScore || 50) < 60) continue;
-            const now = Date.now();
-            const lastUserMsg = [...contact.history].reverse().find(m => m.role === 'user');
-            const gapMinutes = lastUserMsg ? Math.floor((now - lastUserMsg.timestamp) / 60000) : Infinity;
-            const minGap = contact.proactiveConfig?.minGapMinutes ?? 480;
-            if (gapMinutes < minGap) continue;
-            const today = new Date().toISOString().slice(0, 10);
-            const sentToday = contact.proactiveLastSent?.[today] || 0;
-            const maxDaily = contact.proactiveConfig?.maxDaily ?? 2;
-            if (sentToday >= maxDaily) continue;
-    
-            console.log(`[全局监视器] ✅ '${contact.name}' 触发了【主动聊天】！`);
-            
-            // ✨ 新功能：触发“正在思考”的全局通知 (你的需求 A)
-            setGlobalNotification({ type: 'proactive_thinking', contactId: contact.id, name: contact.name, avatar: contact.avatar });
-            // 触发一个后就停止，避免同时弹出多个
-            break; 
-          }
-        };
-    
-        const intervalId = setInterval(checkProactiveMessages, 15000); // 每15秒检查一次
-        return () => clearInterval(intervalId);
-    
-      }, [contacts, isLoaded, globalNotification, currentApp]); // 依赖项现在更准确
+// 文件路径: src/App.tsx
+
+// ★★★ 全局主动消息监视器 (修复版) ★★★
+useEffect(() => {
+  const checkProactiveMessages = () => {
+    // 只有在主页、且数据加载完毕时才检查
+    if (globalNotification || !isLoaded || contacts.length === 0 || currentApp !== 'home') {
+      return;
+    }
+
+    // 遍历所有联系人
+    let triggeredContactId: string | null = null;
+
+    // 我们先计算出新的 contacts 状态，而不要直接在循环里 setContacts (会导致闪烁)
+    const updatedContacts = contacts.map(contact => {
+      // 如果已经触发了（正在等 ChatApp 处理），就跳过
+      if (contact.pendingProactive) return contact; 
+
+      // 1. 基础检查
+      if (!contact.proactiveConfig?.enabled) return contact;
+      if (contact.aiDND?.enabled) return contact;
+      if ((contact.affectionScore || 50) < 60) return contact;
+
+      // 2. 时间检查
+      const now = Date.now();
+      const lastUserMsg = [...contact.history].reverse().find(m => m.role === 'user');
+      const gapMinutes = lastUserMsg ? Math.floor((now - lastUserMsg.timestamp) / (1000 * 60)) : 99999;
+      
+      // ★★★ 测试建议：把这里的 480 改成 1 (分钟) 来测试效果！！！ ★★★
+      const minGap = contact.proactiveConfig?.minGapMinutes ?? 480; 
+
+      if (gapMinutes < minGap) return contact;
+
+      // 3. 每日上限检查
+      const today = new Date().toISOString().slice(0, 10);
+      const sentToday = contact.proactiveLastSent?.[today] || 0;
+      const maxDaily = contact.proactiveConfig?.maxDaily ?? 2;
+
+      if (sentToday >= maxDaily) return contact;
+
+      // === 🎯 命中！触发主动消息 ===
+      console.log(`[App监视器] 命中! ${contact.name} 准备发送主动消息`);
+      
+      // 记录是谁触发的，用于弹窗 (只处理第一个命中的，避免同时弹多个)
+      if (!triggeredContactId) {
+        triggeredContactId = contact.id;
+        // 立即设置“准备中”弹窗通知
+        setGlobalNotification({ 
+          type: 'proactive_thinking', 
+          contactId: contact.id, 
+          name: contact.name, 
+          avatar: contact.avatar 
+        });
+      }
+
+      // 给这个联系人打上“待处理”标记，传给 ChatApp 去执行
+      return { ...contact, pendingProactive: true };
+    });
+
+    // 如果有变化，更新状态
+    if (triggeredContactId) {
+      setContacts(updatedContacts);
+    }
+  };
+
+  const intervalId = setInterval(checkProactiveMessages, 10000); // 每10秒检查一次
+  return () => clearInterval(intervalId);
+
+}, [contacts, isLoaded, globalNotification, currentApp]);
+
+
+
+
+
+
+
 
 
 
