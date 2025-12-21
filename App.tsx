@@ -153,17 +153,25 @@ const App: React.FC = () => {
           localforage.getItem<WorldBookCategory[]>('worldBooks')
         ]);
 
+// 文件路径: src/App.tsx
+// 位置：useEffect(() => { const loadData = async ... }, []); 里面的 `// 恢复联系人` 部分
+
         // 恢复联系人
-        if (savedContacts) {
-          if (Array.isArray(savedContacts)) {
-             const repaired = savedContacts.map(c => sanitizeContact(c));
-             setContacts(repaired);
-             console.log(`成功载入 ${repaired.length} 个角色`);
-          } else {
-             setContacts(INITIAL_CONTACTS);
-          }
-        } else {
+        if (savedContacts === null) { // 情况1: 数据库里根本没有 contacts，这是第一次运行
           console.log("检测到是第一次运行，初始化默认角色");
+          setContacts(INITIAL_CONTACTS);
+        } else if (Array.isArray(savedContacts)) { // 情况2: 数据库有 contacts 数据，并且是一个数组 (可能是空数组 []，也可能有很多角色)
+          if (savedContacts.length === 0) {
+            console.log("数据库中无角色（用户已清空），显示空白列表");
+            setContacts([]); // 保持空数组，不自动恢复
+          } else {
+            // 如果有角色，进行修复并加载
+            const repaired = savedContacts.map(c => sanitizeContact(c));
+            setContacts(repaired);
+            console.log(`成功载入 ${repaired.length} 个角色`);
+          }
+        } else { // 情况3: savedContacts 存在但不是数组（数据损坏），进行恢复
+          console.warn("Contacts数据损坏，重置为默认角色");
           setContacts(INITIAL_CONTACTS);
         }
         
@@ -379,7 +387,7 @@ const App: React.FC = () => {
 
         {/* 4. ChatApp (后台隐身) */}
         <div className="w-full h-full bg-white" style={{ display: currentApp === 'chat' ? 'block' : 'none' }}>
-           {contacts.length > 0 && (
+
               <ChatApp
                 contacts={contacts}
                 setContacts={setContacts}
@@ -396,7 +404,7 @@ const App: React.FC = () => {
                   setTimeout(() => setGlobalNotification(null), 5000);
                 }}
               />
-          )}
+
         </div>
 
         {/* 5. 其他 App */}
