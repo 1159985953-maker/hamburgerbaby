@@ -340,18 +340,17 @@ const avatar = globalSettings.avatar || "https://api.dicebear.com/7.x/avataaars/
       style={{ backgroundImage: `url(${globalSettings.wallpaper})` }}
     >
       {/* 刘海 + 状态栏 */}
-      <div className="absolute top-0 left-0 right-0 h-16 bg-black/30 backdrop-blur-md flex items-end justify-between px-6 pb-2 text-white/90 z-10">
-        <span className="text-sm">5G</span>
-        <span className="text-sm">🔋 100%</span>
+      <div className="absolute top-0 left-0 right-0 h-0 bg-black/0 backdrop-blur-md flex items-end justify-between px-0 pb-0 text-white/0 z-0">
+
       </div>
 
       {/* 顶部大长方形照片框 + 右上小头像 */}
-      <div className="relative pt-16 px-6 pb-4">
-        <div className="relative rounded-3xl overflow-hidden shadow-2xl border-8 border-white/80">
+      <div className="relative pt-24 px-6 pb-10">
+        <div className="relative rounded-3xl overflow-hidden shadow-xl border-2 border-white/80">
           {/* 照片框（点击换照片） */}
           <img src={topFrame} className="w-full h-48 object-cover" alt="Top Frame" />
-          <label className="absolute inset-0 flex items-center justify-center bg-black/40 cursor-pointer opacity-0 hover:opacity-100 transition-opacity">
-            <span className="text-white text-2xl">📷 更换</span>
+          <label className="absolute inset-0 flex items-center justify-center bg-black/10 cursor-pointer opacity-0 hover:opacity-4 transition-opacity">
+            <span className="text-white text-2xl"> 更换</span>
             <input
               type="file"
               onChange={(e) => {
@@ -376,7 +375,9 @@ const avatar = globalSettings.avatar || "https://api.dicebear.com/7.x/avataaars/
         </div>
 
         {/* 右上小头像（可换） */}
-        <label className="absolute top-20 right-6 w-16 h-16 rounded-full overflow-hidden border-4 border-white/80 shadow-xl cursor-pointer">
+        <label className="top-16 m-16 absolute rounded-full w-20 h-20 overflow-hidden border-20 border-white/80 shadow-xl cursor-pointer"
+
+  >
           <img src={avatar} className="w-full h-full object-cover" alt="Avatar" />
           <input
             type="file"
@@ -399,9 +400,10 @@ const avatar = globalSettings.avatar || "https://api.dicebear.com/7.x/avataaars/
       </div>
 
       {/* 中间部分：左边小照片框 + 右边四个小图标 */}
-      <div className="flex-1 flex px-6 py-8 gap-6">
+      <div className="left-0 bottom-1 w-150/3 flex-10 flex px-6 py-4 gap-4">
+
         {/* 左边小正方形照片框 */}
-        <div className="w-1/3 aspect-square rounded-3xl overflow-hidden shadow-2xl border-8 border-white/80 relative">
+        <div className="left-0 bottom-1 w-1/3 aspect-square rounded-3xl overflow-hidden shadow-2xl border-8 border-white/80 relative mt-0">
           <img src={leftFrame} className="w-full h-full object-cover" alt="Left Frame" />
           <label className="absolute inset-0 flex items-center justify-center bg-black/40 cursor-pointer opacity-0 hover:opacity-100 transition-opacity">
             <span className="text-white text-2xl">📷 更换</span>
@@ -461,7 +463,7 @@ const avatar = globalSettings.avatar || "https://api.dicebear.com/7.x/avataaars/
       </div>
 
       {/* 最下面两个图标（再往下移一点） */}
-      <div className="pb-28 px-6 flex justify-center gap-16">
+     <div className="pb-32 px-6 flex justify-center gap-12 mt-40">
         <div className="flex flex-col items-center gap-1 cursor-pointer group" onClick={() => setCurrentApp('settings')}>
           <div className="w-12 h-12 bg-gradient-to-br from-gray-600 to-gray-800 rounded-2xl flex items-center justify-center text-3xl shadow-lg group-hover:scale-110 transition-transform">
             ⚙️
