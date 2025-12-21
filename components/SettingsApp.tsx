@@ -28,42 +28,42 @@ const SettingsApp: React.FC<SettingsAppProps> = ({
   };
 
   // 保存 API 预设
-  const handleSavePreset = () => {
-    if (!editingPreset?.name || !editingPreset?.apiKey || !editingPreset?.type) {
-      alert('请填写完整信息');
-      return;
-    }
+const handleSavePreset = () => {
+  if (!editingPreset?.name || !editingPreset?.apiKey || !editingPreset?.type) {
+    alert('请填写完整信息');
+    return;
+  }
 
-    const newPreset: ApiPreset = {
-      id: editingPreset.id || Date.now().toString(),
-      name: editingPreset.name,
-      type: editingPreset.type,
-      baseUrl: editingPreset.baseUrl || '',
-      apiKey: editingPreset.apiKey,
-      model: editingPreset.model || models[0] || (editingPreset.type === 'gemini' ? 'gemini-1.5-flash' : 'gpt-3.5-turbo'),
-      temperature: editingPreset.temperature || 1.0,
-      maxTokens: editingPreset.maxTokens || 2048,
-      topP: editingPreset.topP || 1
-    };
-
-    setSettings(prev => {
-      const existingIndex = prev.apiPresets.findIndex(p => p.id === newPreset.id);
-      let newPresets = [...prev.apiPresets];
-      if (existingIndex >= 0) {
-        newPresets[existingIndex] = newPreset;
-      } else {
-        newPresets.push(newPreset);
-      }
-      return {
-        ...prev,
-        apiPresets: newPresets,
-        activePresetId: prev.activePresetId || newPreset.id
-      };
-    });
-
-    setEditingPreset(null);
-    setModels([]);
+  const newPreset: ApiPreset = {
+    id: editingPreset.id || Date.now().toString(),
+    name: editingPreset.name,
+    type: editingPreset.type,
+    baseUrl: editingPreset.baseUrl || '',
+    apiKey: editingPreset.apiKey,
+    model: editingPreset.model || models[0] || (editingPreset.type === 'gemini' ? 'gemini-1.5-flash' : 'gpt-3.5-turbo'),
+    temperature: editingPreset.temperature ?? 1.0, // ← 这里确保温度被保存（默认 1.0）
+    maxTokens: editingPreset.maxTokens || 2048,
+    topP: editingPreset.topP || 1
   };
+
+  setSettings(prev => {
+    const existingIndex = prev.apiPresets.findIndex(p => p.id === newPreset.id);
+    let newPresets = [...prev.apiPresets];
+    if (existingIndex >= 0) {
+      newPresets[existingIndex] = newPreset;
+    } else {
+      newPresets.push(newPreset);
+    }
+    return {
+      ...prev,
+      apiPresets: newPresets,
+      activePresetId: prev.activePresetId || newPreset.id
+    };
+  });
+
+  setEditingPreset(null);
+  setModels([]);
+};
 
   // 删除预设
   const handleDeletePreset = (id: string) => {

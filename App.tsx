@@ -6,6 +6,7 @@ import WorldBookApp from './components/WorldBookApp';
 import WallpaperApp from './components/WallpaperApp';
 import localforage from 'localforage';
 import { Contact, GlobalSettings, WorldBookCategory, Message } from './types';
+console.log('React version:', React.version);  // 只应该打印一次
 
 // ==================== 1. 辅助函数 & 初始数据 (必须放在组件外面！) ====================
 
@@ -160,14 +161,27 @@ const App: React.FC = () => {
         if (savedContacts === null) { // 情况1: 数据库里根本没有 contacts，这是第一次运行
           console.log("检测到是第一次运行，初始化默认角色");
           setContacts(INITIAL_CONTACTS);
-        } else if (Array.isArray(savedContacts)) { // 情况2: 数据库有 contacts 数据，并且是一个数组 (可能是空数组 []，也可能有很多角色)
-          if (savedContacts.length === 0) {
-            console.log("数据库中无角色（用户已清空），显示空白列表");
-            setContacts([]); // 保持空数组，不自动恢复
-          } else {
-            // 如果有角色，进行修复并加载
-            const repaired = savedContacts.map(c => sanitizeContact(c));
-            setContacts(repaired);
+        } else if (Array.isArray(savedContacts)) {
+  if (savedContacts.length === 0) {
+    console.log("数据库中无角色（用户已清空），显示空白列表");
+    setContacts([]);
+  } else {
+    // 这里加强修复：强制加 proactiveConfig 默认值 + 清残留 pending
+    const repaired = savedContacts.map(c => {
+      const sanitized = sanitizeContact(c);
+      return {
+        ...sanitized,
+        // 强制设置 proactiveConfig（如果没有，就给默认关闭）
+        proactiveConfig: sanitized.proactiveConfig || {
+          enabled: false,           // 默认关闭！防止没设置也发
+          minGapMinutes: 480,
+          maxDaily: 2
+        },
+        // 清掉任何残留的 pendingProactive 标记
+        pendingProactive: false
+      };
+    });
+    setContacts(repaired);
             console.log(`成功载入 ${repaired.length} 个角色`);
           }
         } else { // 情况3: savedContacts 存在但不是数组（数据损坏），进行恢复
@@ -220,62 +234,59 @@ const App: React.FC = () => {
     return () => clearInterval(intervalId);
   }, []);
 
-  // --- 4. 全局主动消息监视器 (修复版) ---
-  useEffect(() => {
-    const checkProactiveMessages = () => {
-      if (globalNotification || !isLoaded || contacts.length === 0 || currentApp !== 'home') {
-        return;
-      }
 
-      let triggeredContactId: string | null = null;
+// --- 4. 全局主动消息监视器 (最终单层版) ---
+useEffect(() => {
+  const checkProactiveMessages = () => {
+  if (globalNotification || !isLoaded || contacts.length === 0 || currentApp !== 'home') {
+    return;
+  }
 
-      const updatedContacts = contacts.map(contact => {
-        if (contact.pendingProactive) return contact; 
+  let triggered = false;
+  const updated = contacts.map(c => {
+    // 1. 先清掉残留的 pending（防止开关关了还发）
+    if (c.pendingProactive && !c.proactiveConfig?.enabled) {
+      return { ...c, pendingProactive: false };
+    }
 
-        // 基础检查
-        if (!contact.proactiveConfig?.enabled) return contact;
-        if (contact.aiDND?.enabled) return contact;
-        if ((contact.affectionScore || 50) < 60) return contact;
+    // 2. 严格检查开关
+    const config = c.proactiveConfig || { enabled: false, minGapMinutes: 480, maxDaily: 2 };
+    if (!config.enabled) return c; // 关了就绝对不发！（你原来有这行，但要确保 config 存在）
 
-        // 时间检查
-        const now = Date.now();
-        const lastUserMsg = [...contact.history].reverse().find(m => m.role === 'user');
-        const gapMinutes = lastUserMsg ? Math.floor((now - lastUserMsg.timestamp) / (1000 * 60)) : 99999;
-        const minGap = contact.proactiveConfig?.minGapMinutes ?? 480; 
+    // 3. 其他条件
+    if (c.aiDND?.enabled || (c.affectionScore || 50) < 60) return c;
 
-        if (gapMinutes < minGap) return contact;
+    const lastMsg = c.history[c.history.length - 1];
+    const now = Date.now();
+    const gapMinutes = lastMsg ? Math.floor((now - lastMsg.timestamp) / (1000 * 60)) : 99999;
 
-        // 每日上限检查
-        const today = new Date().toISOString().slice(0, 10);
-        const sentToday = contact.proactiveLastSent?.[today] || 0;
-        const maxDaily = contact.proactiveConfig?.maxDaily ?? 2;
+    if (gapMinutes < config.minGapMinutes) return c;
 
-        if (sentToday >= maxDaily) return contact;
+    const today = new Date().toISOString().slice(0, 10);
+    const sentToday = c.proactiveLastSent?.[today] || 0;
+    if (sentToday >= config.maxDaily) return c;
 
-        // === 命中 ===
-        console.log(`[App监视器] 命中! ${contact.name} 准备发送主动消息`);
-        
-        if (!triggeredContactId) {
-          triggeredContactId = contact.id;
-          setGlobalNotification({ 
-            type: 'proactive_thinking', 
-            contactId: contact.id, 
-            name: contact.name, 
-            avatar: contact.avatar 
-          });
-        }
+    // 命中！
+    console.log(`[App监视器] 命中! ${c.name} 准备发送主动消息 (间隔: ${gapMinutes}m)`);
 
-        return { ...contact, pendingProactive: true };
+    if (!triggered) {
+      triggered = true;
+      setGlobalNotification({
+        type: 'proactive_thinking',
+        contactId: c.id,
+        name: c.name,
+        avatar: c.avatar
       });
+    }
+    return { ...c, pendingProactive: true };
+  });
 
-      if (triggeredContactId) {
-        setContacts(updatedContacts);
-      }
-    };
+  if (triggered) setContacts(updated);
+};
 
-    const intervalId = setInterval(checkProactiveMessages, 10000); // 每10秒
-    return () => clearInterval(intervalId);
-  }, [contacts, isLoaded, globalNotification, currentApp]);
+  const intervalId = setInterval(checkProactiveMessages, 10000); // 每10秒检查一次
+  return () => clearInterval(intervalId);
+}, [contacts, isLoaded, globalNotification, currentApp]);
 
   // --- 5. 辅助函数 ---
   const updatePrimaryContact = (updater: (prev: Contact) => Contact) => {
@@ -343,97 +354,123 @@ const App: React.FC = () => {
     );
   };
 
+
   // ==================== 7. 主渲染 JSX ====================
-  return (
-    <div className="h-screen w-screen bg-black flex items-center justify-center overflow-hidden">
-      {/* 手机外框容器 */}
-      <div className="w-full h-full sm:w-[375px] sm:h-[812px] bg-black sm:rounded-[3rem] sm:border-[8px] sm:border-gray-800 overflow-hidden shadow-2xl relative ring-4 ring-gray-900/50 flex flex-col">
-        
-        {/* 1. 刘海 (Dynamic Island) */}
-        <div className="absolute top-0 left-1/2 transform -translate-x-1/2 w-[120px] h-[35px] bg-black rounded-b-3xl z-[100] hidden sm:block pointer-events-none"></div>
+return (
+  <div className="h-screen w-screen bg-black flex items-center justify-center overflow-hidden">
+    {/* 手机外框容器 */}
+    <div className="w-full h-full sm:w-[375px] sm:h-[812px] bg-black sm:rounded-[3rem] sm:border-[8px] sm:border-gray-800 overflow-hidden shadow-2xl relative ring-4 ring-gray-900/50 flex flex-col">
+      {/* 1. 刘海 (Dynamic Island) */}
+      <div className="absolute top-0 left-1/2 transform -translate-x-1/2 w-[120px] h-[35px] bg-black rounded-b-3xl z-[100] hidden sm:block pointer-events-none"></div>
 
-        {/* 2. 顶部弹窗通知 */}
-        {globalNotification && (
-          <div 
-            onClick={() => {
-              setJumpToContactId(globalNotification.contactId);
-              setCurrentApp('chat');
-              setGlobalNotification(null);
-            }} 
-            className="absolute top-12 left-3 right-3 z-[999] bg-white/95 backdrop-blur-md rounded-2xl p-3 shadow-[0_8px_30px_rgb(0,0,0,0.12)] border border-gray-100 flex items-center gap-3 cursor-pointer animate-slideDown active:scale-95 transition-transform duration-200"
-          >
-            <div className="relative">
-               <img src={globalNotification.avatar} className="w-10 h-10 rounded-full object-cover border border-gray-200" alt="avatar" />
-               {globalNotification.type === 'proactive_thinking' && (
-                 <span className="absolute bottom-0 right-0 w-3 h-3 bg-blue-500 border-2 border-white rounded-full animate-ping"></span>
-               )}
-            </div>
-            <div className="flex-1 min-w-0 flex flex-col justify-center">
-              <div className="flex justify-between items-center">
-                 <span className="font-bold text-sm text-gray-900 truncate">{globalNotification.name}</span>
-                 <span className="text-[10px] text-gray-400">刚刚</span>
-              </div>
-              {globalNotification.type === 'proactive_thinking' ? (
-                <p className="text-xs text-blue-600 font-medium truncate flex items-center gap-1"><span>正在输入...</span><span className="animate-pulse">💬</span></p>
-              ) : (
-                <p className="text-xs text-gray-600 truncate leading-tight">{globalNotification.content || '发来一条新消息'}</p>
-              )}
-            </div>
+      {/* 2. 顶部弹窗通知 */}
+      {globalNotification && (
+        <div
+          onClick={() => {
+            setJumpToContactId(globalNotification.contactId);
+            setCurrentApp('chat');
+            setGlobalNotification(null);
+          }}
+          className="absolute top-12 left-3 right-3 z-[999] bg-white/95 backdrop-blur-md rounded-2xl p-3 shadow-[0_8px_30px_rgb(0,0,0,0.12)] border border-gray-100 flex items-center gap-3 cursor-pointer animate-slideDown active:scale-95 transition-transform duration-200"
+        >
+          <div className="relative">
+            <img src={globalNotification.avatar} className="w-10 h-10 rounded-full object-cover border border-gray-200" alt="avatar" />
+            {globalNotification.type === 'proactive_thinking' && (
+              <span className="absolute bottom-0 right-0 w-3 h-3 bg-blue-500 border-2 border-white rounded-full animate-ping"></span>
+            )}
           </div>
-        )}
-
-        {/* 3. 桌面 */}
-        {currentApp === 'home' && renderHome()}
-
-        {/* 4. ChatApp (后台隐身) */}
-        <div className="w-full h-full bg-white" style={{ display: currentApp === 'chat' ? 'block' : 'none' }}>
-
-              <ChatApp
-                contacts={contacts}
-                setContacts={setContacts}
-                globalSettings={globalSettings}
-                setGlobalSettings={setGlobalSettings}
-                worldBooks={worldBooks}
-                setWorldBooks={setWorldBooks}
-                onExit={() => setCurrentApp('home')}
-                isBackground={currentApp !== 'chat'}
-                initialContactId={jumpToContactId}
-                onChatOpened={() => setJumpToContactId(null)}
-                onNewMessage={(contactId, name, avatar, content) => {
-                  setGlobalNotification({ type: 'new_message', contactId, name, avatar, content });
-                  setTimeout(() => setGlobalNotification(null), 5000);
-                }}
-              />
-
+          <div className="flex-1 min-w-0 flex flex-col justify-center">
+            <div className="flex justify-between items-center">
+              <span className="font-bold text-sm text-gray-900 truncate">{globalNotification.name}</span>
+              <span className="text-[10px] text-gray-400">刚刚</span>
+            </div>
+            {globalNotification.type === 'proactive_thinking' ? (
+              <p className="text-xs text-blue-600 font-medium truncate flex items-center gap-1">
+                <span>正在输入...</span><span className="animate-pulse">💬</span>
+              </p>
+            ) : (
+              <p className="text-xs text-gray-600 truncate leading-tight">
+                {globalNotification.content || '发来一条新消息'}
+              </p>
+            )}
+          </div>
         </div>
+      )}
 
-        {/* 5. 其他 App */}
-        {currentApp === 'coupleSpace' && contacts[0] && (
-          (() => {
-            let target = contacts[0];
-            const safeProfile = { ...target, name: target.name || "Unknown", avatar: target.avatar || "", mood: target.mood || { current: "Content", energyLevel: 80, lastUpdate: Date.now() }, userName: target.userName || "Darling", diaries: target.diaries || [], coupleSpaceUnlocked: target.coupleSpaceUnlocked || false, history: target.history || [], summary: target.summary || "" };
-            const recentHistory = Array.isArray(target.history) && target.history.length > 0
-              ? target.history.slice(-5).map((msg: any) => `${msg?.role === 'user' ? target.userName : target.name}: ${msg?.content || ''}`).join('\n')
-              : "暂无历史对话";
-            return <CoupleSpace profile={safeProfile} chatMemorySummary={`Summary: ${target.summary}\nRecent:\n${recentHistory}`} onClose={() => setCurrentApp('home')} onUnlock={() => updatePrimaryContact(prev => ({ ...prev, coupleSpaceUnlocked: true }))} />;
-          })()
-        )}
+      {/* 3. 桌面 */}
+      {currentApp === 'home' && renderHome()}
 
-        {currentApp === 'settings' && (
-          <SettingsApp settings={globalSettings} setSettings={setGlobalSettings} contacts={contacts} setContacts={setContacts} worldBooks={worldBooks} setWorldBooks={setWorldBooks} onClose={() => setCurrentApp('home')} />
-        )}
-
-        {currentApp === 'worldbook' && (
-          <WorldBookApp worldBooks={worldBooks} setWorldBooks={setWorldBooks} onClose={() => setCurrentApp('home')} />
-        )}
-
-        {currentApp === 'wallpaper' && (
-          <WallpaperApp settings={globalSettings} setSettings={setGlobalSettings} onClose={() => setCurrentApp('home')} />
-        )}
-
+      {/* 4. ChatApp (后台隐身) */}
+      <div className="w-full h-full bg-white" style={{ display: currentApp === 'chat' ? 'block' : 'none' }}>
+        <ChatApp
+          contacts={contacts}
+          setContacts={setContacts}
+          globalSettings={globalSettings}
+          setGlobalSettings={setGlobalSettings}
+          worldBooks={worldBooks}
+          setWorldBooks={setWorldBooks}
+          onExit={() => setCurrentApp('home')}
+          isBackground={currentApp !== 'chat'}
+          initialContactId={jumpToContactId}
+          onChatOpened={() => setJumpToContactId(null)}
+          onNewMessage={(contactId, name, avatar, content) => {
+            setGlobalNotification({ type: 'new_message', contactId, name, avatar, content });
+            setTimeout(() => setGlobalNotification(null), 5000);
+          }}
+        />
       </div>
+
+      {/* 5. 其他 App */}
+      {currentApp === 'coupleSpace' && contacts[0] && (
+        (() => {
+          let target = contacts[0];
+          const safeProfile = {
+            ...target,
+            name: target.name || "Unknown",
+            avatar: target.avatar || "",
+            mood: target.mood || { current: "Content", energyLevel: 80, lastUpdate: Date.now() },
+            userName: target.userName || "Darling",
+            diaries: target.diaries || [],
+            coupleSpaceUnlocked: target.coupleSpaceUnlocked || false,
+            history: target.history || [],
+            summary: target.summary || ""
+          };
+          const recentHistory = Array.isArray(target.history) && target.history.length > 0
+            ? target.history.slice(-5).map((msg: any) => `${msg?.role === 'user' ? target.userName : target.name}: ${msg?.content || ''}`).join('\n')
+            : "暂无历史对话";
+          return (
+            <CoupleSpace
+              profile={safeProfile}
+              chatMemorySummary={`Summary: ${target.summary}\nRecent:\n${recentHistory}`}
+              onClose={() => setCurrentApp('home')}
+              onUnlock={() => updatePrimaryContact(prev => ({ ...prev, coupleSpaceUnlocked: true }))}
+            />
+          );
+        })()
+      )}
+
+{currentApp === 'settings' && (
+  <SettingsApp
+    settings={globalSettings}
+    setSettings={setGlobalSettings}
+    contacts={contacts}
+    setContacts={setContacts}
+    worldBooks={worldBooks}
+    setWorldBooks={setWorldBooks}
+    onClose={() => setCurrentApp('home')}
+  />
+)}
+
+      {currentApp === 'worldbook' && (
+        <WorldBookApp worldBooks={worldBooks} setWorldBooks={setWorldBooks} onClose={() => setCurrentApp('home')} />
+      )}
+
+      {currentApp === 'wallpaper' && (
+        <WallpaperApp settings={globalSettings} setSettings={setGlobalSettings} onClose={() => setCurrentApp('home')} />
+      )}
     </div>
-  );
+  </div>
+);
 };
 
 export default App;

@@ -1,0 +1,4 @@
+/* 这是一组什么代码: 这是全局样式入口文件，用来启动 Tailwind CSS */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;

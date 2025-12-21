@@ -1,14 +1,12 @@
+// 这是一组什么代码: 这是最终修复版的项目入口文件 (index.tsx)
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
-// 如果你有全局样式文件（比如 index.css），记得留着下面这行，没有就删掉
+import './index.css'; // 关键：我们在这里把刚刚创建的 CSS 文件导入进来！
 
-
-// 获取网页上的根节点
 const rootElement = document.getElementById('root');
 
 if (rootElement) {
-  // 只有在网页环境下，这里才能正常运行
   const root = ReactDOM.createRoot(rootElement);
   root.render(
     <React.StrictMode>
@@ -16,5 +14,5 @@ if (rootElement) {
     </React.StrictMode>
   );
 } else {
-  console.error("找不到 root 节点，请检查 index.html");
+  console.error("关键错误: 在 index.html 中找不到 id 为 'root' 的节点！");
 }
