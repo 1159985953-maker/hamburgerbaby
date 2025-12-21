@@ -9,6 +9,7 @@ interface AppearanceAppProps {
   onClose: () => void;
 }
 
+
 const AppearanceApp: React.FC<AppearanceAppProps> = ({ settings, setSettings, onClose }) => {
   const [activeTab, setActiveTab] = useState<'wallpaper' | 'frames' | 'avatar'>('wallpaper');
   const presets = [
@@ -19,26 +20,34 @@ const AppearanceApp: React.FC<AppearanceAppProps> = ({ settings, setSettings, on
     "https://images.unsplash.com/photo-1534796636912-3b95b3ab5986"
   ];
 
-  const handleUpload = (e: React.ChangeEvent<HTMLInputElement>, key: 'wallpaper' | 'top' | 'left' | 'avatar') => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (ev) => {
-      if (ev.target?.result) {
-        if (key === 'wallpaper') {
-          setSettings(prev => ({ ...prev, wallpaper: ev.target!.result as string }));
-        } else if (key === 'avatar') {
-          setSettings(prev => ({ ...prev, avatar: ev.target!.result as string }));
-        } else {
-          setSettings(prev => ({
+const handleUpload = (e: React.ChangeEvent<HTMLInputElement>, key: 'wallpaper' | 'top' | 'left' | 'avatar') => {
+  const file = e.target.files?.[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (ev) => {
+    if (ev.target?.result) {
+      if (key === 'wallpaper') {
+        setSettings(prev => ({ ...prev, wallpaper: ev.target!.result as string }));
+      } else if (key === 'avatar') {
+        setSettings(prev => ({ ...prev, avatar: ev.target!.result as string }));
+      } else {
+        setSettings(prev => {
+          const currentFrames = prev.photoFrames || [  // ← 超级兜底：如果 undefined，就用默认数组
+            { id: 'top', photo: "https://picsum.photos/800/300?random=1" },
+            { id: 'left', photo: "https://picsum.photos/400/400?random=2" }
+          ];
+          return {
             ...prev,
-            photoFrames: prev.photoFrames.map(f => f.id === key ? { ...f, photo: ev.target!.result as string } : f)
-          }));
-        }
+            photoFrames: currentFrames.map(f =>
+              f.id === key ? { ...f, photo: ev.target!.result as string } : f
+            )
+          };
+        });
       }
-    };
-    reader.readAsDataURL(file);
+    }
   };
+  reader.readAsDataURL(file);
+};
 
   return (
     <div className="h-full w-full bg-gradient-to-br from-gray-900 to-black flex flex-col">
@@ -96,7 +105,12 @@ const AppearanceApp: React.FC<AppearanceAppProps> = ({ settings, setSettings, on
             <div>
               <h3 className="text-white text-lg mb-2">顶部大照片框</h3>
               <div className="aspect-[4/3] rounded-3xl overflow-hidden border-4 border-white/20 shadow-2xl relative">
-                <img src={settings.photoFrames.find(f => f.id === 'top')?.photo || "https://picsum.photos/800/300"} className="w-full h-full object-cover" />
+               <img 
+  src={
+    settings.photoFrames?.find(f => f.id === 'top')?.photo 
+    || "https://picsum.photos/800/300?random=1"
+  } 
+  className="w-full h-full object-cover"/>
                 <label className="absolute inset-0 flex items-center justify-center bg-black/40 cursor-pointer">
                   <span className="text-white text-2xl">📷 更换</span>
                   <input type="file" onChange={e => handleUpload(e, 'top')} className="hidden" accept="image/*" />
@@ -107,7 +121,12 @@ const AppearanceApp: React.FC<AppearanceAppProps> = ({ settings, setSettings, on
             <div>
               <h3 className="text-white text-lg mb-2">左下小照片框</h3>
               <div className="aspect-square rounded-3xl overflow-hidden border-4 border-white/20 shadow-2xl relative">
-                <img src={settings.photoFrames.find(f => f.id === 'left')?.photo || "https://picsum.photos/400/400"} className="w-full h-full object-cover" />
+              <img 
+  src={
+    settings.photoFrames?.find(f => f.id === 'left')?.photo 
+    || "https://picsum.photos/400/400?random=2"
+  } 
+  className="w-full h-full object-cover"/>
                 <label className="absolute inset-0 flex items-center justify-center bg-black/40 cursor-pointer">
                   <span className="text-white text-2xl">📷 更换</span>
                   <input type="file" onChange={e => handleUpload(e, 'left')} className="hidden" accept="image/*" />

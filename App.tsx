@@ -11,6 +11,8 @@ console.log('React version:', React.version);  // 只应该打印一次
 
 // ==================== 1. 辅助函数 & 初始数据 (必须放在组件外面！) ====================
 
+
+
 // 初始联系人数据 (防崩底包)
 const INITIAL_CONTACTS: Contact[] = [
   {
@@ -154,8 +156,7 @@ const [globalSettings, setGlobalSettings] = useState<GlobalSettings>({
     { id: 'top', photo: "https://picsum.photos/800/300?random=1" },
     { id: 'left', photo: "https://picsum.photos/400/400?random=2" }
   ],
-  avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=User"  // 默认头像
-
+  avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=User"
 });
 
   // --- 1. 强力加载逻辑 (防白屏核心) ---
@@ -331,8 +332,24 @@ useEffect(() => {
 
   // --- 6. 渲染桌面 ---
 const renderHome = () => {
-  const topFrame = globalSettings.photoFrames?.find(f => f.id === 'top')?.photo || "https://picsum.photos/800/300";
-const leftFrame = globalSettings.photoFrames?.find(f => f.id === 'left')?.photo || "https://picsum.photos/400/400";
+  // 强制保证 photoFrames 永远是数组
+  if (!globalSettings.photoFrames || !Array.isArray(globalSettings.photoFrames)) {
+    setGlobalSettings(prev => ({
+      ...prev,
+      photoFrames: [
+        { id: 'top', photo: "https://picsum.photos/800/300?random=1" },
+        { id: 'left', photo: "https://picsum.photos/400/400?random=2" }
+      ]
+    }));
+    // 直接用默认值渲染
+    const topFrame = "https://picsum.photos/800/300?random=1";
+    const leftFrame = "https://picsum.photos/400/400?random=2";
+    const avatar = globalSettings.avatar || "https://api.dicebear.com/7.x/avataaars/svg?seed=User";
+    // ... 继续下面的渲染
+  }
+  
+const topFrame = globalSettings.photoFrames?.find(f => f.id === 'top')?.photo || "https://picsum.photos/800/300?random=1";
+  const leftFrame = globalSettings.photoFrames?.find(f => f.id === 'left')?.photo || "https://picsum.photos/400/400?random=2";
 const avatar = globalSettings.avatar || "https://api.dicebear.com/7.x/avataaars/svg?seed=User";
 
   return (
@@ -349,7 +366,11 @@ const avatar = globalSettings.avatar || "https://api.dicebear.com/7.x/avataaars/
       <div className="relative pt-24 px-6 pb-10">
         <div className="relative rounded-3xl overflow-hidden shadow-xl border-2 border-white/80">
           {/* 照片框（点击换照片） */}
-          <img src={topFrame} className="w-full h-48 object-cover" alt="Top Frame" />
+          <img 
+  src={topFrame || "https://picsum.photos/800/300?random=1"} 
+  className="w-full h-48 object-cover" 
+  alt="Top Frame" 
+/>
           <label className="absolute inset-0 flex items-center justify-center bg-black/10 cursor-pointer opacity-0 hover:opacity-4 transition-opacity">
             <span className="text-white text-2xl"> 更换</span>
             <input
@@ -360,10 +381,15 @@ const avatar = globalSettings.avatar || "https://api.dicebear.com/7.x/avataaars/
                   const reader = new FileReader();
                   reader.onload = (ev) => {
                     if (ev.target?.result) {
-                      setGlobalSettings(prev => ({
-                        ...prev,
-                        photoFrames: prev.photoFrames.map(f => f.id === 'top' ? { ...f, photo: ev.target!.result as string } : f)
-                      }));
+setGlobalSettings(prev => ({
+  ...prev,
+  photoFrames: (prev.photoFrames ?? [ // ← 用 ?? 兜底
+    { id: 'top', photo: "https://picsum.photos/800/300?random=1" },
+    { id: 'left', photo: "https://picsum.photos/400/400?random=2" }
+  ]).map(f =>
+    f.id === 'top' ? { ...f, photo: ev.target!.result as string } : f
+  )
+}));
                     }
                   };
                   reader.readAsDataURL(file);
@@ -378,7 +404,11 @@ const avatar = globalSettings.avatar || "https://api.dicebear.com/7.x/avataaars/
         {/* 小头像（可换） */}
        <label className="absolute top-28 left-1/2 -translate-x-1/2 w-20 h-20 rounded-full overflow-hidden border-4 border-white/80 shadow-2xl cursor-pointer z-10"
   >
-          <img src={avatar} className="w-full h-full object-cover" alt="Avatar" />
+          <img 
+  src={avatar || "https://api.dicebear.com/7.x/avataaars/svg?seed=User"} 
+  className="w-full h-full object-cover" 
+  alt="Avatar" 
+/>
           <input
             type="file"
             onChange={(e) => {
@@ -387,7 +417,7 @@ const avatar = globalSettings.avatar || "https://api.dicebear.com/7.x/avataaars/
                 const reader = new FileReader();
                 reader.onload = (ev) => {
                   if (ev.target?.result) {
-                    setGlobalSettings(prev => ({ ...prev, avatar: ev.target!.result as string }));
+                 setGlobalSettings(prev => ({ ...prev, avatar: ev.target!.result as string }));
                   }
                 };
                 reader.readAsDataURL(file);
@@ -404,7 +434,11 @@ const avatar = globalSettings.avatar || "https://api.dicebear.com/7.x/avataaars/
 
         {/* 左边小正方形照片框 */}
         <div className="left- bottom-1 w-1/3 aspect-square rounded-3xl overflow-hidden shadow-2xl border-8 border-white/80 relative mt-0">
-          <img src={leftFrame} className="w-full h-full object-cover" alt="Left Frame" />
+          <img 
+  src={leftFrame || "https://picsum.photos/400/400?random=2"} 
+  className="w-full h-full object-cover" 
+  alt="Left Frame" 
+/>
           <label className="absolute inset-0 flex items-center justify-center bg-black/40 cursor-pointer opacity-0 hover:opacity-0 transition-opacity">
             <span className="text-white text-2xl">📷 更换</span>
             <input
@@ -416,9 +450,14 @@ const avatar = globalSettings.avatar || "https://api.dicebear.com/7.x/avataaars/
                   reader.onload = (ev) => {
                     if (ev.target?.result) {
                       setGlobalSettings(prev => ({
-                        ...prev,
-                        photoFrames: prev.photoFrames.map(f => f.id === 'left' ? { ...f, photo: ev.target!.result as string } : f)
-                      }));
+  ...prev,
+  photoFrames: (prev.photoFrames ?? [
+    { id: 'top', photo: "https://picsum.photos/800/300?random=1" },
+    { id: 'left', photo: "https://picsum.photos/400/400?random=2" }
+  ]).map(f =>
+    f.id === 'left' ? { ...f, photo: ev.target!.result as string } : f
+  )
+}));
                     }
                   };
                   reader.readAsDataURL(file);
