@@ -179,16 +179,15 @@ const SettingsApp: React.FC<SettingsAppProps> = ({
   };
 
   return (
-  <div className="h-screen w-screen bg-gray-900 flex flex-col overflow-hidden">
-  {/* SafeAreaHeader */}
-  <SafeAreaHeader
-    title="系统设置"
-    left={<button onClick={onClose} className="text-white text-2xl">←</button>}
-    backgroundClass="bg-black/70 backdrop-blur-md border-b border-white/10"
-  />
+    <div className="h-full w-full bg-gray-100 flex flex-col overflow-hidden pt-16"> {/* 加 pt-16 */}
+      {/* 顶部标题栏 */}
+      <SafeAreaHeader
+  title="系统设置"
+  left={<button onClick={onClose} className="text-blue-500 text-2xl -ml-2">‹</button>}
+/>
 
       {/* 标签页切换 */}
-      <div className="flex bg-black/40 backdrop-blur-md border-b border-white/10">
+      <div className="flex bg-white border-b">
         <button onClick={() => setActiveTab('api')} className={`flex-1 py-3 font-medium ${activeTab === 'api' ? 'text-blue-600 border-b-2 border-blue-600' : 'text-gray-500'}`}>
           API 配置
         </button>
@@ -200,7 +199,7 @@ const SettingsApp: React.FC<SettingsAppProps> = ({
         </button>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-6">
+      <div className="flex-1 overflow-y-auto p-4">
         {/* ==================== 1. API 配置页面 ==================== */}
         {activeTab === 'api' && (
           <div className="space-y-6">
