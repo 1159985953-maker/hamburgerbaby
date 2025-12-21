@@ -440,6 +440,9 @@ interface ChatAppProps {
 }
 
 // ========== 【修复版】ChatListItem：修复左滑按钮点击无效的问题 ==========
+// 文件路径: src/components/ChatApp.tsx
+
+// ========== 【终极修复版】ChatListItem：完美支持左滑点击 ==========
 const ChatListItem: React.FC<{
   contact: Contact;
   onClick: () => void;
@@ -449,84 +452,110 @@ const ChatListItem: React.FC<{
 }> = ({ contact, onClick, onDelete, onPin, isPinned }) => {
   const [translateX, setTranslateX] = useState(0);
   const touchStartX = useRef(0);
-  // 增加一个 ref 来判断是否正在滑动，防止点击穿透
-  const isSwiping = useRef(false); 
+  const touchStartY = useRef(0); // 增加 Y 轴记录，防止上下滑误触
+  const isSwipingHorizontal = useRef(false); // 标记是否确认是水平滑动
 
   const handleTouchStart = (e: React.TouchEvent) => {
     touchStartX.current = e.touches[0].clientX;
-    isSwiping.current = false;
+    touchStartY.current = e.touches[0].clientY;
+    isSwipingHorizontal.current = false;
   };
 
   const handleTouchMove = (e: React.TouchEvent) => {
-    const diff = e.touches[0].clientX - touchStartX.current;
-    if (Math.abs(diff) > 10) isSwiping.current = true; // 稍微动一点就算滑动
-    if (diff < 0) { // 只允许左滑
-      setTranslateX(Math.max(diff, -140)); // 最大露140px按钮
+    const currentX = e.touches[0].clientX;
+    const currentY = e.touches[0].clientY;
+    const diffX = currentX - touchStartX.current;
+    const diffY = currentY - touchStartY.current;
+
+    // 1. 判断滑动方向：如果是上下滑动，就不处理左右滑
+    if (!isSwipingHorizontal.current) {
+      if (Math.abs(diffY) > Math.abs(diffX)) {
+        return; // 认为是垂直滚动，放行
+      }
+      isSwipingHorizontal.current = true; // 确认为水平滑动
+    }
+
+    // 2. 处理左滑逻辑
+    if (diffX < 0) { 
+      // 左滑：最大滑出 140px
+      // 增加阻尼感：滑得越远越难滑
+      const newTranslateX = Math.max(diffX, -140);
+      setTranslateX(newTranslateX);
+    } else {
+      // 右滑（归位）：如果本来是打开的(translateX < 0)，允许右滑关闭
+      if (translateX < 0) {
+         setTranslateX(Math.min(translateX + diffX, 0));
+      }
     }
   };
 
   const handleTouchEnd = () => {
-    // 如果松开时滑出了超过70px，就展开；否则收回
-    if (translateX < -70) {
+    // 阈值判断：如果滑出超过 60px，就自动展开；否则回弹
+    if (translateX < -60) {
       setTranslateX(-140);
     } else {
       setTranslateX(0);
     }
+    isSwipingHorizontal.current = false;
   };
 
   const resetSwipe = () => {
     setTranslateX(0);
   };
 
-  const handleItemClick = () => {
-    // 如果按钮露出来了，点击列表项是收回按钮，而不是进聊天
-    if (translateX < -10) {
-      resetSwipe();
-      return;
-    }
-    onClick();
-  };
-
   return (
-    <div className="relative overflow-hidden bg-white">
-      {/* 背景按钮层 (放在下面) */}
-      <div className="absolute inset-y-0 right-0 flex items-center z-0">
+    <div className="relative overflow-hidden bg-white w-full select-none">
+      {/* 
+         ★★★ 背景按钮层 (z-0) ★★★ 
+         关键点：pointer-events-auto 确保能点到
+      */}
+      <div className="absolute inset-y-0 right-0 flex items-center z-0 h-full">
         <button
+          className="w-[70px] h-full bg-orange-500 text-white font-bold text-sm flex items-center justify-center active:bg-orange-600 transition-colors"
           onClick={(e) => {
-            e.stopPropagation(); // 阻止冒泡
+            e.stopPropagation(); // 阻止冒泡，防止进入聊天
             onPin(contact.id);
             resetSwipe();
           }}
-          className="w-20 h-full bg-orange-500 text-white font-medium text-sm flex items-center justify-center active:bg-orange-600"
         >
           {isPinned ? '取消' : '置顶'}
         </button>
         <button
+          className="w-[70px] h-full bg-red-600 text-white font-bold text-sm flex items-center justify-center active:bg-red-700 transition-colors"
           onClick={(e) => {
             e.stopPropagation(); // 阻止冒泡
-            if (confirm("确定删除这个角色吗？所有聊天记录将永久删除！")) {
+            if (confirm(`确定删除 ${contact.name} 吗？所有回忆将消失！`)) {
               onDelete(contact.id);
+            } else {
+              resetSwipe();
             }
-            resetSwipe();
           }}
-          className="w-20 h-full bg-red-600 text-white font-medium text-sm flex items-center justify-center active:bg-red-700"
         >
           删除
         </button>
       </div>
 
-      {/* 前景卡片 (盖在上面) */}
+      {/* 
+         ★★★ 前景卡片层 (z-10) ★★★ 
+         transform 移动它，露出下面的按钮
+      */}
       <div
-        className={`relative flex items-center py-3 px-4 border-b transition-transform duration-300 z-10 ${
-          isPinned ? 'bg-gray-50' : 'bg-white hover:bg-gray-50'
-        }`}
+        className={`relative z-10 flex items-center py-3 px-4 border-b bg-white transition-transform duration-200 ease-out active:bg-gray-50 ${isPinned ? 'bg-gray-50' : ''}`}
         style={{ transform: `translateX(${translateX}px)` }}
-        onClick={handleItemClick}
+        onClick={() => {
+          // 如果是打开状态，点击只是关闭按钮，不进聊天
+          if (translateX < -10) {
+            resetSwipe();
+          } else {
+            onClick();
+          }
+        }}
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
       >
-        <div className="relative mr-3 flex-shrink-0">
+        {/* 头像 */}
+        <div className="relative mr-3 flex-shrink-0 pointer-events-none">
           <img 
             src={contact.avatar} 
             className="w-11 h-11 rounded-full object-cover border border-gray-100" 
@@ -539,7 +568,8 @@ const ChatListItem: React.FC<{
           )}
         </div>
         
-        <div className="flex-1 min-w-0 pointer-events-none"> {/* 防止文字遮挡点击 */}
+        {/* 文字内容 (pointer-events-none 防止文字遮挡点击) */}
+        <div className="flex-1 min-w-0 pointer-events-none">
           <div className="flex items-center gap-2">
             <div className="font-semibold text-gray-900 text-base truncate">{contact.name}</div>
             {isPinned && <span className="text-orange-500 text-xs font-bold scale-75">📌</span>}
@@ -549,7 +579,8 @@ const ChatListItem: React.FC<{
           </div>
         </div>
         
-        <div className="text-xs text-gray-400 ml-4 flex-shrink-0">
+        {/* 时间 */}
+        <div className="text-xs text-gray-400 ml-4 flex-shrink-0 pointer-events-none">
           {new Date(contact.history[contact.history.length - 1]?.timestamp || contact.created)
             .toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })}
         </div>
@@ -973,7 +1004,7 @@ const ChatApp: React.FC<ChatAppProps> = ({
   const [isAiTyping, setIsAiTyping] = useState(false); // AI 是否正在“打字”
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  
+
 // 文件路径: src/components/ChatApp.tsx
 
   // ▼▼▼▼▼▼▼▼▼▼▼▼ 替换开始：安全获取当前角色 + 防白屏逻辑 ▼▼▼▼▼▼▼▼▼▼▼▼
@@ -1071,15 +1102,38 @@ useEffect(() => {
     }
   }, [activeContactId, isBackground, view]);
 
-  useLayoutEffect(() => {
-  if (messagesEndRef.current) {
-    // 为了确保万无一失，我们使用更直接的滚动方式
-    const scrollContainer = messagesEndRef.current.parentElement;
-    if (scrollContainer) {
-      scrollContainer.scrollTop = scrollContainer.scrollHeight;
+ // 文件路径: src/components/ChatApp.tsx
+
+  // ▼▼▼▼▼▼▼▼▼▼▼▼ 替换开始：强力自动滚动逻辑 ▼▼▼▼▼▼▼▼▼▼▼▼
+  // 核心滚动函数
+  const scrollToBottom = (behavior: ScrollBehavior = 'auto') => {
+    if (messagesEndRef.current) {
+      // 1. 优先尝试 scrollIntoView (最稳)
+      messagesEndRef.current.scrollIntoView({ behavior });
+      
+      // 2. 双重保险：直接操纵 scrollTop
+      const container = messagesEndRef.current.parentElement;
+      if (container) {
+        container.scrollTop = container.scrollHeight;
+      }
     }
-  }
-}, [activeContact?.history, isAiTyping]);
+  };
+
+  // 监听所有可能需要滚动的时机
+  useLayoutEffect(() => {
+    if (view === 'chat') {
+      // 这里的 setTimeout 是关键！让浏览器先把页面画好，稍微等 10ms 再滚，防止滚早了高度不对。
+      setTimeout(() => {
+        scrollToBottom('auto'); // 瞬间跳到底部，不要动画 (防晕)
+      }, 10);
+    }
+  }, [
+    activeContact?.history, // 1. 有新消息时
+    isAiTyping,             // 2. AI 正在输入时
+    view,                   // 3. ★★★ 关键：刚切进聊天页面时
+    activeContactId         // 4. ★★★ 关键：切换联系人时
+  ]);
+  // ▲▲▲▲▲▲▲▲▲▲▲▲ 替换结束 ▲▲▲▲▲▲▲▲▲▲▲▲
 
 // ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
 
