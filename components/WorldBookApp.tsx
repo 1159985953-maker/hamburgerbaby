@@ -21,6 +21,8 @@ const WorldBookApp: React.FC<WorldBookAppProps> = ({ worldBooks, setWorldBooks, 
   const [newEntryContent, setNewEntryContent] = useState("");
   const [showNewEntryModal, setShowNewEntryModal] = useState(false);
 
+
+  
   const toggleCat = (catId: string) => {
     if (manageMode) {
       setSelectedCats(prev => prev.includes(catId) ? prev.filter(id => id !== catId) : [...prev, catId]);
@@ -173,20 +175,22 @@ const WorldBookApp: React.FC<WorldBookAppProps> = ({ worldBooks, setWorldBooks, 
       <SafeAreaHeader
         title="世界书"
         left={<button onClick={onClose} className="text-gray-700 font-medium">关闭</button>}
-        right={
-          <div className="flex items-center gap-5">
-            <label className="cursor-pointer text-gray-600 text-lg hover:text-gray-900">
-              📥
-              <input type="file" accept=".json" onChange={handleFileUpload} className="hidden" />
-            </label>
-            <button onClick={() => setManageMode(!manageMode)} className="text-gray-700 font-medium hover:text-gray-900">
-              {manageMode ? '完成' : '管理'}
-            </button>
-            {!manageMode && (
-              <button onClick={() => setShowNewEntryModal(true)} className="text-gray-700 text-2xl hover:text-gray-900">+</button>
-            )}
-          </div>
-        }
+       right={
+  <div className="flex items-center !mr-auto gap-1 pr-2">  {/* pr-2 = padding-right: 0.5rem = 8px */}
+    <label className="cursor-pointer  text-gray-600 text-lg hover:text-gray-900">
+      📥
+      <input type="file" accept=".json" onChange={handleFileUpload} className="hidden" />
+    </label>
+    <button onClick={() => setManageMode(!manageMode)} className="text-gray-700 font-medium hover:text-gray-900">
+      {manageMode ? '完成' : '管理'}
+    </button>
+    {!manageMode && (
+      <button onClick={() => setShowNewEntryModal(true)} className="text-gray-700 text-2xl hover:text-gray-900">
+        +
+      </button>
+    )}
+  </div>
+}
       />
 
       {/* 多选操作栏（保持原样，但位置下移） */}

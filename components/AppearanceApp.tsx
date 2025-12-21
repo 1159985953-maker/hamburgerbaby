@@ -119,7 +119,7 @@ const AppearanceApp: React.FC<AppearanceAppProps> = ({ settings, setSettings, on
 
         {activeTab === 'avatar' && (
           <div>
-            <h3 className="text-white text-lg mb-2">右上小头像</h3>
+            <h3 className="text-white text-lg mb-2">小头像</h3>
             <div className="w-32 h-32 rounded-full overflow-hidden border-4 border-white/20 shadow-2xl mx-auto relative">
               <img src={settings.avatar} className="w-full h-full object-cover" alt="Avatar" />
               <label className="absolute inset-0 flex items-center justify-center bg-black/40 cursor-pointer">

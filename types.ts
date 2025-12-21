@@ -313,7 +313,7 @@ export interface PhotoFrame {
 export interface GlobalSettings {
   // ... 原有
   photoFrames: PhotoFrame[];  // 两个照片框：top + left
-  avatar: string;  // 右上小头像
+  avatar: string;  // 小头像
 }
 
 export interface LoveLetter {

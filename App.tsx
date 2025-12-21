@@ -4,6 +4,7 @@ import CoupleSpace from './components/CoupleSpace';
 import SettingsApp from './components/SettingsApp';
 import WorldBookApp from './components/WorldBookApp';
 import WallpaperApp from './components/AppearanceApp';
+import SafeAreaHeader from './components/SafeAreaHeader';  // ← 加这一行！
 import localforage from 'localforage';
 import { Contact, GlobalSettings, WorldBookCategory, Message } from './types';
 console.log('React version:', React.version);  // 只应该打印一次
@@ -344,7 +345,7 @@ const avatar = globalSettings.avatar || "https://api.dicebear.com/7.x/avataaars/
 
       </div>
 
-      {/* 顶部大长方形照片框 + 右上小头像 */}
+      {/* 顶部大长方形照片框 + 小头像 */}
       <div className="relative pt-24 px-6 pb-10">
         <div className="relative rounded-3xl overflow-hidden shadow-xl border-2 border-white/80">
           {/* 照片框（点击换照片） */}
@@ -374,7 +375,7 @@ const avatar = globalSettings.avatar || "https://api.dicebear.com/7.x/avataaars/
           </label>
         </div>
 
-        {/* 右上小头像（可换） */}
+        {/* 小头像（可换） */}
        <label className="absolute top-28 left-1/2 -translate-x-1/2 w-20 h-20 rounded-full overflow-hidden border-4 border-white/80 shadow-2xl cursor-pointer z-10"
   >
           <img src={avatar} className="w-full h-full object-cover" alt="Avatar" />
@@ -399,12 +400,12 @@ const avatar = globalSettings.avatar || "https://api.dicebear.com/7.x/avataaars/
       </div>
 
       {/* 中间部分：左边小照片框 + 右边四个小图标 */}
-      <div className="left-0 bottom-1 w-150/3 flex-10 flex px-6 py-4 gap-4">
+      <div className="left-12 bottom-2 w-200/3 flex-10 flex px-6 py-6 gap-8">
 
         {/* 左边小正方形照片框 */}
-        <div className="left-0 bottom-1 w-1/3 aspect-square rounded-3xl overflow-hidden shadow-2xl border-8 border-white/80 relative mt-0">
+        <div className="left- bottom-1 w-1/3 aspect-square rounded-3xl overflow-hidden shadow-2xl border-8 border-white/80 relative mt-0">
           <img src={leftFrame} className="w-full h-full object-cover" alt="Left Frame" />
-          <label className="absolute inset-0 flex items-center justify-center bg-black/40 cursor-pointer opacity-0 hover:opacity-100 transition-opacity">
+          <label className="absolute inset-0 flex items-center justify-center bg-black/40 cursor-pointer opacity-0 hover:opacity-0 transition-opacity">
             <span className="text-white text-2xl">📷 更换</span>
             <input
               type="file"
@@ -462,21 +463,24 @@ const avatar = globalSettings.avatar || "https://api.dicebear.com/7.x/avataaars/
       </div>
 
       {/* 最下面两个图标（再往下移一点） */}
-     <div className="pb-32 px-6 flex justify-center gap-12 mt-40">
-        <div className="flex flex-col items-center gap-1 cursor-pointer group" onClick={() => setCurrentApp('settings')}>
-          <div className="w-12 h-12 bg-gradient-to-br from-gray-600 to-gray-800 rounded-2xl flex items-center justify-center text-3xl shadow-lg group-hover:scale-110 transition-transform">
-            ⚙️
-          </div>
-          <span className="text-white text-xs font-medium drop-shadow-md">Settings</span>
-        </div>
+    {/* ... 上面的照片框和图标 ... */}
 
-        <div className="flex flex-col items-center gap-1 cursor-pointer group" onClick={() => setCurrentApp('wallpaper')}>
-          <div className="w-12 h-12 bg-gradient-to-br from-purple-500 to-indigo-600 rounded-2xl flex items-center justify-center text-3xl shadow-lg group-hover:scale-110 transition-transform">
-            🎨
-          </div>
-          <span className="text-white text-xs font-medium drop-shadow-md">Theme</span>
-        </div>
-      </div>
+
+<div className="absolute bottom-12 left-0 right-0 px-6 flex justify-center gap-16">
+  <div className="flex flex-col items-center gap-2 cursor-pointer group" onClick={() => setCurrentApp('settings')}>
+    <div className="w-12 h-12 bg-gradient-to-br from-gray-600 to-gray-800 rounded-2xl flex items-center justify-center text-4xl shadow-xl group-hover:scale-110 transition-transform">
+      ⚙️
+    </div>
+    <span className="text-white text-sm font-medium drop-shadow-md">Settings</span>
+  </div>
+
+  <div className="flex flex-col items-center gap-2 cursor-pointer group" onClick={() => setCurrentApp('wallpaper')}>
+    <div className="w-12 h-12 bg-gradient-to-br from-purple-500 to-indigo-600 rounded-2xl flex items-center justify-center text-4xl shadow-xl group-hover:scale-110 transition-transform">
+      🎨
+    </div>
+    <span className="text-white text-sm font-medium drop-shadow-md">Theme</span>
+  </div>
+</div>
     </div>
   );
 };
@@ -577,17 +581,18 @@ return (
       )}
 
 {currentApp === 'settings' && (
-  <SettingsApp
-    settings={globalSettings}
-    setSettings={setGlobalSettings}
-    contacts={contacts}
-    setContacts={setContacts}
-    worldBooks={worldBooks}
-    setWorldBooks={setWorldBooks}
-    onClose={() => setCurrentApp('home')}
-  />
+  <div className="absolute inset-0 z-50">  {/* inset-0 = top-0 right-0 bottom-0 left-0 */}
+    <SettingsApp
+      settings={globalSettings}
+      setSettings={setGlobalSettings}
+      contacts={contacts}
+      setContacts={setContacts}
+      worldBooks={worldBooks}
+      setWorldBooks={setWorldBooks}
+      onClose={() => setCurrentApp('home')}
+    />
+  </div>
 )}
-
       {currentApp === 'worldbook' && (
         <WorldBookApp worldBooks={worldBooks} setWorldBooks={setWorldBooks} onClose={() => setCurrentApp('home')} />
       )}
