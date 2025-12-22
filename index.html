@@ -3,8 +3,6 @@
     
 
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-    
-
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="hamburgerphone" />
@@ -12,102 +10,79 @@
     <meta name="theme-color" content="#000000" />
 
     <title>hamburgerphone</title>
-<script src="https://cdn.tailwindcss.com"></script>
+    
+
+    <script src="https://cdn.tailwindcss.com"></script>
+    
     <style>
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap');
+        /* --- 新代码说明：你引入的 Inter 字体，也原样保留 --- */
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap');
 
+        /* --- 新代码说明：你为聊天界面顶部 Header 写的精准修复 CSS，这里也完全保留 --- */
+        div.bg-white\/90.backdrop-blur.border-b.p-3 {
+          padding-top: calc(env(safe-area-inset-top) + 0.5rem) !important;
+          padding-top: calc(constant(safe-area-inset-top) + 0.5rem) !important;
+          min-height: calc(3.5rem + env(safe-area-inset-top));
+          box-sizing: border-box;
+          align-items: flex-end;
+        }
+        .sticky.top-0.z-10 > div.bg-white\/90 {
+          padding-top: calc(env(safe-area-inset-top) + 0.5rem) !important;
+          padding-top: calc(constant(safe-area-inset-top) + 0.5rem) !important;
+          min-height: calc(3.5rem + env(safe-area-inset-top));
+          box-sizing: border-box;
+          align-items: flex-end;
+        }
+        @supports (padding-top: env(safe-area-inset-top)) {
+          div.bg-white\/90.backdrop-blur.border-b {
+            background-color: rgba(255, 255, 255, 0.85) !important;
+            backdrop-filter: blur(12px);
+          }
+        }
 
+        /* --- 新代码说明：这是唯一的修改点！用这组新的样式替换掉你旧的 body 和 html,body,#root 样式，彻底解决白边问题！--- */
+        html, body, #root {
+          height: 100%;
+          height: 100dvh; /* 动态视口高度，完美适配所有手机（包括iPhone底部条）*/
+          width: 100%;
+          margin: 0;
+          padding: 0;
+          overflow: hidden; /* 关键：禁止任何元素溢出导致滚动 */
+          position: fixed; /* 关键：把整个页面固定住，让它无法滚动 */
+          background-color: #000000; /* 设置一个黑色底色，防止闪烁 */
+        }
+        
+        body {
+          font-family: 'Inter', sans-serif;
+          touch-action: none; /* 进一步禁止意外的触摸手势 */
+        }
 
+        #root > div {
+          height: 100%;
+          width: 100%;
+        }
+        
+        /* --- 新代码说明：你其他的 CSS 样式，比如 no-scrollbar 和 app-icon-shadow，都原样保留 --- */
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
 
+        .app-icon-shadow {
+          box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+        }
+    </style>
+    
 
-
-
-
-/* ========== 这是一组超级精准只修复顶部Header的CSS（不会影响消息气泡） ========== */
-/* 作用：只给聊天界面的顶部栏（返回+Aria+设置）增加顶部安全区，让它往下移并变高一点 */
-/* 完全不碰消息气泡、输入框、列表页，保证样式不崩 */
-
-/* 聊天界面顶部Header（class包含 bg-white/90 backdrop-blur border-b 的那个div） */
-div.bg-white\/90.backdrop-blur.border-b.p-3 {
-  padding-top: calc(env(safe-area-inset-top) + 0.5rem) !important;     /* 往下推安全区 + 一点内边距 */
-  padding-top: calc(constant(safe-area-inset-top) + 0.5rem) !important; /* 兼容老iOS */
-  min-height: calc(3.5rem + env(safe-area-inset-top));                 /* 原高度约3rem，增加安全区，让它“宽一点” */
-  box-sizing: border-box;
-  align-items: flex-end; /* 内容向下对齐，避免文字被拉伸 */
-}
-
-/* 如果上面选择器不生效，备用更精确的选择器（同时保留） */
-.sticky.top-0.z-10 > div.bg-white\/90 {
-  padding-top: calc(env(safe-area-inset-top) + 0.5rem) !important;
-  padding-top: calc(constant(safe-area-inset-top) + 0.5rem) !important;
-  min-height: calc(3.5rem + env(safe-area-inset-top));
-  box-sizing: border-box;
-  align-items: flex-end;
-}
-
-/* 可选：让状态栏区域背景也透明，跟你的毛玻璃一致（更沉浸） */
-@supports (padding-top: env(safe-area-inset-top)) {
-  div.bg-white\/90.backdrop-blur.border-b {
-    background-color: rgba(255, 255, 255, 0.85) !important;
-    backdrop-filter: blur(12px);
-  }
-}
-/* ========== 精准修复结束 ========== */
-
-
-
-
-/* ========== 安全的 body 样式（只处理底部） ========== */
-body {
-  font-family: 'Inter', sans-serif;
-  margin: 0;
-  padding: 0;
-  padding-bottom: env(safe-area-inset-bottom); /* 只留这一句处理底部 */
-  /* 不要加 padding-top！让内容顶到状态栏下面 */
-}
-/* ========== 结束 ========== */
-
-
-
-/* Hide scrollbar */
-.no-scrollbar::-webkit-scrollbar { display: none; }
-.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
-
-.app-icon-shadow {
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
-}
-
-/* ==================== 强制100%高度填充全屏 ==================== */
-   html, body, #root {
-      height: 100%;
-      height: 100dvh; /* 动态视口高度，完美适配所有手机（包括iPhone底部条）*/
-      width: 100%;
-      margin: 0;
-      padding: 0;
-      overflow: hidden; /* 关键：禁止任何元素溢出导致滚动 */
-      position: fixed; /* 关键：把整个页面固定住，让它无法滚动 */
-      background: #f3f4f6;  /* 设置一个黑色底色，防止闪烁 */
+    <script type="importmap">
+    {
+      "imports": {
+        "react": "https://esm.sh/react@^19.2.3",
+        "react-dom/": "https://esm.sh/react-dom@^19.2.3/",
+        "react/": "https://esm.sh/react@^19.2.3/",
+        "@google/genai": "https://esm.sh/@google/genai@^1.33.0"
+      }
     }
-/* 和你的聊天背景一致 */
-
-
-#root > div {
-  height: 100%;
-  width: 100%;
-}
-</style>
-
-<script type="importmap">
-{
-  "imports": {
-    "react": "https://esm.sh/react@^19.2.3",
-    "react-dom/": "https://esm.sh/react-dom@^19.2.3/",
-    "react/": "https://esm.sh/react@^19.2.3/",
-    "@google/genai": "https://esm.sh/@google/genai@^1.33.0"
-  }
-}
-</script>
-<link rel="stylesheet" href="/index.css">
+    </script>
+    <link rel="stylesheet" href="/index.css">
 </head>
 
 <body class="bg-gray-100">
