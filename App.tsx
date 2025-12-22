@@ -602,15 +602,14 @@ return (
     {currentApp === 'home' && renderHome()}
 
     {/* ChatApp (逻辑不变) */}
-   {/* ChatApp - 新全屏方案：和世界书、外观设置完全一致 */}
-    {/* ChatApp - 正确方案：全屏 + 留出刘海安全区 + 不覆盖原头部 */}
+    {/* ChatApp - 终极修复版：只垫高顶部安全区，保持原生头部和输入框完全不动 */}
     {currentApp === 'chat' && (
-      <div className="fixed inset-0 z-40 bg-white flex flex-col">
-        {/* 只留出顶部安全区高度，不加任何新 Header！！让 ChatApp 自己的头部正常显示 */}
-        <div className="h-[env(safe-area-inset-top)] bg-white" />
+      <div className="h-full w-full flex flex-col">
+        {/* 唯一的作用：防止刘海遮住ChatApp自己的头部 */}
+        <div className="h-[env(safe-area-inset-top)] flex-shrink-0" />
         
-        {/* ChatApp 本身占满剩余空间 */}
-        <div className="flex-1 flex flex-col">
+        {/* ChatApp 原样放进去，什么都不包 */}
+        <div className="flex-1 flex flex-col min-h-0">
           <ChatApp
             contacts={contacts}
             setContacts={setContacts}
