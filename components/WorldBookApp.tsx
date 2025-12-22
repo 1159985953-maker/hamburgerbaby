@@ -213,7 +213,6 @@ const WorldBookApp: React.FC<WorldBookAppProps> = ({ worldBooks, setWorldBooks, 
 
       {/* 分类列表内容区：顶部留出 Header 高度 */}
 <div className="flex-1 overflow-y-auto p-5">
-```    我们把 `pt-20` 这个不精确的临时方案删掉，因为它已经被我们上面加的精确计算的内边距完美替代了。
         {worldBooks.length === 0 ? (
           <div className="text-center text-gray-500 py-24">
             暂无世界书分类

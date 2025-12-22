@@ -2642,7 +2642,7 @@ useEffect(() => {
   // ==================== 视图部分 ====================
   if (view === 'list') {
     return (
-      <div className="h-full w-full bg-gray-50 flex flex-col relative pt-16"> {/* 加了 pt-16 */}
+      <div className="h-full w-full bg-gray-50 flex flex-col relative pt-[calc(44px+env(safe-area-inset-top))]"> {/* 加了 pt-16 */}
         <SafeAreaHeader
   title={navTab === 'chats' ? 'Chats' : navTab === 'moments' ? 'Moments' : 'Favorites'}
   left={<button onClick={onExit} className="text-blue-500 font-medium text-lg">Exit</button>}
