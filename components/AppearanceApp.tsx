@@ -31,7 +31,13 @@ const handleUpload = (e: React.ChangeEvent<HTMLInputElement>, key: 'wallpaper' |
     if (ev.target?.result) {
       if (key === 'wallpaper') {
         setSettings(prev => ({ ...prev, wallpaper: ev.target!.result as string }));
-      } else if (key === 'avatar') {
+      // 修复：AppearanceApp 中支持更换全局头像
+} else if (key === 'avatar') {
+  setSettings(prev => ({
+    ...prev,
+    avatar: ev.target!.result as string
+  }));
+
         } else if (key.startsWith('widget-')) { // <-- 新增的 else if
             const widgetId = key.replace('widget-', '');
             setSettings(prev => ({

@@ -365,10 +365,11 @@ const renderHome = () => {
   };
 
   return (
-    <div
-      className="h-full w-full bg-cover bg-center text-white flex flex-col"
-      style={{ backgroundImage: `url(${globalSettings.wallpaper})` }}
-    >
+    // 添加安全区域内边距 + 整体缩进，让内容不贴边
+<div
+  className="h-full w-full bg-cover bg-center text-white flex flex-col px-4 pt-4 pb-[env(safe-area-inset-bottom)]"
+  style={{ backgroundImage: `url(${globalSettings.wallpaper})` }}
+>
       {/* 状态栏预留空间 */}
       <div style={{ height: `env(safe-area-inset-top)` }} />
 
@@ -394,40 +395,54 @@ const renderHome = () => {
           <img src={avatar} className="w-full h-full object-cover" alt="Avatar"/>
           <input type="file" onChange={(e) => { /* 更换头像逻辑 */ }} className="hidden" accept="image/*"/>
         </label>
-        <div className="text-center">
-          <input type="text" defaultValue="Your Name" className="text-lg font-bold bg-transparent text-center outline-none focus:bg-white/10 rounded-lg"/>
-          <p className="text-xs text-white/80 mt-1">个性签名~</p>
-        </div>
+
+<div className="text-center bg-black/30 backdrop-blur-md rounded-2xl px-6 py-3 shadow-lg">
+  <input
+    type="text"
+    defaultValue="Your Name"
+    placeholder="输入你的名字"
+    className="text-lg font-bold bg-transparent text-center outline-none focus:bg-white/10 rounded-lg w-full"
+  />
+  <input
+    type="text"
+    defaultValue="个性签名~"
+    placeholder="写点什么吧..."
+    className="text-xs text-white/90 bg-transparent text-center outline-none focus:bg-white/10 rounded-lg mt-1 w-full"
+  />
+</div>
       </div>
     </div>
 
     {/* --- 区域B: 中间组件 (它会吃掉所有剩余空间，把A和C推开) --- */}
-    <div className="flex-2 flex items-center">
-      <div className="w-full flex items-stretch gap-4">
-        <label className="w-1/2 aspect-square rounded-3xl overflow-hidden shadow-2xl border-4 border-white/60 relative cursor-pointer">
-          <img src={leftFrame} className="w-full h-full object-cover" alt="Left Frame" />
-          <input type="file" onChange={(e) => handlePhotoChange(e, 'left')} className="hidden" accept="image/*"/>
-        </label>
-        <div className="w-1/2 grid grid-cols-2 grid-rows-2 gap-4">
-          {['chat', 'book', 'couple', 'diary'].map(id => {
-            const widget = globalSettings.widgets?.find(w => w.id === id);
-            if (!widget) return null;
-            return (
-              // ↓↓↓ 关键修复：直接调用 setCurrentApp，而不是传一个值 ↓↓↓
-              <div key={id} className="cursor-pointer group" onClick={() => setCurrentApp(widget.url as any)}>
-                <div className="w-full h-full bg-black/20 backdrop-blur-sm rounded-2xl flex items-center justify-center text-3xl shadow-lg group-hover:scale-110 transition-transform overflow-hidden">
-                  {widget.customIcon ? (
-                    <img src={widget.customIcon} className="w-full h-full object-cover"/>
-                  ) : (
-                    <span>{widget.icon}</span>
-                  )}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
+
+<div className="flex-1 flex items-center justify-center">
+  <div className="w-full flex items-stretch gap-4 max-w-[90%]">
+    {/* 左边大图保持原样，但限制最大宽度 */}
+    <label className="right-6 flex-1 aspect-square rounded-3xl overflow-hidden shadow-2xl border-4 border-white/60 relative cursor-pointer">
+      <img src={leftFrame} className="w-full h-full object-cover" alt="Left Frame" />
+      <input type="file" onChange={(e) => handlePhotoChange(e, 'left')} className="hidden" accept="image/*"/>
+    </label>
+
+    {/* 右边四个图标：整体正方形，图标变小 */}
+    <div className="flex-1 aspect-square grid grid-cols-2 grid-rows-2 gap-3">
+      {['chat', 'book', 'couple', 'diary'].map(id => {
+        const widget = globalSettings.widgets?.find(w => w.id === id);
+        if (!widget) return null;
+        return (
+          <div key={id} className="cursor-pointer group" onClick={() => setCurrentApp(widget.url as any)}>
+            <div className="w-full h-full bg-black/30 backdrop-blur-md rounded-2xl flex items-center justify-center text-2xl shadow-lg group-hover:scale-110 transition-transform">
+              {widget.customIcon ? (
+                <img src={widget.customIcon} className="w-10 h-10 object-cover rounded-lg"/>
+              ) : (
+                <span>{widget.icon}</span>
+              )}
+            </div>
+          </div>
+        );
+      })}
     </div>
+  </div>
+</div>
 
 
     {/* --- 区域C: To-Do List 小组件 --- */}
