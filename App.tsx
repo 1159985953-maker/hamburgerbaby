@@ -24,6 +24,7 @@ const INITIAL_CONTACTS: Contact[] = [
     memo: "My Artist GF",
     userName: "Darling",
     userAvatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=Felix",
+    
     userPersona: "A supportive partner.",
     history: [{
       id: '1',
@@ -145,11 +146,19 @@ const [homePageIndex, setHomePageIndex] = useState(0); // 0 代表第一页, 1 �
 const [globalSettings, setGlobalSettings] = useState<GlobalSettings>({
   wallpaper: "https://images.unsplash.com/photo-1557683316-973673baf926",
   apiPresets: [],
+   customWallpapers: [
+    "https://images.unsplash.com/photo-1557683316-973673baf926",
+    "https://images.unsplash.com/photo-1618331835717-801e976710b2",
+    "https://images.unsplash.com/photo-1579546929518-9e396f3cc809",
+    "https://images.unsplash.com/photo-1506744038136-46273834b3fb",
+    "https://images.unsplash.com/photo-1534796636912-3b95b3ab5986"
+  ],
   activePresetId: "",
   systemTimezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
   userTimezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
   appearance: { bubbleColorUser: '', bubbleColorAI: '', fontSize: 'text-sm', showStatusBar: true },
   themePresets: [],
+  
   // 用这个新的 widgets 数组覆盖旧的
 widgets: [
   { id: 'chat', icon: "💬", text: "Chat", url: "chat" },
@@ -167,6 +176,13 @@ widgets: [
   { id: 'polaroid-3', photo: "https://picsum.photos/200/200?random=5" }
   ],
 avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=User",
+  customWallpapers: [
+    "https://images.unsplash.com/photo-1557683316-973673baf926",
+    "https://images.unsplash.com/photo-1618331835717-801e976710b2",
+    "https://images.unsplash.com/photo-1579546929518-9e396f3cc809",
+    "https://images.unsplash.com/photo-1506744038136-46273834b3fb",
+    "https://images.unsplash.com/photo-1534796636912-3b95b3ab5986"
+  ],
 userName: "Your Name",
 userSignature: "个性签名~",
 });

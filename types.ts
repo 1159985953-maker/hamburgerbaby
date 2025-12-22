@@ -229,6 +229,7 @@ export interface Widget {
   text: string;
   url: string;
   bgColor?: string;
+  background?: string; // 新增：背景，可以是颜色或图片 URL
 }
 
 export interface PhotoFrame {
@@ -239,6 +240,7 @@ export interface PhotoFrame {
 // 核心类型：全局设置 (合并所有功能)
 export interface GlobalSettings {
   wallpaper: string;
+  customWallpapers: string[];
   apiPresets: ApiPreset[];
   activePresetId: string;
   systemTimezone: string;
