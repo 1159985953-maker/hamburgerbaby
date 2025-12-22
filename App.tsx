@@ -810,54 +810,91 @@ return (
         )}
         
 {/* ==================== 快速添加任务弹窗 (主页直接调用) ==================== */}
-{quickAddMode && (
-  <div className="absolute inset-0 z-[100] bg-black/60 backdrop-blur-sm flex items-end sm:items-center justify-center animate-fadeIn">
-    {/* 点击遮罩关闭 */}
-    <div className="absolute inset-0" onClick={() => setQuickAddMode(false)} />
-    
-    <div className="bg-white w-full sm:w-[90%] sm:max-w-sm rounded-t-3xl sm:rounded-3xl p-6 shadow-2xl animate-slideUp relative z-10 mb-0 sm:mb-10">
-      <div className="flex justify-between items-center mb-4">
-        <h3 className="font-bold text-xl text-gray-800">快速记录</h3>
-        <button onClick={() => setQuickAddMode(false)} className="bg-gray-100 w-8 h-8 rounded-full text-gray-500">×</button>
+{/* ==================== 快速添加任务弹窗 (全功能版) ==================== */}
+    {quickAddMode && (
+      <div className="absolute inset-0 z-[100] bg-black/60 backdrop-blur-sm flex items-end sm:items-center justify-center animate-fadeIn">
+        <div className="absolute inset-0" onClick={() => setQuickAddMode(false)} />
+        
+        {/* 这里使用和LifeApp一样的输入UI */}
+        <div className="bg-white w-full sm:w-[90%] sm:max-w-sm rounded-t-3xl sm:rounded-3xl p-6 shadow-2xl animate-slideUp relative z-10 mb-0 sm:mb-10">
+          <div className="flex justify-between items-center mb-4">
+            <h3 className="font-bold text-xl text-gray-800">快速记录</h3>
+            <button onClick={() => setQuickAddMode(false)} className="bg-gray-100 w-8 h-8 rounded-full text-gray-500">×</button>
+          </div>
+          
+          <form onSubmit={(e) => {
+             e.preventDefault();
+             const form = e.target as any;
+             const text = form.text.value;
+             if(!text) return;
+             
+             // 获取表单数据
+             const date = form.date.value || new Date().toISOString().slice(0, 10);
+             const time = form.time.value;
+             const location = form.location.value;
+             const note = form.note.value;
+             // 找到选中的分类ID (通过 radio button)
+             const catId = form.categoryId.value;
+
+             const newTodo = {
+               id: Date.now().toString(),
+               text: text,
+               completed: false,
+               createdAt: Date.now(),
+               date: date,
+               categoryId: catId,
+               time: time, location: location, note: note
+             };
+             
+             setGlobalSettings(prev => ({ ...prev, todos: [newTodo, ...(prev.todos || [])] }));
+             setQuickAddMode(false);
+          }}>
+            <input 
+              name="text"
+              autoFocus 
+              type="text" 
+              placeholder="要做什么？" 
+              className="w-full text-lg font-bold outline-none placeholder-gray-300 bg-gray-50 p-3 rounded-xl mb-3"
+            />
+            
+            {/* 分类选择 (使用 Radio 实现) */}
+            <div className="flex gap-3 overflow-x-auto no-scrollbar py-1 mb-3">
+               {(globalSettings.categories || [
+                  { id: '1', name: '紧急', color: '#EF4444' },
+                  { id: '2', name: '工作', color: '#3B82F6' },
+                  { id: '3', name: '生活', color: '#10B981' }
+               ]).map((cat, idx) => (
+                 <label key={cat.id} className="cursor-pointer">
+                   <input type="radio" name="categoryId" value={cat.id} defaultChecked={idx === 0} className="peer hidden" />
+                   <div 
+                     className="px-3 py-1.5 rounded-full text-xs font-bold border border-gray-200 text-gray-500 bg-white peer-checked:text-white peer-checked:border-transparent transition-all whitespace-nowrap peer-checked:scale-105 shadow-sm"
+                     style={{ '--checked-bg': cat.color } as any}
+                   >
+                     {cat.name}
+                     <style>{`
+                       input:checked + div { background-color: ${cat.color} !important; }
+                     `}</style>
+                   </div>
+                 </label>
+               ))}
+            </div>
+
+            <div className="grid grid-cols-2 gap-3 mb-3">
+               <input name="date" type="date" defaultValue={new Date().toISOString().slice(0, 10)} className="bg-gray-100 rounded-xl px-3 py-2 outline-none text-sm w-full" />
+               <input name="time" type="time" className="bg-gray-100 rounded-xl px-3 py-2 outline-none text-sm w-full" />
+            </div>
+
+            <input name="location" type="text" placeholder="地点?" className="bg-gray-100 rounded-xl px-3 py-2 outline-none text-sm w-full mb-3" />
+            
+            <textarea name="note" placeholder="备注..." className="w-full bg-gray-100 rounded-xl p-3 text-sm outline-none resize-none h-16 mb-4" />
+
+            <button type="submit" className="w-full bg-blue-500 text-white py-3.5 rounded-xl font-bold shadow-lg shadow-blue-200 active:scale-95 transition-transform">
+              确认添加
+            </button>
+          </form>
+        </div>
       </div>
-      
-      <form onSubmit={(e) => {
-         e.preventDefault();
-         const form = e.target as any;
-         const text = form.text.value;
-         if(!text) return;
-         
-         // 默认用第一个分类，或者是 '工作'
-         const defaultCat = globalSettings.categories?.[0] || { id: '1', name: '工作', color: '#3B82F6' };
-         const todayStr = new Date().toISOString().slice(0, 10);
-         
-         const newTodo = {
-           id: Date.now().toString(),
-           text: text,
-           completed: false,
-           createdAt: Date.now(),
-           date: todayStr,
-           categoryId: defaultCat.id,
-           time: '', location: '', note: ''
-         };
-         
-         setGlobalSettings(prev => ({ ...prev, todos: [newTodo, ...(prev.todos || [])] }));
-         setQuickAddMode(false);
-      }}>
-        <input 
-          name="text"
-          autoFocus 
-          type="text" 
-          placeholder="接下来要做什么？" 
-          className="w-full text-lg font-bold outline-none placeholder-gray-300 bg-gray-50 p-4 rounded-xl mb-4"
-        />
-        <button type="submit" className="w-full bg-blue-500 text-white py-3.5 rounded-xl font-bold shadow-lg shadow-blue-200 active:scale-95 transition-transform">
-          添加任务
-        </button>
-      </form>
-    </div>
-  </div>
-)}
+    )}
 
 
         {/* 这里为了防止你点击日历跳转报错，暂时加个日记本占位 */}

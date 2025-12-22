@@ -21,6 +21,28 @@ export interface TaskCategory {
 
 
 
+// ★★★ 新增：记账分类 ★★★
+export interface FinanceCategory {
+  id: string;
+  name: string; // "餐饮", "工资"
+  type: 'expense' | 'income'; // 支出还是收入
+  icon: string; // "🍔", "💰"
+  color: string;
+}
+
+
+
+// ★★★ 新增：交易记录 ★★★
+export interface Transaction {
+  id: string;
+  type: 'expense' | 'income';
+  amount: number;
+  categoryId: string;
+  date: string; // "YYYY-MM-DD"
+  note?: string;
+  createdAt: number;
+}
+
 export interface TodoItem {
   id: string;
   text: string;
@@ -271,6 +293,11 @@ export interface GlobalSettings {
   apiPresets: ApiPreset[];
   activePresetId: string;
   systemTimezone: string;
+
+// ★★★ 新增：记账数据 ★★★
+  transactions: Transaction[];
+  financeCategories: FinanceCategory[];
+
   userTimezone: string;
   appearance: {
     bubbleColorUser: string;
