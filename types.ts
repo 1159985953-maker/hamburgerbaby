@@ -11,6 +11,29 @@ export interface Song {
   cover: string;
 }
 
+
+
+export interface TaskCategory {
+  id: string;
+  name: string; // 例如 "工作", "生活"
+  color: string; // 例如 "#FF5733", "rgb(0,0,0)"
+}
+
+
+
+export interface TodoItem {
+  id: string;
+  text: string;
+  completed: boolean;
+  createdAt: number;
+  date: string;       // 格式 "2023-10-01"，标记任务归属哪一天
+  time?: string;      // "14:00"
+  location?: string;  // "星巴克"
+  note?: string;      // "记得带电脑"
+  categoryId?: string; // ★ 新增：关联到某个分类ID
+}
+
+
 export interface Message {
   id: string;
   role: 'user' | 'assistant' | 'system';
@@ -225,7 +248,7 @@ export interface Contact {
 }
 
 // 桌面小组件类型
-// 用这段新代码覆盖旧的 Widget interface
+
 export interface Widget {
   id: string; // 'chat', 'book', 'couple', 'diary', 'settings', 'theme'
   icon: string; // emoji or a placeholder
@@ -259,6 +282,8 @@ export interface GlobalSettings {
   widgets: Widget[];
   photoFrames: PhotoFrame[];
   avatar: string;
+  todos: TodoItem[]; 
+  categories: TaskCategory[];
   minimax?: {
     groupId: string;
     apiKey: string;

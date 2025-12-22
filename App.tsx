@@ -7,7 +7,9 @@ import WallpaperApp from './components/AppearanceApp';
 import SafeAreaHeader from './components/SafeAreaHeader';  // ← 加这一行！
 import localforage from 'localforage';
 import { Contact, GlobalSettings, WorldBookCategory, Message } from './types';
+import LifeApp from './components/LifeApp';
 console.log('React version:', React.version);  // 只应该打印一次
+
 
 // ==================== 1. 辅助函数 & 初始数据 (必须放在组件外面！) ====================
 
@@ -142,6 +144,31 @@ const [homePageIndex, setHomePageIndex] = useState(0); // 0 代表第一页, 1 �
   const [currentApp, setCurrentApp] = useState<'home' | 'chat' | 'coupleSpace' | 'settings' | 'worldbook' | 'wallpaper'>('home');
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [isLoaded, setIsLoaded] = useState(false);
+  const [quickAddMode, setQuickAddMode] = useState(false); // 快速添加任务弹窗状态
+
+  // 核心功能：任务自动顺延 (Rollover)
+  useEffect(() => {
+    if (!isLoaded || !globalSettings.todos) return;
+
+    const todayStr = new Date().toISOString().slice(0, 10);
+    let hasChanges = false;
+
+    // 检查是否有 "过去日期" 且 "未完成" 的任务
+    const updatedTodos = globalSettings.todos.map(todo => {
+      // 如果这个任务有日期，且日期小于今天，且没做完
+      if (todo.date && todo.date < todayStr && !todo.completed) {
+        hasChanges = true;
+        // 把它的日期改成今天，并加上一个标记(可选)
+        return { ...todo, date: todayStr, note: (todo.note ? todo.note + " " : "") + "[已顺延]" };
+      }
+      return todo;
+    });
+
+    if (hasChanges) {
+      console.log("检测到未完成任务，已自动顺延到今天");
+      setGlobalSettings(prev => ({ ...prev, todos: updatedTodos }));
+    }
+  }, [isLoaded]); // 只在加载完成后检查一次，或者你可以加 globalSettings.todos 作为依赖
   const [worldBooks, setWorldBooks] = useState<WorldBookCategory[]>([]);
 const [globalSettings, setGlobalSettings] = useState<GlobalSettings>({
   wallpaper: "https://images.unsplash.com/photo-1557683316-973673baf926",
@@ -186,6 +213,68 @@ avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=User",
 userName: "Your Name",
 userSignature: "个性签名~",
 });
+
+// --- 日历功能状态 ---
+  const [calendarDate, setCalendarDate] = useState(new Date()); // 当前显示的月份
+  
+  // --- ToDo 功能状态 ---
+  const [todoInput, setTodoInput] = useState("");
+
+
+
+
+
+
+
+  // --- 日历辅助函数：获取当月所有天数 ---
+  const getCalendarDays = (date: Date) => {
+    const year = date.getFullYear();
+    const month = date.getMonth();
+    const firstDay = new Date(year, month, 1).getDay(); // 当月1号是周几
+    const daysInMonth = new Date(year, month + 1, 0).getDate(); // 当月有多少天
+    
+    const days = [];
+    // 补前面的空白 (如果1号不是周日)
+    for (let i = 0; i < firstDay; i++) {
+      days.push(null);
+    }
+    // 填入日期
+    for (let i = 1; i <= daysInMonth; i++) {
+      days.push(i);
+    }
+    return days;
+  };
+
+  // --- ToDo 辅助函数 ---
+  const handleAddTodo = () => {
+    if (!todoInput.trim()) return;
+    const newTodo: any = {
+      id: Date.now().toString(),
+      text: todoInput,
+      completed: false,
+      createdAt: Date.now()
+    };
+    // 更新设置并保存
+    setGlobalSettings(prev => ({
+      ...prev,
+      todos: [newTodo, ...(prev.todos || [])]
+    }));
+    setTodoInput("");
+  };
+
+  const toggleTodo = (id: string) => {
+    setGlobalSettings(prev => ({
+      ...prev,
+      todos: (prev.todos || []).map(t => t.id === id ? { ...t, completed: !t.completed } : t)
+    }));
+  };
+
+  const deleteTodo = (id: string) => {
+    setGlobalSettings(prev => ({
+      ...prev,
+      todos: (prev.todos || []).filter(t => t.id !== id)
+    }));
+  };
 
   // --- 1. 强力加载逻辑 (防白屏核心) ---
   useEffect(() => {
@@ -369,6 +458,7 @@ const renderHome = () => {
   const leftFrame = globalSettings.photoFrames?.find(f => f.id === 'left')?.photo || "https://picsum.photos/400/400?random=2";
   const avatar = globalSettings.avatar || "https://api.dicebear.com/7.x/avataaars/svg?seed=User";
 
+
   const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>, key: 'avatar' | 'top' | 'left' | string) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -396,6 +486,13 @@ const renderHome = () => {
       {/* 2. 滑动容器 */}
       <div className="flex-1 w-full flex overflow-x-scroll snap-x snap-mandatory no-scrollbar">
         
+
+
+
+
+
+
+
         {/* ===== 页面一：主页 ===== */}
         <div className="w-full h-full flex-shrink-0 snap-center overflow-y-auto no-scrollbar">
           
@@ -438,12 +535,12 @@ const renderHome = () => {
 
               {/* 右侧 App Grid (图标保持小尺寸) */}
               <div className="flex-1 aspect-square grid grid-cols-2 grid-rows-2 gap-3">
-                {['chat', 'book', 'couple', 'diary'].map(id => {
+                {['chat', 'life', 'couple', 'diary'].map(id => {
                   let widget = globalSettings.widgets?.find(w => w.id === id);
                   if (!widget) {
                      const defaults = [
                        { id: 'chat', icon: "💬", text: "Chat", url: "chat" },
-                       { id: 'book', icon: "📕", text: "Book", url: "worldbook" },
+                       { id: 'life', icon: "📅", text: "life", url: "life" },
                        { id: 'couple', icon: "❤️", text: "Couple", url: "coupleSpace" },
                        { id: 'diary', icon: "📖", text: "Diary", url: "diary" }
                      ];
@@ -470,23 +567,66 @@ const renderHome = () => {
               </div>
             </div>
 
-            {/* --- 区域C: To-Do List --- */}
-            <div className="h-40 w-full backdrop-blur-sm bg-white/20 rounded-3xl p-4 flex flex-col shadow-lg flex-shrink-0">
-              <h3 className="font-bold text-lg mb-2">To Do</h3>
-              <div className="space-y-2 text-sm">
-                <div className="flex items-center gap-2 opacity-50 line-through">
-                  <div className="w-4 h-4 rounded-full border-2 border-white/50 flex items-center justify-center">✓</div>
-                  <span>完成项目UI设计</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <div className="w-4 h-4 rounded-full border-2 border-white"></div>
-                  <span>添加新功能</span>
+          {/* ==================== 3.2 替换主页 To-Do 小组件代码 ==================== */}
+              {/* --- 区域C: 主页上的 To-Do List 小组件 --- */}
+              <div 
+                 className="h-40 w-full backdrop-blur-sm bg-white/20 rounded-3xl p-4 flex flex-col shadow-lg flex-shrink-0 cursor-pointer hover:bg-white/30 transition border border-white/20"
+                 onClick={() => setCurrentApp('life')} // 点击大框框 -> 进APP
+              >
+<h3 className="font-bold text-lg mb-2 text-white flex justify-between items-center relative z-20">
+  <span className="flex items-center gap-2">📝 To Do</span>
+  <div className="flex items-center gap-2">
+     {/* 待办计数 */}
+     <span className="text-[10px] bg-white/20 px-2 py-1 rounded-full">
+       {(globalSettings.todos || []).filter(t => !t.completed && t.date === new Date().toISOString().slice(0,10)).length} 待办
+     </span>
+     {/* ★★★ 新增的加号按钮 ★★★ */}
+     <button 
+       onClick={(e) => {
+         e.stopPropagation(); // 防止跳转进App
+         setQuickAddMode(true);
+       }}
+       className="w-6 h-6 rounded-full bg-white/20 hover:bg-white/40 flex items-center justify-center text-white font-bold transition-colors"
+     >
+       +
+     </button>
+  </div>
+</h3>
+                
+                <div className="space-y-2 text-sm overflow-hidden flex-1">
+                  {/* 筛选今天的待办任务 */}
+                  {(() => {
+                    const todayStr = new Date().toISOString().slice(0, 10);
+                    const todayTasks = (globalSettings.todos || []).filter(t => t.date === todayStr && !t.completed).slice(0, 3);
+                    
+                    if (todayTasks.length === 0) {
+                      return <div className="text-white/50 italic text-xs mt-4 text-center">今日任务已清空 🎉</div>;
+                    }
+
+                    return todayTasks.map(todo => (
+                      <div key={todo.id} className="flex items-center gap-3 group">
+                        {/* ★★★ 关键点：stopPropagation 防止跳转 ★★★ */}
+                        <button 
+                          onClick={(e) => {
+                            e.stopPropagation(); // 阻止冒泡！只打钩，不跳转
+                            setGlobalSettings(prev => ({
+                                ...prev,
+                                todos: prev.todos.map(t => t.id === todo.id ? { ...t, completed: !t.completed } : t)
+                            }));
+                          }}
+                          className="w-5 h-5 rounded-full border-2 border-white/60 flex items-center justify-center hover:bg-white/20 transition-colors flex-shrink-0"
+                        >
+                        </button>
+                        <span className="truncate text-white/90 font-medium drop-shadow-md">{todo.text}</span>
+                        {todo.time && <span className="text-[10px] text-white/60 bg-black/20 px-1 rounded">{todo.time}</span>}
+                      </div>
+                    ));
+                  })()}
                 </div>
               </div>
             </div>
-
           </div>
-        </div>
+
 
         {/* ===== 页面二 ===== */}
         <div className="w-full h-full flex-shrink-0 snap-center p-4">
@@ -503,37 +643,40 @@ const renderHome = () => {
         </div>
       </div>
 
-      {/* 底部 Dock 栏 */}
-      <div className="fixed bottom-0 left-0 right-0 flex justify-center pointer-events-none"
-           style={{ paddingBottom: `calc(20px + env(safe-area-inset-bottom))` }}>
-        <div className="flex justify-center gap-12 pointer-events-auto bg-white/20 backdrop-blur-xl px-10 py-3 rounded-full border border-white/30 shadow-2xl">
-          {['settings', 'theme'].map(id => {
-            let widget = globalSettings.widgets?.find(w => w.id === id);
-            if (!widget) {
-                if(id === 'settings') widget = { id: 'settings', icon: "⚙️", text: "Settings", url: "settings" };
-                if(id === 'theme') widget = { id: 'theme', icon: "🎨", text: "Theme", url: "wallpaper" };
-            }
-            if (!widget) return null;
-            return (
-              <div key={id} className="flex flex-col items-center gap-2 cursor-pointer group" onClick={() => setCurrentApp(widget.url as any)}>
-                <div className="w-14 h-14 rounded-2xl flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform overflow-hidden bg-white/20 backdrop-blur-md border border-white/20">
-                  {widget.customIcon ? (
-                    <img src={widget.customIcon} className="w-full h-full object-cover" alt={widget.text} />
-                  ) : (
-                    <div className="flex items-center justify-center text-3xl">
-                      <span>{widget.icon}</span>
-                    </div>
-                  )}
+      {/* 底部 Dock 栏：这里变了！3个图标！ */}
+        <div className="fixed bottom-0 left-0 right-0 flex justify-center pointer-events-none"
+             style={{ paddingBottom: `calc(20px + env(safe-area-inset-bottom))` }}>
+          <div className="flex justify-center gap-12 pointer-events-auto bg-white/20 backdrop-blur-xl px-10 py-3 rounded-full border border-white/30 shadow-2xl">
+            
+            {/* ★★★ 'book' 移到了这里，和 settings, theme 在一起 ★★★ */}
+            {['book', 'settings', 'theme'].map(id => {
+              let widget = globalSettings.widgets?.find(w => w.id === id);
+              if (!widget) {
+                  if(id === 'book') widget = { id: 'book', icon: "📕", text: "Book", url: "worldbook" };
+                  if(id === 'settings') widget = { id: 'settings', icon: "⚙️", text: "Settings", url: "settings" };
+                  if(id === 'theme') widget = { id: 'theme', icon: "🎨", text: "Theme", url: "wallpaper" };
+              }
+              if (!widget) return null;
+              return (
+                <div key={id} className="flex flex-col items-center gap-2 cursor-pointer group" onClick={() => setCurrentApp(widget.url as any)}>
+                  <div className="w-14 h-14 rounded-2xl flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform overflow-hidden bg-white/20 backdrop-blur-md border border-white/20">
+                    {widget.customIcon ? (
+                      <img src={widget.customIcon} className="w-full h-full object-cover" alt={widget.text} />
+                    ) : (
+                      <div className="flex items-center justify-center text-3xl">
+                        <span>{widget.icon}</span>
+                      </div>
+                    )}
+                  </div>
+                  <span className="text-xs text-gray-800 font-bold drop-shadow-sm">{widget.text}</span>
                 </div>
-                <span className="text-xs text-gray-800 font-bold drop-shadow-sm">{widget.text}</span>
-              </div>
-            );
-          })}
+              );
+            })}
+          </div>
         </div>
       </div>
-    </div>
-  );
-};
+    );
+  };
 // ==================== 复制粘贴到这里结束 ====================
 
 
@@ -651,6 +794,86 @@ return (
     {currentApp === 'worldbook' && (
       <WorldBookApp worldBooks={worldBooks} setWorldBooks={setWorldBooks} onClose={() => setCurrentApp('home')} />
     )}
+
+
+
+{/* ==================== 4. 在 App.tsx 插入新页面渲染逻辑 ==================== */}
+        {currentApp === 'life' && (
+          <div className="absolute inset-0 z-50 bg-white">
+            <LifeApp 
+              settings={globalSettings} 
+              setSettings={setGlobalSettings} 
+              onClose={() => setCurrentApp('home')} 
+              onOpenDiary={() => setCurrentApp('diary')}
+            />
+          </div>
+        )}
+        
+{/* ==================== 快速添加任务弹窗 (主页直接调用) ==================== */}
+{quickAddMode && (
+  <div className="absolute inset-0 z-[100] bg-black/60 backdrop-blur-sm flex items-end sm:items-center justify-center animate-fadeIn">
+    {/* 点击遮罩关闭 */}
+    <div className="absolute inset-0" onClick={() => setQuickAddMode(false)} />
+    
+    <div className="bg-white w-full sm:w-[90%] sm:max-w-sm rounded-t-3xl sm:rounded-3xl p-6 shadow-2xl animate-slideUp relative z-10 mb-0 sm:mb-10">
+      <div className="flex justify-between items-center mb-4">
+        <h3 className="font-bold text-xl text-gray-800">快速记录</h3>
+        <button onClick={() => setQuickAddMode(false)} className="bg-gray-100 w-8 h-8 rounded-full text-gray-500">×</button>
+      </div>
+      
+      <form onSubmit={(e) => {
+         e.preventDefault();
+         const form = e.target as any;
+         const text = form.text.value;
+         if(!text) return;
+         
+         // 默认用第一个分类，或者是 '工作'
+         const defaultCat = globalSettings.categories?.[0] || { id: '1', name: '工作', color: '#3B82F6' };
+         const todayStr = new Date().toISOString().slice(0, 10);
+         
+         const newTodo = {
+           id: Date.now().toString(),
+           text: text,
+           completed: false,
+           createdAt: Date.now(),
+           date: todayStr,
+           categoryId: defaultCat.id,
+           time: '', location: '', note: ''
+         };
+         
+         setGlobalSettings(prev => ({ ...prev, todos: [newTodo, ...(prev.todos || [])] }));
+         setQuickAddMode(false);
+      }}>
+        <input 
+          name="text"
+          autoFocus 
+          type="text" 
+          placeholder="接下来要做什么？" 
+          className="w-full text-lg font-bold outline-none placeholder-gray-300 bg-gray-50 p-4 rounded-xl mb-4"
+        />
+        <button type="submit" className="w-full bg-blue-500 text-white py-3.5 rounded-xl font-bold shadow-lg shadow-blue-200 active:scale-95 transition-transform">
+          添加任务
+        </button>
+      </form>
+    </div>
+  </div>
+)}
+
+
+        {/* 这里为了防止你点击日历跳转报错，暂时加个日记本占位 */}
+        {currentApp === 'diary' && (
+          <div className="absolute inset-0 z-50 bg-white flex flex-col">
+            <SafeAreaHeader title="我的日记" left={<button onClick={() => setCurrentApp('home')} className="text-blue-500">返回</button>} />
+            <div className="flex-1 flex items-center justify-center text-gray-400">
+              这里是日记本页面 (DairyApp)
+            </div>
+          </div>
+        )}
+
+        {/* ==================== 插入结束 ==================== */}
+
+
+
 
     {currentApp === 'wallpaper' && (
       <WallpaperApp settings={globalSettings} setSettings={setGlobalSettings} onClose={() => setCurrentApp('home')} />
