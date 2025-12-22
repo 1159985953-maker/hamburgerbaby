@@ -179,7 +179,7 @@ const SettingsApp: React.FC<SettingsAppProps> = ({
   };
 
   return (
-    <div className="h-full w-full bg-gray-100 flex flex-col">
+    <div className="h-full w-full bg-gray-100 flex flex-col pt-[calc(44px+env(safe-area-inset-top))]">
       {/* 顶部标题栏 */}
       <SafeAreaHeader
   title="系统设置"
@@ -198,14 +198,10 @@ const SettingsApp: React.FC<SettingsAppProps> = ({
           备份恢复
         </button>
       </div>
+      
+<div className="flex-1 overflow-y-auto p-4">
 
-      <div 
-  className="flex-1 overflow-y-auto p-4"
-  style={{
-    paddingTop: `calc(1rem + 44px + env(safe-area-inset-top))`,
-    paddingBottom: `calc(1rem + env(safe-area-inset-bottom))`
-  }}
->
+
         {/* ==================== 1. API 配置页面 ==================== */}
         {activeTab === 'api' && (
           <div className="space-y-6">

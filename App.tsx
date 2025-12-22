@@ -450,7 +450,7 @@ const renderHome = () => {
                       return (
                         <div key={id} className="cursor-pointer group" onClick={() => setCurrentApp(widget.url as any)}>
                           {/* 将 text-2xl 改为 text-xl 使 emoji 变小 */}
-                          <div className="w-full h-full bg-black/30 backdrop-blur-md rounded-2xl flex items-center justify-center text-xl shadow-lg group-hover:scale-110 transition-transform">
+                          <div className="w-full aspect-square bg-black/30 backdrop-blur-md rounded-2xl flex items-center justify-center text-xl shadow-lg group-hover:scale-110 transition-transform">
                             {widget.customIcon ? (
                               /* 将 w-10 h-10 改为 w-8 h-8 使图片变小 */
                               <img src={widget.customIcon} className="w-8 h-8 object-cover rounded-lg"/>

@@ -14,62 +14,54 @@
 
     <script src="https://cdn.tailwindcss.com"></script>
     
-    <style>
-        /* --- 新代码说明：你引入的 Inter 字体，也原样保留 --- */
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap');
+<style>
+    /* --- 你的字体，原封不动 --- */
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap');
 
-        /* --- 新代码说明：你为聊天界面顶部 Header 写的精准修复 CSS，这里也完全保留 --- */
-        div.bg-white\/90.backdrop-blur.border-b.p-3 {
-          padding-top: calc(env(safe-area-inset-top) + 0.5rem) !important;
-          padding-top: calc(constant(safe-area-inset-top) + 0.5rem) !important;
-          min-height: calc(3.5rem + env(safe-area-inset-top));
-          box-sizing: border-box;
-          align-items: flex-end;
-        }
-        .sticky.top-0.z-10 > div.bg-white\/90 {
-          padding-top: calc(env(safe-area-inset-top) + 0.5rem) !important;
-          padding-top: calc(constant(safe-area-inset-top) + 0.5rem) !important;
-          min-height: calc(3.5rem + env(safe-area-inset-top));
-          box-sizing: border-box;
-          align-items: flex-end;
-        }
-        @supports (padding-top: env(safe-area-inset-top)) {
-          div.bg-white\/90.backdrop-blur.border-b {
-            background-color: rgba(255, 255, 255, 0.85) !important;
-            backdrop-filter: blur(12px);
-          }
-        }
+    /* --- 你的聊天界面顶部 Header CSS，原封不动 --- */
+    div.bg-white\/90.backdrop-blur.border-b.p-3 {
+      padding-top: calc(env(safe-area-inset-top) + 0.5rem) !important;
+      padding-top: calc(constant(safe-area-inset-top) + 0.5rem) !important;
+      min-height: calc(3.5rem + env(safe-area-inset-top));
+      box-sizing: border-box;
+      align-items: flex-end;
+    }
+    .sticky.top-0.z-10 > div.bg-white\/90 {
+      padding-top: calc(env(safe-area-inset-top) + 0.5rem) !important;
+      padding-top: calc(constant(safe-area-inset-top) + 0.5rem) !important;
+      min-height: calc(3.5rem + env(safe-area-inset-top));
+      box-sizing: border-box;
+      align-items: flex-end;
+    }
+    @supports (padding-top: env(safe-area-inset-top)) {
+      div.bg-white\/90.backdrop-blur.border-b {
+        background-color: rgba(255, 255, 255, 0.85) !important;
+        backdrop-filter: blur(12px);
+      }
+    }
 
-        /* --- 新代码说明：这是唯一的修改点！用这组新的样式替换掉你旧的 body 和 html,body,#root 样式，彻底解决白边问题！--- */
-        html, body, #root {
-          height: 100%;
-          height: 100dvh; /* 动态视口高度，完美适配所有手机（包括iPhone底部条）*/
-          width: 100%;
-          margin: 0;
-          padding: 0;
-          overflow: hidden; /* 关键：禁止任何元素溢出导致滚动 */
-          position: fixed; /* 关键：把整个页面固定住，让它无法滚动 */
-          background-color: #000000; /* 设置一个黑色底色，防止闪烁 */
-        }
-        
-        body {
-          font-family: 'Inter', sans-serif;
-          touch-action: none; /* 进一步禁止意外的触摸手势 */
-        }
+    /* --- 新代码说明：这是最终修正版！它只负责撑满屏幕，把所有内边距都交给组件自己管理，白边彻底消失！--- */
+    html, body, #root {
+        height: 100%;
+        height: 100dvh;
+        width: 100%;
+        margin: 0;
+        padding: 0; /* 关键：这里必须是 0，不能有 padding-bottom */
+        overflow: hidden;
+        background: #000; /* 背景设为黑色，和 App 融为一体 */
+    }
+    
+    body {
+        font-family: 'Inter', sans-serif;
+    }
 
-        #root > div {
-          height: 100%;
-          width: 100%;
-        }
-        
-        /* --- 新代码说明：你其他的 CSS 样式，比如 no-scrollbar 和 app-icon-shadow，都原样保留 --- */
-        .no-scrollbar::-webkit-scrollbar { display: none; }
-        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
-
-        .app-icon-shadow {
-          box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
-        }
-    </style>
+    /* --- 你的其他辅助样式，原封不动 --- */
+    .no-scrollbar::-webkit-scrollbar { display: none; }
+    .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+    .app-icon-shadow {
+      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+    }
+</style>
     
 
     <script type="importmap">
