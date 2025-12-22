@@ -399,12 +399,15 @@ const renderHome = () => {
         {/* ===== 页面一：主页 ===== */}
         <div className="w-full h-full flex-shrink-0 snap-center overflow-y-auto no-scrollbar">
           
-          {/* ★★★ 核心修复：在这里加 max-w-3xl 和 mx-auto ★★★ */}
-          {/* 这样整个内容块在电脑上居中且有最大宽度，且上下左右严格对齐 */}
-          <div className="min-h-full flex flex-col justify-evenly px-4 py-4 gap-4 w-full max-w-3xl mx-auto"
-               style={{ paddingBottom: `calc(100px + env(safe-area-inset-bottom))` }}>
+          {/* ★★★ 核心修改点 ★★★ */}
+          {/* 1. px-8: 两侧留白大幅增加，内容不会顶到屏幕边缘，显得更精致（像图三） */}
+          {/* 2. max-w-3xl: 限制最大宽度，保证电脑上不拉伸 */}
+          {/* 3. gap-6: 强制要求每个模块之间有 24px 的间距，防止贴在一起 */}
+          {/* 4. paddingBottom: 增加到底部 140px，确保 To-Do 绝对不会被 Dock 遮挡 */}
+          <div className="min-h-full flex flex-col justify-evenly px-8 py-6 gap-6 w-full max-w-3xl mx-auto"
+               style={{ paddingBottom: `calc(140px + env(safe-area-inset-bottom))` }}>
 
-            {/* --- 区域A: 顶部照片框 (w-full) --- */}
+            {/* --- 区域A: 顶部照片框 --- */}
             <div className="h-60 w-full relative rounded-3xl overflow-hidden shadow-xl border-2 border-white/50 flex-shrink-0">
               <img src={topFrame} className="w-full h-full object-cover" alt="Top Frame" />
               <label className="absolute inset-0 cursor-pointer z-10">
@@ -424,17 +427,16 @@ const renderHome = () => {
               </div>
             </div>
 
-            {/* --- 区域B: 中间组件 (红线对齐修复) --- */}
-            {/* 去掉了所有的 max-w 限制，直接 flex-1 撑满 w-full，保证左右边缘对齐 */}
+            {/* --- 区域B: 中间组件 (保持左右对齐) --- */}
             <div className="w-full flex items-stretch justify-center gap-4">
               
-              {/* 左图：flex-1 自动撑满左半边 */}
+              {/* 左图 */}
               <label className="flex-1 aspect-square rounded-3xl overflow-hidden shadow-2xl border-4 border-white/60 relative cursor-pointer">
                 <img src={leftFrame} className="w-full h-full object-cover" alt="Left Frame" />
                 <input type="file" onChange={(e) => handlePhotoChange(e, 'left')} className="hidden" accept="image/*"/>
               </label>
 
-              {/* 右侧 App Grid：flex-1 自动撑满右半边 */}
+              {/* 右侧 App Grid (图标保持小尺寸) */}
               <div className="flex-1 aspect-square grid grid-cols-2 grid-rows-2 gap-3">
                 {['chat', 'book', 'couple', 'diary'].map(id => {
                   let widget = globalSettings.widgets?.find(w => w.id === id);
@@ -450,11 +452,8 @@ const renderHome = () => {
                   if (!widget) return null;
 
                   return (
-                    // 这里的 div 会随着容器变大而变大，但里面的图标我们锁死大小！
                     <div key={id} className="cursor-pointer group flex flex-col items-center justify-center rounded-2xl transition-colors hover:bg-white/5" onClick={() => setCurrentApp(widget.url as any)}>
-                      
-                      {/* ★★★ 锁死图标大小 w-14 h-14，和底部 Dock 栏一致 ★★★ */}
-                      {/* 无论父容器格子多大，这个图标永远居中且固定大小 */}
+                      {/* 图标尺寸 w-14 h-14 保持精致 */}
                       <div className="w-14 h-14 rounded-2xl flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform overflow-hidden bg-white/20 backdrop-blur-md border border-white/20 flex-shrink-0">
                         {widget.customIcon ? (
                           <img src={widget.customIcon} className="w-full h-full object-cover" alt={widget.text} />
@@ -471,7 +470,7 @@ const renderHome = () => {
               </div>
             </div>
 
-            {/* --- 区域C: To-Do List (w-full) --- */}
+            {/* --- 区域C: To-Do List --- */}
             <div className="h-40 w-full backdrop-blur-sm bg-white/20 rounded-3xl p-4 flex flex-col shadow-lg flex-shrink-0">
               <h3 className="font-bold text-lg mb-2">To Do</h3>
               <div className="space-y-2 text-sm">
@@ -517,7 +516,6 @@ const renderHome = () => {
             if (!widget) return null;
             return (
               <div key={id} className="flex flex-col items-center gap-2 cursor-pointer group" onClick={() => setCurrentApp(widget.url as any)}>
-                {/* 底部图标：同样大小 w-14 h-14 */}
                 <div className="w-14 h-14 rounded-2xl flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform overflow-hidden bg-white/20 backdrop-blur-md border border-white/20">
                   {widget.customIcon ? (
                     <img src={widget.customIcon} className="w-full h-full object-cover" alt={widget.text} />

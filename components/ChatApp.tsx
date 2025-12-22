@@ -2644,6 +2644,9 @@ useEffect(() => {
    return (
       // 1. 外层容器：去掉 pt-[...]，只保留 h-full flex flex-col，背景铺满
       <div className="h-full w-full bg-gray-50 flex flex-col relative overflow-hidden">
+         {/* ★★★ 核心修复：强制占位符 ★★★ */}
+        {/* 专门用来把 Header 顶下来，防止被手机刘海遮住 */}
+        <div style={{ height: 'env(safe-area-inset-top)', minHeight: '20px' }} className="w-full bg-gray-50 shrink-0" />
 <SafeAreaHeader
           title={navTab === 'chats' ? 'Chats' : navTab === 'moments' ? 'Moments' : 'Favorites'}
           left={<button onClick={onExit} className="text-blue-500 font-medium text-lg">Exit</button>}
