@@ -465,15 +465,16 @@ const renderHome = () => {
                       if (!widget) return null;
                       return (
                         <div key={id} className="cursor-pointer group" onClick={() => setCurrentApp(widget.url as any)}>
-                          {/* 将 text-2xl 改为 text-xl 使 emoji 变小 */}
-                          <div className="w-full aspect-square bg-black/30 backdrop-blur-md rounded-2xl flex items-center justify-center text-xl shadow-lg group-hover:scale-110 transition-transform">
+                          <div className="w-full aspect-square rounded-2xl flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform overflow-hidden">
                             {widget.customIcon ? (
-                              /* 将 w-10 h-10 改为 w-8 h-8 使图片变小 */
-                              <img src={widget.customIcon} className="w-8 h-8 object-cover rounded-lg"/>
+                              <img src={widget.customIcon} className="w-full h-full object-cover" alt={widget.text} />
                             ) : (
-                              <span>{widget.icon}</span>
+                              <div className="w-full h-full bg-gray-300 flex items-center justify-center text-4xl">
+                                <span>{widget.icon}</span>
+                              </div>
                             )}
                           </div>
+                          <span className="text-xs text-gray-800 mt-1 text-center">{widget.text}</span>
                         </div>
                       );
                     })}
@@ -519,16 +520,28 @@ const renderHome = () => {
           <div className={`w-2 h-2 rounded-full transition-all ${homePageIndex === 1 ? 'bg-white' : 'bg-white/30'}`}></div>
         </div>
 
-        <div 
+        <div
           className="w-full flex justify-center gap-12 py-4"
           style={{ paddingBottom: `calc(env(safe-area-inset-bottom) + 1rem)`}}
         >
-          <div className="flex flex-col items-center gap-2 cursor-pointer group" onClick={() => setCurrentApp('settings')}>
-            <div className="w-14 h-14 bg-black/30 backdrop-blur-md rounded-2xl flex items-center justify-center text-4xl shadow-lg group-hover:scale-110 transition-transform">⚙️</div>
-          </div>
-          <div className="flex flex-col items-center gap-2 cursor-pointer group" onClick={() => setCurrentApp('wallpaper')}>
-            <div className="w-14 h-14 bg-black/30 backdrop-blur-md rounded-2xl flex items-center justify-center text-4xl shadow-lg group-hover:scale-110 transition-transform">🎨</div>
-          </div>
+          {['settings', 'theme'].map(id => {
+            const widget = globalSettings.widgets?.find(w => w.id === id);
+            if (!widget) return null;
+            return (
+              <div key={id} className="flex flex-col items-center gap-2 cursor-pointer group" onClick={() => setCurrentApp(widget.url as any)}>
+                <div className="w-14 h-14 rounded-2xl flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform overflow-hidden">
+                  {widget.customIcon ? (
+                    <img src={widget.customIcon} className="w-full h-full object-cover" alt={widget.text} />
+                  ) : (
+                    <div className="w-full h-full bg-gray-300 flex items-center justify-center text-4xl">
+                      <span>{widget.icon}</span>
+                    </div>
+                  )}
+                </div>
+                <span className="text-xs text-gray-800">{widget.text}</span>
+              </div>
+            );
+          })}
         </div>
       </div>
     </div>
@@ -586,7 +599,14 @@ return (
     {currentApp === 'home' && renderHome()}
 
     {/* ChatApp (逻辑不变) */}
-    <div className="w-full h-full bg-white" style={{ display: currentApp === 'chat' ? 'block' : 'none' }}>
+   {/* ChatApp - 新全屏方案：和世界书、外观设置完全一致 */}
+{currentApp === 'chat' && (
+  <div className="fixed inset-0 z-40 bg-white flex flex-col">
+    <SafeAreaHeader
+      title={contacts.find(c => c.id === jumpToContactId || c.id === contacts[0]?.id)?.name || "Chat"}
+      left={<button onClick={() => setCurrentApp('home')} className="text-blue-500 font-medium">关闭</button>}
+    />
+    <div className="flex-1 flex flex-col pt-[calc(44px + env(safe-area-inset-top))]">
       <ChatApp
         contacts={contacts}
         setContacts={setContacts}
@@ -595,7 +615,7 @@ return (
         worldBooks={worldBooks}
         setWorldBooks={setWorldBooks}
         onExit={() => setCurrentApp('home')}
-        isBackground={currentApp !== 'chat'}
+        isBackground={false}
         initialContactId={jumpToContactId}
         onChatOpened={() => setJumpToContactId(null)}
         onNewMessage={(contactId, name, avatar, content) => {
@@ -604,6 +624,8 @@ return (
         }}
       />
     </div>
+  </div>
+)}
 
     {/* 其他 App (逻辑不变) */}
     {currentApp === 'coupleSpace' && contacts[0] && (
