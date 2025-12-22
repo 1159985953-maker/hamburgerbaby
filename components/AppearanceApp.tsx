@@ -78,7 +78,7 @@ const AppearanceApp: React.FC<AppearanceAppProps> = ({ settings, setSettings, on
           // --- 新代码说明：把卡片背景改成了白色，上传按钮也改成了浅灰色 ---
           <div className="bg-white p-4 rounded-xl shadow-sm">
             <div className="grid grid-cols-3 gap-4">
-              // --- 新代码：动态显示所有壁纸（预设 + 用户上传），支持删除任意一个 ---
+             
               {(settings.customWallpapers || presets).map((url, i) => (
                 <div key={i} className="relative">
                   <div
@@ -139,7 +139,7 @@ const AppearanceApp: React.FC<AppearanceAppProps> = ({ settings, setSettings, on
             <div className="grid grid-cols-4 gap-4">
                            {(settings.widgets || []).map(widget => (  // 移除 filter，显示所有
                 <div key={widget.id} className="flex flex-col items-center gap-2">
-                  <label className="w-16 h-16 rounded-2xl overflow-hidden cursor-pointer relative group bg-gray-100 border" style={{ background: widget.background || 'gray' }}>  // 用 background 作为样式，默认灰色背景
+                  <label className="w-16 h-16 rounded-2xl overflow-hidden cursor-pointer relative group bg-gray-100 border" style={{ background: widget.background || 'gray' }}> 
                     {widget.customIcon && (  // 只显示 customIcon，如果没有，就空（移除 emoji）
                       <img src={widget.customIcon} className="w-full h-full object-cover" />
                     )}

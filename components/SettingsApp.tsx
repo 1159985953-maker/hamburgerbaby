@@ -198,7 +198,7 @@ const SettingsApp: React.FC<SettingsAppProps> = ({
           备份恢复
         </button>
       </div>
-      
+
 <div className="flex-1 overflow-y-auto p-4">
 
 
@@ -270,7 +270,7 @@ const SettingsApp: React.FC<SettingsAppProps> = ({
                 >
                   <option value="">
                     {models.length === 0
-                      ? (editingPreset.type === 'gemini' ? '默认 gemini-1.5-flash' : '请拉取模型或手动填写')
+                      ? (editingPreset.type === 'gemini' ? '默认 gemini-1.5-flash' : '请拉取模型')
                       : '选择模型'}
                   </option>
                   {models.map(m => (
