@@ -147,14 +147,15 @@ const [globalSettings, setGlobalSettings] = useState<GlobalSettings>({
   userTimezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
   appearance: { bubbleColorUser: '', bubbleColorAI: '', fontSize: 'text-sm', showStatusBar: true },
   themePresets: [],
-  widgets: [  // ← 默认小组件（可自定义）
-    { id: 'chat', icon: "https://picsum.photos/100", text: "Chat", url: "chat" },
-    { id: 'couple', icon: "https://picsum.photos/100", text: "Couple", url: "coupleSpace" },
-    { id: 'book', icon: "https://picsum.photos/100", text: "Book", url: "worldbook" },
-    { id: 'theme', icon: "https://picsum.photos/100", text: "Theme", url: "wallpaper" },
-    { id: 'settings', icon: "https://picsum.photos/100", text: "Settings", url: "settings" }
-    
-  ],
+  // 用这个新的 widgets 数组覆盖旧的
+widgets: [
+  { id: 'chat', icon: "💬", text: "Chat", url: "chat" },
+  { id: 'book', icon: "📕", text: "Book", url: "worldbook" },
+  { id: 'couple', icon: "❤️", text: "Couple", url: "coupleSpace" },
+  { id: 'diary', icon: "📖", text: "Diary", url: "diary" },
+  { id: 'settings', icon: "⚙️", text: "Settings", url: "settings" },
+  { id: 'theme', icon: "🎨", text: "Theme", url: "wallpaper" }
+],
   photoFrames: [
     { id: 'top', photo: "https://picsum.photos/800/300?random=1" },
     { id: 'left', photo: "https://picsum.photos/400/400?random=2" },
@@ -180,18 +181,18 @@ const [globalSettings, setGlobalSettings] = useState<GlobalSettings>({
 
         // 恢复设置
 // 恢复设置
+// ==================== 从这里开始替换 ====================
 if (savedSettings) {
   setGlobalSettings({
-    ...savedSettings,
-    // 强制补 photoFrames（如果旧数据没有，就用默认两个照片框）
-    photoFrames: savedSettings.photoFrames || [
-      { id: 'top', photo: "https://picsum.photos/800/300?random=1" },  // 大长方形
-      { id: 'left', photo: "https://picsum.photos/400/400?random=2" }   // 小正方形
-    ],
-    avatar: savedSettings.avatar || "https://api.dicebear.com/7.x/avataaars/svg?seed=User"
-    
+    ...globalSettings, // <-- 先用初始化的 globalSettings 打底
+    ...savedSettings,  // <-- 再用加载出来的数据覆盖
+    // ↓↓↓ 关键修复：像 photoFrames 一样，给 widgets 也加上兜底 ↓↓↓
+    widgets: savedSettings.widgets || globalSettings.widgets,
+    photoFrames: savedSettings.photoFrames || globalSettings.photoFrames,
+    avatar: savedSettings.avatar || globalSettings.avatar
   });
 }
+// ==================== 替换到这里结束 ====================
 
 // 文件路径: src/App.tsx
 // 位置：useEffect(() => { const loadData = async ... }, []); 里面的 `// 恢复联系人` 部分
@@ -374,74 +375,81 @@ const renderHome = () => {
       <div className="flex-1 flex flex-col">
         <div className="flex-1 w-full flex overflow-x-scroll snap-x snap-mandatory no-scrollbar">
           
-          {/* ===== 页面一 ===== */}
-          <div className="w-full h-full flex-shrink-0 snap-center px-4">
-            <div className="h-full flex flex-col justify-between py-4 gap-4">
+          {/* ==================== 从这里开始完整复制，覆盖旧的“页面一” ==================== */}
 
-              {/* --- 区域A: 顶部照片框 (内含头像和信息) --- */}
-              <div className="w-full h-60 relative rounded-3xl overflow-hidden shadow-xl border-2 border-white/50 ">
-                {/* 背景图 */}
-                <img src={topFrame} className="w-full h-full object-cover" alt="Top Frame" />
-                {/* 半透明遮罩，让文字更清晰 */}
-                <div className="absolute inset-0 bg-black/20"></div>
-                {/* 更换背景图的隐形按钮 */}
-                <label className="absolute inset-0 cursor-pointer">
-                  <input type="file" onChange={(e) => handlePhotoChange(e, 'top')} className="hidden" accept="image/*"/>
-                </label>
-                {/* 居中的内容: 头像 + 名字 + 签名 */}
-                <div className="absolute inset-0 flex flex-col items-center justify-center gap-2">
-                  <label className="w-16 h-16 rounded-full overflow-hidden border-2 border-white/80 shadow-lg cursor-pointer">
-                    <img src={avatar} className="w-full h-full object-cover" alt="Avatar"/>
-                    <input type="file" onChange={(e) => { /* 省略更换头像逻辑 */ }} className="hidden" accept="image/*"/>
-                  </label>
-                  <div className="text-center">
-                    <input type="text" defaultValue="Your Name" className="text-lg font-bold bg-transparent text-center outline-none focus:bg-white/10 rounded-lg"/>
-                    <p className="text-xs text-white/80 mt-1">个性签名~</p>
-                  </div>
+{/* ===== 页面一 ===== */}
+<div className="w-full h-full flex-shrink-0 snap-center p-4">
+  <div className="h-full flex flex-col gap-4">
+
+    {/* --- 区域A: 顶部照片框 (内含头像和信息) --- */}
+    {/* 我们给它一个固定的基础高度，并且不允许它被压缩 */}
+    <div className="h-60 relative rounded-3xl overflow-hidden shadow-xl border-2 border-white/50 flex-shrink-0">
+      <img src={topFrame} className="w-full h-full object-cover" alt="Top Frame" />
+      <div className="absolute inset-0 bg-black/20"></div>
+      <label className="absolute inset-0 cursor-pointer">
+        <input type="file" onChange={(e) => handlePhotoChange(e, 'top')} className="hidden" accept="image/*"/>
+      </label>
+      <div className="absolute inset-0 flex flex-col items-center justify-center gap-2">
+        <label className="w-16 h-16 rounded-full overflow-hidden border-2 border-white/80 shadow-lg cursor-pointer">
+          <img src={avatar} className="w-full h-full object-cover" alt="Avatar"/>
+          <input type="file" onChange={(e) => { /* 更换头像逻辑 */ }} className="hidden" accept="image/*"/>
+        </label>
+        <div className="text-center">
+          <input type="text" defaultValue="Your Name" className="text-lg font-bold bg-transparent text-center outline-none focus:bg-white/10 rounded-lg"/>
+          <p className="text-xs text-white/80 mt-1">个性签名~</p>
+        </div>
+      </div>
+    </div>
+
+    {/* --- 区域B: 中间组件 (它会吃掉所有剩余空间，把A和C推开) --- */}
+    <div className="flex-2 flex items-center">
+      <div className="w-full flex items-stretch gap-4">
+        <label className="w-1/2 aspect-square rounded-3xl overflow-hidden shadow-2xl border-4 border-white/60 relative cursor-pointer">
+          <img src={leftFrame} className="w-full h-full object-cover" alt="Left Frame" />
+          <input type="file" onChange={(e) => handlePhotoChange(e, 'left')} className="hidden" accept="image/*"/>
+        </label>
+        <div className="w-1/2 grid grid-cols-2 grid-rows-2 gap-4">
+          {['chat', 'book', 'couple', 'diary'].map(id => {
+            const widget = globalSettings.widgets?.find(w => w.id === id);
+            if (!widget) return null;
+            return (
+              // ↓↓↓ 关键修复：直接调用 setCurrentApp，而不是传一个值 ↓↓↓
+              <div key={id} className="cursor-pointer group" onClick={() => setCurrentApp(widget.url as any)}>
+                <div className="w-full h-full bg-black/20 backdrop-blur-sm rounded-2xl flex items-center justify-center text-3xl shadow-lg group-hover:scale-110 transition-transform overflow-hidden">
+                  {widget.customIcon ? (
+                    <img src={widget.customIcon} className="w-full h-full object-cover"/>
+                  ) : (
+                    <span>{widget.icon}</span>
+                  )}
                 </div>
               </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
 
-              {/* --- 区域B: 中间组件 (左照片 + 右4图标) --- */}
-              <div className="w-full flex items-stretch gap-4">
-                <label className="w-1/2 aspect-square rounded-3xl overflow-hidden shadow-2xl border-4 border-white/60 relative cursor-pointer">
-                  <img src={leftFrame} className="w-full h-full object-cover" alt="Left Frame" />
-                  <input type="file" onChange={(e) => handlePhotoChange(e, 'left')} className="hidden" accept="image/*"/>
-                </label>
-                <div className="w-1/2 grid grid-cols-2 grid-rows-2 gap-4">
-                  {/* 图标现在会撑满格子，自动对齐 */}
-                  <div className="cursor-pointer group" onClick={() => setCurrentApp('chat')}>
-                    <div className="w-16 h-16 bg-green-500/80 backdrop-blur-sm rounded-2xl flex items-center justify-center text-3xl shadow-lg group-hover:scale-110 transition-transform">💬</div>
-                  </div>
-                  <div className="cursor-pointer group" onClick={() => setCurrentApp('worldbook')}>
-                    <div className="w-16 h-16 bg-orange-500/80 backdrop-blur-sm rounded-2xl flex items-center justify-center text-3xl shadow-lg group-hover:scale-110 transition-transform">📕</div>
-                  </div>
-                  <div className="cursor-pointer group" onClick={() => setCurrentApp('coupleSpace')}>
-                    <div className="w-16 h-16 bg-pink-500/80 backdrop-blur-sm rounded-2xl flex items-center justify-center text-3xl shadow-lg group-hover:scale-110 transition-transform">❤️</div>
-                  </div>
-                  <div className="cursor-pointer group" onClick={() => setCurrentApp('diary')}>
-                    <div className="w-16 h-16 bg-blue-500/80 backdrop-blur-sm rounded-2xl flex items-center justify-center text-3xl shadow-lg group-hover:scale-110 transition-transform">📖</div>
-                  </div>
-                </div>
-              </div>
 
-              {/* --- 区域C: To-Do List 小组件 --- */}
-              <div className="w-full flex-1 backdrop-blur-sm bg-white/20 rounded-3xl p-4 flex flex-col shadow-lg">
-                <h3 className="font-bold text-lg mb-2">To Do</h3>
-                <div className="space-y-2 text-sm">
-                  <div className="flex items-center gap-2 opacity-50 line-through">
-                    <div className="w-4 h-4 rounded-full border-2 border-white/50 flex items-center justify-center">✓</div>
-                    <span>完成项目UI设计</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <div className="w-4 h-4 rounded-full border-2 border-white"></div>
-                    <span>添加新功能</span>
-                  </div>
-                </div>
-              </div>
+    {/* --- 区域C: To-Do List 小组件 --- */}
+    {/* 我们也给它一个固定的基础高度，并且不允许它被压缩 */}
+    <div className="h-40 backdrop-blur-sm bg-white/20 rounded-3xl p-4 flex flex-col shadow-lg flex-shrink-0">
+      <h3 className="font-bold text-lg mb-2">To Do</h3>
+      <div className="space-y-2 text-sm">
+        <div className="flex items-center gap-2 opacity-50 line-through">
+          <div className="w-4 h-4 rounded-full border-2 border-white/50 flex items-center justify-center">✓</div>
+          <span>完成项目UI设计</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="w-4 h-4 rounded-full border-2 border-white"></div>
+          <span>添加新功能</span>
+        </div>
+      </div>
+    </div>
 
-            </div>
-          </div>
+  </div>
+</div>
 
+{/* ==================== 复制粘贴到这里结束 ==================== */}
           {/* ===== 页面二 (拍立得) ===== */}
           <div className="w-full h-full flex-shrink-0 snap-center p-4">
             <div className="w-full h-full flex flex-col justify-center items-center gap-y-8">

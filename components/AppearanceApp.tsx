@@ -11,7 +11,10 @@ interface AppearanceAppProps {
 
 
 const AppearanceApp: React.FC<AppearanceAppProps> = ({ settings, setSettings, onClose }) => {
-  const [activeTab, setActiveTab] = useState<'wallpaper' | 'frames' | 'avatar'>('wallpaper');
+ // 在 AppearanceApp 函数内部最顶上添加这行
+const [activeTab, setActiveTab] = useState<'wallpaper' | 'frames' | 'avatar' | 'icons'>('wallpaper');
+ 
+ 
   const presets = [
     "https://images.unsplash.com/photo-1557683316-973673baf926",
     "https://images.unsplash.com/photo-1618331835717-801e976710b2",
@@ -29,8 +32,17 @@ const handleUpload = (e: React.ChangeEvent<HTMLInputElement>, key: 'wallpaper' |
       if (key === 'wallpaper') {
         setSettings(prev => ({ ...prev, wallpaper: ev.target!.result as string }));
       } else if (key === 'avatar') {
-        setSettings(prev => ({ ...prev, avatar: ev.target!.result as string }));
-      } else {
+        } else if (key.startsWith('widget-')) { // <-- 新增的 else if
+            const widgetId = key.replace('widget-', '');
+            setSettings(prev => ({
+                ...prev,
+                widgets: prev.widgets.map(w => 
+                    w.id === widgetId ? { ...w, customIcon: ev.target!.result as string } : w
+                )
+            }));
+        } else {
+        
+
         setSettings(prev => {
           const currentFrames = prev.photoFrames || [  // ← 超级兜底：如果 undefined，就用默认数组
             { id: 'top', photo: "https://picsum.photos/800/300?random=1" },
@@ -148,6 +160,42 @@ const handleUpload = (e: React.ChangeEvent<HTMLInputElement>, key: 'wallpaper' |
             </div>
           </div>
         )}
+        
+{/* ==================== 把这段新代码加在最后一个 {activeTab === 'avatar' && ...} 的后面 ==================== */}
+{activeTab === 'icons' && (
+  <div className="space-y-6">
+    <h3 className="text-white text-lg">自定义桌面图标</h3>
+    <div className="grid grid-cols-4 gap-4">
+      {settings.widgets.filter(w => ['chat', 'book', 'couple', 'diary'].includes(w.id)).map(widget => (
+        <div key={widget.id} className="flex flex-col items-center gap-2">
+          <label className="w-16 h-16 rounded-2xl overflow-hidden cursor-pointer relative group bg-black/20">
+            {widget.customIcon ? (
+              <img src={widget.customIcon} className="w-full h-full object-cover" />
+            ) : (
+              <span className="w-full h-full flex items-center justify-center text-3xl">{widget.icon}</span>
+            )}
+            <div className="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                <span className="text-white text-xs">更换</span>
+            </div>
+            <input type="file" onChange={e => handleUpload(e, `widget-${widget.id}`)} className="hidden" accept="image/*" />
+          </label>
+          <span className="text-xs text-white/70">{widget.text}</span>
+        </div>
+      ))}
+    </div>
+  </div>
+)}
+
+
+        {/* ... Avatar 按钮后面 ... */}
+ <button
+    onClick={() => setActiveTab('icons')}
+    className={`flex-1 py-4 font-medium transition ${activeTab === 'icons' ? 'text-white border-b-2 border-white' : 'text-gray-400'}`}
+  >
+    图标
+  </button>
+
+
       </div>
     </div>
   );

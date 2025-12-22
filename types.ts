@@ -221,9 +221,11 @@ export interface Contact {
 }
 
 // 桌面小组件类型
+// 用这段新代码覆盖旧的 Widget interface
 export interface Widget {
-  id: string;
-  icon: string;
+  id: string; // 'chat', 'book', 'couple', 'diary', 'settings', 'theme'
+  icon: string; // emoji or a placeholder
+  customIcon?: string; // 用户上传的图片 URL
   text: string;
   url: string;
   bgColor?: string;
