@@ -338,37 +338,48 @@ useEffect(() => {
 
   // --- 6. 渲染桌面 ---
 // ==================== 从这里开始完整复制，覆盖旧的 renderHome 函数 ====================
+// ==================== 从这里开始完整复制，覆盖旧的 renderHome 函数 ====================
 const renderHome = () => {
-  // 从 globalSettings 安全地获取数据
+  // 数据获取部分保持不变
   const topFrame = globalSettings.photoFrames?.find(f => f.id === 'top')?.photo || "https://picsum.photos/800/300?random=1";
   const leftFrame = globalSettings.photoFrames?.find(f => f.id === 'left')?.photo || "https://picsum.photos/400/400?random=2";
   const avatar = globalSettings.avatar || "https://api.dicebear.com/7.x/avataaars/svg?seed=User";
+
+  // 为了方便更换照片，我们把 onChange 的逻辑提出来作为一个函数
+  const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>, frameId: string) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        if (ev.target?.result) {
+          setGlobalSettings(prev => ({
+            ...prev,
+            photoFrames: (prev.photoFrames || []).map(f =>
+              f.id === frameId ? { ...f, photo: ev.target!.result as string } : f
+            )
+          }));
+        }
+      };
+      reader.readAsDataURL(file);
+    }
+  };
 
   return (
     <div
       className="h-full w-full bg-cover bg-center text-white flex flex-col"
       style={{ backgroundImage: `url(${globalSettings.wallpaper})` }}
     >
-      {/* ========== 1. 顶部状态栏 (模拟时间、信号) ========== */}
+      {/* ========== 1. 主内容区 (填满所有空间) ========== */}
       <div 
-        className="w-full flex justify-between items-center px-6 text-sm font-bold"
-        style={{ paddingTop: `calc(env(safe-area-inset-top) + 8px)`, height: '44px' }}
+        className="flex-1 flex flex-col"
+        // ↓↓↓ 为顶部刘海预留出安全空间 ↓↓↓
+        style={{ paddingTop: `env(safe-area-inset-top)`}}
       >
-        <span>11:47</span>
-        <div className="flex items-center gap-1">
-          <span>📶</span>
-          <span>🔋</span>
-        </div>
-      </div>
-
-      {/* ========== 2. 主内容区 (填满剩余空间) ========== */}
-      <div className="flex-1 flex flex-col">
         
-        {/* ========== 3. 滑动容器 (核心) ========== */}
+        {/* ========== 2. 滑动容器 (核心) ========== */}
         <div 
           className="flex-1 w-full flex overflow-x-scroll snap-x snap-mandatory no-scrollbar"
           onScroll={(e) => {
-            // 根据滚动位置判断当前在哪一页
             const scrollLeft = e.currentTarget.scrollLeft;
             const pageWidth = e.currentTarget.offsetWidth;
             const currentPage = Math.round(scrollLeft / pageWidth);
@@ -378,95 +389,105 @@ const renderHome = () => {
           }}
         >
           {/* ===== 页面一 ===== */}
-          <div className="w-full h-full flex-shrink-0 snap-center grid grid-rows-3 p-4 gap-4">
-            {/* 区域 A: 顶部照片框 */}
-            <div className="row-span-1 relative flex justify-center">
-              <div className="w-full h-full relative rounded-3xl overflow-hidden shadow-xl border-2 border-white/50">
-                <img src={topFrame} className="w-full h-full object-cover" alt="Top Frame" />
-                <label className="absolute inset-0 flex items-center justify-center bg-black/20 cursor-pointer opacity-0 hover:opacity-100 transition-opacity">
-                  <span className="text-white text-lg font-bold">更换</span>
-                  <input type="file" onChange={(e) => { /* ... 省略更换照片逻辑 ... */ }} className="hidden" accept="image/*"/>
-                </label>
-              </div>
-              <label className="absolute -bottom-8 w-20 h-20 rounded-full overflow-hidden border-4 border-white/80 shadow-2xl cursor-pointer z-10">
-                <img src={avatar} className="w-full h-full object-cover" alt="Avatar"/>
-                <input type="file" onChange={(e) => { /* ... 省略更换头像逻辑 ... */ }} className="hidden" accept="image/*"/>
-              </label>
-            </div>
+          <div className="w-full h-full flex-shrink-0 snap-center p-4">
+            {/* 使用 Grid 精确划分三块区域：头像区、上半部、下半部 */}
+            <div className="h-full grid grid-rows-[auto_1fr_1fr] gap-4">
 
-            {/* 区域 B: 中间组件 (左照片+右4图标) */}
-            <div className="row-span-1 w-full flex items-center gap-4 pt-4">
-              <div className="w-1/3 aspect-square rounded-3xl overflow-hidden shadow-2xl border-4 border-white/60 relative">
-                <img src={leftFrame} className="w-full h-full object-cover" alt="Left Frame" />
-                <label className="absolute inset-0 flex items-center justify-center bg-black/20 cursor-pointer opacity-0 hover:opacity-100 transition-opacity">
-                   <input type="file" onChange={(e) => { /* ... 省略更换照片逻辑 ... */ }} className="hidden" accept="image/*"/>
+              {/* --- 区域 A: 头像 & 可编辑文本 (中上方) --- */}
+              <div className="flex flex-col items-center justify-center gap-2 pt-4">
+                <label className="w-24 h-24 rounded-full overflow-hidden border-4 border-white/80 shadow-2xl cursor-pointer">
+                  <img src={avatar} className="w-full h-full object-cover" alt="Avatar"/>
+                  <input type="file" onChange={(e) => {/* ...更换头像逻辑... */}} className="hidden" accept="image/*"/>
                 </label>
-              </div>
-              <div className="flex-1 grid grid-cols-2 gap-4">
-                {/* ... 你的4个图标代码不变 ... */}
-                <div className="flex flex-col items-center gap-1 cursor-pointer group" onClick={() => setCurrentApp('chat')}>
-                  <div className="w-14 h-14 bg-green-500/80 backdrop-blur-sm rounded-2xl flex items-center justify-center text-3xl shadow-lg group-hover:scale-110 transition-transform">💬</div>
-                  <span className="text-xs font-medium drop-shadow-md">Chat</span>
-                </div>
-                 <div className="flex flex-col items-center gap-1 cursor-pointer group" onClick={() => setCurrentApp('worldbook')}>
-                  <div className="w-14 h-14 bg-orange-500/80 backdrop-blur-sm rounded-2xl flex items-center justify-center text-3xl shadow-lg group-hover:scale-110 transition-transform">📕</div>
-                  <span className="text-xs font-medium drop-shadow-md">Book</span>
-                </div>
-                 <div className="flex flex-col items-center gap-1 cursor-pointer group" onClick={() => setCurrentApp('coupleSpace')}>
-                  <div className="w-14 h-14 bg-pink-500/80 backdrop-blur-sm rounded-2xl flex items-center justify-center text-3xl shadow-lg group-hover:scale-110 transition-transform">❤️</div>
-                  <span className="text-xs font-medium drop-shadow-md">Couple</span>
-                </div>
-                 <div className="flex flex-col items-center gap-1 cursor-pointer group" onClick={() => setCurrentApp('diary')}>
-                  <div className="w-14 h-14 bg-blue-500/80 backdrop-blur-sm rounded-2xl flex items-center justify-center text-3xl shadow-lg group-hover:scale-110 transition-transform">📖</div>
-                  <span className="text-xs font-medium drop-shadow-md">Diary</span>
+                <div className="text-center">
+                  <input type="text" defaultValue="Your Name" className="text-xl font-bold bg-transparent text-center outline-none focus:bg-white/10 rounded-lg"/>
+                  <input type="text" defaultValue="个性签名~" className="text-xs bg-transparent text-center opacity-70 outline-none focus:bg-white/10 rounded-lg mt-1"/>
                 </div>
               </div>
+
+              {/* --- 区域 B: 左照片 + 右4图标 --- */}
+              <div className="w-full flex items-center gap-4">
+                {/* 左照片框 (严格正方形，尺寸与右侧对齐) */}
+                <label className="w-1/2 aspect-square rounded-3xl overflow-hidden shadow-2xl border-4 border-white/60 relative cursor-pointer">
+                  <img src={leftFrame} className="w-full h-full object-cover" alt="Left Frame" />
+                  <input type="file" onChange={(e) => handlePhotoChange(e, 'left')} className="hidden" accept="image/*"/>
+                </label>
+                {/* 右边四个图标 */}
+                <div className="w-1/2 grid grid-cols-2 gap-4">
+                  {/* ... 图标代码 ... */}
+                   <div className="flex flex-col items-center gap-1 cursor-pointer group" onClick={() => setCurrentApp('chat')}>
+                    <div className="w-full aspect-square bg-green-500/80 backdrop-blur-sm rounded-2xl flex items-center justify-center text-3xl shadow-lg group-hover:scale-110 transition-transform">💬</div>
+                  </div>
+                   <div className="flex flex-col items-center gap-1 cursor-pointer group" onClick={() => setCurrentApp('worldbook')}>
+                    <div className="w-full aspect-square bg-orange-500/80 backdrop-blur-sm rounded-2xl flex items-center justify-center text-3xl shadow-lg group-hover:scale-110 transition-transform">📕</div>
+                  </div>
+                   <div className="flex flex-col items-center gap-1 cursor-pointer group" onClick={() => setCurrentApp('coupleSpace')}>
+                    <div className="w-full aspect-square bg-pink-500/80 backdrop-blur-sm rounded-2xl flex items-center justify-center text-3xl shadow-lg group-hover:scale-110 transition-transform">❤️</div>
+                  </div>
+                   <div className="flex flex-col items-center gap-1 cursor-pointer group" onClick={() => setCurrentApp('diary')}>
+                    <div className="w-full aspect-square bg-blue-500/80 backdrop-blur-sm rounded-2xl flex items-center justify-center text-3xl shadow-lg group-hover:scale-110 transition-transform">📖</div>
+                  </div>
+                </div>
+              </div>
+
+              {/* --- 区域 C: To-Do List 小组件 --- */}
+              <div className="w-full backdrop-blur-sm bg-white/20 rounded-3xl p-4 flex flex-col shadow-lg">
+                <h3 className="font-bold text-lg mb-2">To Do</h3>
+                <div className="space-y-2 text-sm">
+                  <div className="flex items-center gap-2 opacity-50 line-through">
+                    <div className="w-4 h-4 rounded-full border-2 border-white/50 flex items-center justify-center">✓</div>
+                    <span>完成项目UI设计</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="w-4 h-4 rounded-full border-2 border-white"></div>
+                    <span>添加新功能</span>
+                  </div>
+                </div>
+              </div>
+
             </div>
-            
-            {/* 区域 C: 底部占位，留给最下面的图标 */}
-            <div className="row-span-1"></div>
           </div>
 
           {/* ===== 页面二 ===== */}
           <div className="w-full h-full flex-shrink-0 snap-center p-4">
-            <div className="w-full h-full flex justify-center items-start pt-16">
-                {/* 这里放你的拍立得组件 */}
+            <div className="w-full h-full flex flex-col justify-center items-center gap-y-8">
+                {/* 区域一：拍立得 */}
                 <div className="flex justify-center items-center gap-2">
                     {globalSettings.photoFrames?.filter(f => f.id.includes('polaroid')).map((frame, index) => (
                       <label key={frame.id} className={`w-24 h-28 bg-white p-2 rounded-md shadow-lg border border-gray-200 cursor-pointer hover:scale-105 hover:shadow-2xl transition-transform duration-300 ${index === 0 ? '-rotate-6' : ''} ${index === 1 ? 'rotate-3 scale-110 z-10' : ''} ${index === 2 ? '-rotate-2' : ''}`}>
                         <img src={frame.photo || "https://picsum.photos/200/200"} className="w-full h-full object-cover" alt={`Polaroid ${index + 1}`} />
-                        <input type="file" onChange={(e) => { /* ... 省略更换照片逻辑 ... */ }} className="hidden" accept="image/*"/>
+                        <input type="file" onChange={(e) => handlePhotoChange(e, frame.id)} className="hidden" accept="image/*"/>
                       </label>
                     ))}
                 </div>
+                {/* 区域二：可以放其他东西，比如音乐播放器 */}
             </div>
           </div>
         </div>
 
-        {/* ========== 4. 页面指示器 (小圆点) ========== */}
+        {/* ========== 3. 页面指示器 (小圆点) ========== */}
         <div className="w-full flex justify-center items-center gap-2 py-2">
           <div className={`w-2 h-2 rounded-full transition-all ${homePageIndex === 0 ? 'bg-white' : 'bg-white/30'}`}></div>
           <div className={`w-2 h-2 rounded-full transition-all ${homePageIndex === 1 ? 'bg-white' : 'bg-white/30'}`}></div>
         </div>
 
-        {/* ========== 5. 底部 Dock 栏 (固定图标) ========== */}
+        {/* ========== 4. 底部 Dock 栏 (固定图标) ========== */}
         <div 
           className="w-full flex justify-center gap-12 py-4"
           style={{ paddingBottom: `calc(env(safe-area-inset-bottom) + 1rem)`}}
         >
           <div className="flex flex-col items-center gap-2 cursor-pointer group" onClick={() => setCurrentApp('settings')}>
             <div className="w-14 h-14 bg-black/30 backdrop-blur-md rounded-2xl flex items-center justify-center text-4xl shadow-lg group-hover:scale-110 transition-transform">⚙️</div>
-            <span className="text-xs font-medium drop-shadow-md">Settings</span>
           </div>
           <div className="flex flex-col items-center gap-2 cursor-pointer group" onClick={() => setCurrentApp('wallpaper')}>
             <div className="w-14 h-14 bg-black/30 backdrop-blur-md rounded-2xl flex items-center justify-center text-4xl shadow-lg group-hover:scale-110 transition-transform">🎨</div>
-            <span className="text-xs font-medium drop-shadow-md">Theme</span>
           </div>
         </div>
       </div>
     </div>
   );
 };
+// ==================== 复制粘贴到这里结束 ====================
 // ==================== 复制粘贴到这里结束 ====================
 
 
