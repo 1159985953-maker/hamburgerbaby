@@ -364,32 +364,21 @@ useEffect(() => {
 // ==================== 从这里开始完整复制，覆盖旧的 renderHome 函数 ====================
 // ==================== 从这里开始完整复制，覆盖旧的 renderHome 函数 ====================
 const renderHome = () => {
-  // 数据获取部分保持不变
+  // 数据获取逻辑不变
   const topFrame = globalSettings.photoFrames?.find(f => f.id === 'top')?.photo || "https://picsum.photos/800/300?random=1";
   const leftFrame = globalSettings.photoFrames?.find(f => f.id === 'left')?.photo || "https://picsum.photos/400/400?random=2";
   const avatar = globalSettings.avatar || "https://api.dicebear.com/7.x/avataaars/svg?seed=User";
 
-  // 图片上传逻辑保持不变
   const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>, key: 'avatar' | 'top' | 'left' | string) => {
     const file = e.target.files?.[0];
     if (!file) return;
-
     const reader = new FileReader();
     reader.onload = (ev) => {
       if (ev.target?.result) {
         const dataUrl = ev.target.result as string;
-
         setGlobalSettings(prev => {
-          if (key === 'avatar') {
-            return { ...prev, avatar: dataUrl };
-          } else {
-            return {
-              ...prev,
-              photoFrames: (prev.photoFrames || []).map(f =>
-                f.id === key ? { ...f, photo: dataUrl } : f
-              )
-            };
-          }
+          if (key === 'avatar') return { ...prev, avatar: dataUrl };
+          return { ...prev, photoFrames: (prev.photoFrames || []).map(f => f.id === key ? { ...f, photo: dataUrl } : f) };
         });
       }
     };
@@ -397,154 +386,151 @@ const renderHome = () => {
   };
 
   return (
-    // 主容器保持不变
-   <div
-      className="h-full w-full bg-cover bg-center bg-no-repeat bg-fixed text-white flex flex-col px-4 pt-4"
-      style={{ 
-        backgroundImage: `url(${globalSettings.wallpaper})`,
-        paddingBottom: `calc(env(safe-area-inset-bottom) + 4rem)`  // 关键：padding 足够大，盖住手势条
-      }}
+    // 1. 最外层：背景层
+    <div
+      className="h-full w-full bg-cover bg-center bg-no-repeat bg-fixed text-white flex flex-col"
+      style={{ backgroundImage: `url(${globalSettings.wallpaper})` }}
     >
       <div style={{ height: `env(safe-area-inset-top)` }} />
 
-      <div className="flex-1 flex flex-col">
-        <div className="flex-1 w-full flex overflow-x-scroll snap-x snap-mandatory no-scrollbar">
+      {/* 2. 滑动容器 */}
+      <div className="flex-1 w-full flex overflow-x-scroll snap-x snap-mandatory no-scrollbar">
+        
+        {/* ===== 页面一：主页 ===== */}
+        <div className="w-full h-full flex-shrink-0 snap-center overflow-y-auto no-scrollbar">
           
-          {/* ===== 页面一 ===== */}
-          <div className="w-full h-full flex-shrink-0 snap-center p-4">
-            <div className="h-full flex flex-col gap-4">
+          {/* ★★★ 核心修复：在这里加 max-w-3xl 和 mx-auto ★★★ */}
+          {/* 这样整个内容块在电脑上居中且有最大宽度，且上下左右严格对齐 */}
+          <div className="min-h-full flex flex-col justify-evenly px-4 py-4 gap-4 w-full max-w-3xl mx-auto"
+               style={{ paddingBottom: `calc(100px + env(safe-area-inset-bottom))` }}>
 
-              {/* --- 区域A: 顶部照片框 --- */}
-              <div className="h-60 relative rounded-3xl overflow-hidden shadow-xl border-2 border-white/50 flex-shrink-0">
-                <img src={topFrame} className="w-full h-full object-cover" alt="Top Frame" />
-                <label className="absolute inset-0 cursor-pointer z-10">
-                  <input type="file" onChange={(e) => handlePhotoChange(e, 'top')} className="hidden" accept="image/*" />
+            {/* --- 区域A: 顶部照片框 (w-full) --- */}
+            <div className="h-60 w-full relative rounded-3xl overflow-hidden shadow-xl border-2 border-white/50 flex-shrink-0">
+              <img src={topFrame} className="w-full h-full object-cover" alt="Top Frame" />
+              <label className="absolute inset-0 cursor-pointer z-10">
+                <input type="file" onChange={(e) => handlePhotoChange(e, 'top')} className="hidden" accept="image/*" />
+              </label>
+              <div className="absolute inset-x-0 bottom-0 flex flex-col items-center">
+                <label className="w-20 h-20 top-6 rounded-full overflow-hidden border-4 border-white/90 shadow-2xl cursor-pointer relative z-20 -mt-8">
+                  <img src={avatar} className="w-full h-full object-cover" alt="Avatar"/>
+                  <input type="file" onChange={(e) => handlePhotoChange(e, 'avatar')} className="hidden" accept="image/*" />
                 </label>
-                <div className="absolute inset-x-0 bottom-0 flex flex-col items-center">
-                  <label className="w-20 h-20 top-6 rounded-full overflow-hidden border-4 border-white/90 shadow-2xl cursor-pointer relative z-20 -mt-8">
-                    <img src={avatar} className="w-full h-full object-cover" alt="Avatar"/>
-                    <input type="file" onChange={(e) => handlePhotoChange(e, 'avatar')} className="hidden" accept="image/*" />
-                    <div className="absolute inset-0 bg-black/30 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity rounded-full">
-                      <span className="text-white text-2xl">📷</span>
-                    </div>
-                  </label>
-                  <div className="w-full relative z-20">
-                    <div className="bg-gradient-to-t from-white/85 via-white/80 to-transparent pt-10 pb-7">
+                <div className="w-full relative z-20">
+                  <div className="bg-gradient-to-t from-white/85 via-white/80 to-transparent pt-10 pb-7">
+                    <input type="text" value={globalSettings.userName || ""} onChange={(e) => setGlobalSettings(prev => ({ ...prev, userName: e.target.value }))} placeholder="输入你的名字" className="w-full text-xl font-bold text-center bg-transparent outline-none text-gray-900" />
+                    <input type="text" value={globalSettings.userSignature || ""} onChange={(e) => setGlobalSettings(prev => ({ ...prev, userSignature: e.target.value }))} placeholder="个性签名~" className="w-full text-sm text-center bg-transparent outline-none text-gray-800 mt-1" />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* --- 区域B: 中间组件 (红线对齐修复) --- */}
+            {/* 去掉了所有的 max-w 限制，直接 flex-1 撑满 w-full，保证左右边缘对齐 */}
+            <div className="w-full flex items-stretch justify-center gap-4">
+              
+              {/* 左图：flex-1 自动撑满左半边 */}
+              <label className="flex-1 aspect-square rounded-3xl overflow-hidden shadow-2xl border-4 border-white/60 relative cursor-pointer">
+                <img src={leftFrame} className="w-full h-full object-cover" alt="Left Frame" />
+                <input type="file" onChange={(e) => handlePhotoChange(e, 'left')} className="hidden" accept="image/*"/>
+              </label>
+
+              {/* 右侧 App Grid：flex-1 自动撑满右半边 */}
+              <div className="flex-1 aspect-square grid grid-cols-2 grid-rows-2 gap-3">
+                {['chat', 'book', 'couple', 'diary'].map(id => {
+                  let widget = globalSettings.widgets?.find(w => w.id === id);
+                  if (!widget) {
+                     const defaults = [
+                       { id: 'chat', icon: "💬", text: "Chat", url: "chat" },
+                       { id: 'book', icon: "📕", text: "Book", url: "worldbook" },
+                       { id: 'couple', icon: "❤️", text: "Couple", url: "coupleSpace" },
+                       { id: 'diary', icon: "📖", text: "Diary", url: "diary" }
+                     ];
+                     widget = defaults.find(w => w.id === id);
+                  }
+                  if (!widget) return null;
+
+                  return (
+                    // 这里的 div 会随着容器变大而变大，但里面的图标我们锁死大小！
+                    <div key={id} className="cursor-pointer group flex flex-col items-center justify-center rounded-2xl transition-colors hover:bg-white/5" onClick={() => setCurrentApp(widget.url as any)}>
                       
-                      {/* --- 新代码说明：已移除名字输入框的 drop-shadow 样式 --- */}
-                      <input
-                        type="text"
-                        value={globalSettings.userName || ""}
-                        onChange={(e) => setGlobalSettings(prev => ({ ...prev, userName: e.target.value }))}
-                        placeholder="输入你的名字"
-                        className="w-full text-xl font-bold text-center bg-transparent outline-none text-gray-900"
-                      />
-
-                      {/* --- 新代码说明：已移除个性签名输入框的 drop-shadow 样式 --- */}
-                      <input
-                        type="text"
-                        value={globalSettings.userSignature || ""}
-                        onChange={(e) => setGlobalSettings(prev => ({ ...prev, userSignature: e.target.value }))}
-                        placeholder="个性签名~"
-                        className="w-full text-sm text-center bg-transparent outline-none text-gray-800 mt-1"
-                      />
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* --- 区域B: 中间组件 --- */}
-              <div className="flex-1 flex items-center justify-center">
-                <div className="w-full flex items-stretch gap-4 max-w-[90%]">
-                  <label className="right-4 flex-1 aspect-square rounded-3xl overflow-hidden shadow-2xl border-4 border-white/60 relative cursor-pointer">
-                    <img src={leftFrame} className="w-full h-full object-cover" alt="Left Frame" />
-                    <input type="file" onChange={(e) => handlePhotoChange(e, 'left')} className="hidden" accept="image/*"/>
-                  </label>
-
-                  {/* --- 新代码说明：这里修改了图标的大小 --- */}
-                  <div className="flex-1 aspect-square grid grid-cols-2 grid-rows-2 gap-3">
-                    {['chat', 'book', 'couple', 'diary'].map(id => {
-                      const widget = globalSettings.widgets?.find(w => w.id === id);
-                      if (!widget) return null;
-                      return (
-                        <div key={id} className="cursor-pointer group" onClick={() => setCurrentApp(widget.url as any)}>
-                          <div className="w-full aspect-square rounded-2xl flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform overflow-hidden">
-                            {widget.customIcon ? (
-                              <img src={widget.customIcon} className="w-full h-full object-cover" alt={widget.text} />
-                            ) : (
-                              <div className="w-full h-full bg-gray-300 flex items-center justify-center text-4xl">
-                                <span>{widget.icon}</span>
-                              </div>
-                            )}
+                      {/* ★★★ 锁死图标大小 w-14 h-14，和底部 Dock 栏一致 ★★★ */}
+                      {/* 无论父容器格子多大，这个图标永远居中且固定大小 */}
+                      <div className="w-14 h-14 rounded-2xl flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform overflow-hidden bg-white/20 backdrop-blur-md border border-white/20 flex-shrink-0">
+                        {widget.customIcon ? (
+                          <img src={widget.customIcon} className="w-full h-full object-cover" alt={widget.text} />
+                        ) : (
+                          <div className="flex items-center justify-center text-3xl">
+                            <span>{widget.icon}</span>
                           </div>
-                          <span className="text-xs text-gray-800 mt-1 text-center">{widget.text}</span>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              </div>
-
-              {/* --- 区域C: To-Do List 小组件 (保持不变) --- */}
-              <div className="h-40 backdrop-blur-sm bg-white/20 rounded-3xl p-4 flex flex-col shadow-lg flex-shrink-0">
-                <h3 className="font-bold text-lg mb-2">To Do</h3>
-                <div className="space-y-2 text-sm">
-                  <div className="flex items-center gap-2 opacity-50 line-through">
-                    <div className="w-4 h-4 rounded-full border-2 border-white/50 flex items-center justify-center">✓</div>
-                    <span>完成项目UI设计</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <div className="w-4 h-4 rounded-full border-2 border-white"></div>
-                    <span>添加新功能</span>
-                  </div>
-                </div>
-              </div>
-
-            </div>
-          </div>
-
-          {/* 页面二 和 底部 Dock 栏保持不变 */}
-          <div className="w-full h-full flex-shrink-0 snap-center p-4">
-            <div className="w-full h-full flex flex-col justify-center items-center gap-y-8">
-              <div className="flex justify-center items-center gap-2">
-                {globalSettings.photoFrames?.filter(f => f.id.includes('polaroid')).map((frame, index) => (
-                  <label key={frame.id} className={`w-24 h-28 bg-white p-2 rounded-md shadow-lg border border-gray-200 cursor-pointer hover:scale-105 hover:shadow-2xl transition-transform duration-300 ${index === 0 ? '-rotate-6' : ''} ${index === 1 ? 'rotate-3 scale-110 z-10' : ''} ${index === 2 ? '-rotate-2' : ''}`}>
-                    <img src={frame.photo || "https://picsum.photos/200/200"} className="w-full h-full object-cover" alt={`Polaroid ${index + 1}`} />
-                    <input type="file" onChange={(e) => handlePhotoChange(e, frame.id)} className="hidden" accept="image/*"/>
-                  </label>
-                ))}
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="w-full flex justify-center items-center gap-2 py-2">
-          <div className={`w-2 h-2 rounded-full transition-all ${homePageIndex === 0 ? 'bg-white' : 'bg-white/30'}`}></div>
-          <div className={`w-2 h-2 rounded-full transition-all ${homePageIndex === 1 ? 'bg-white' : 'bg-white/30'}`}></div>
-        </div>
-
-        <div className="fixed bottom-0 left-0 right-0 flex justify-center pb-4 pointer-events-none"
-             style={{ paddingBottom: `env(safe-area-inset-bottom)` }}>
-          <div className="flex justify-center gap-12 pointer-events-auto">
-            {['settings', 'theme'].map(id => {
-              const widget = globalSettings.widgets?.find(w => w.id === id);
-              if (!widget) return null;
-              return (
-                <div key={id} className="flex flex-col items-center gap-2 cursor-pointer group" onClick={() => setCurrentApp(widget.url as any)}>
-                  <div className="w-14 h-14 rounded-2xl flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform overflow-hidden">
-                    {widget.customIcon ? (
-                      <img src={widget.customIcon} className="w-full h-full object-cover" alt={widget.text} />
-                    ) : (
-                      <div className="w-full h-full bg-gray-300 flex items-center justify-center text-4xl">
-                        <span>{widget.icon}</span>
+                        )}
                       </div>
-                    )}
-                  </div>
-                  <span className="text-xs text-gray-800">{widget.text}</span>
+                      <span className="text-xs text-gray-800 mt-1 text-center font-bold drop-shadow-sm">{widget.text}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* --- 区域C: To-Do List (w-full) --- */}
+            <div className="h-40 w-full backdrop-blur-sm bg-white/20 rounded-3xl p-4 flex flex-col shadow-lg flex-shrink-0">
+              <h3 className="font-bold text-lg mb-2">To Do</h3>
+              <div className="space-y-2 text-sm">
+                <div className="flex items-center gap-2 opacity-50 line-through">
+                  <div className="w-4 h-4 rounded-full border-2 border-white/50 flex items-center justify-center">✓</div>
+                  <span>完成项目UI设计</span>
                 </div>
-              );
-            })}
+                <div className="flex items-center gap-2">
+                  <div className="w-4 h-4 rounded-full border-2 border-white"></div>
+                  <span>添加新功能</span>
+                </div>
+              </div>
+            </div>
+
           </div>
+        </div>
+
+        {/* ===== 页面二 ===== */}
+        <div className="w-full h-full flex-shrink-0 snap-center p-4">
+          <div className="w-full h-full flex flex-col justify-center items-center gap-y-8">
+            <div className="flex justify-center items-center gap-2">
+              {globalSettings.photoFrames?.filter(f => f.id.includes('polaroid')).map((frame, index) => (
+                <label key={frame.id} className={`w-24 h-28 bg-white p-2 rounded-md shadow-lg border border-gray-200 cursor-pointer hover:scale-105 hover:shadow-2xl transition-transform duration-300 ${index === 0 ? '-rotate-6' : ''} ${index === 1 ? 'rotate-3 scale-110 z-10' : ''} ${index === 2 ? '-rotate-2' : ''}`}>
+                  <img src={frame.photo || "https://picsum.photos/200/200"} className="w-full h-full object-cover" alt={`Polaroid ${index + 1}`} />
+                  <input type="file" onChange={(e) => handlePhotoChange(e, frame.id)} className="hidden" accept="image/*"/>
+                </label>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* 底部 Dock 栏 */}
+      <div className="fixed bottom-0 left-0 right-0 flex justify-center pointer-events-none"
+           style={{ paddingBottom: `calc(20px + env(safe-area-inset-bottom))` }}>
+        <div className="flex justify-center gap-12 pointer-events-auto bg-white/20 backdrop-blur-xl px-10 py-3 rounded-full border border-white/30 shadow-2xl">
+          {['settings', 'theme'].map(id => {
+            let widget = globalSettings.widgets?.find(w => w.id === id);
+            if (!widget) {
+                if(id === 'settings') widget = { id: 'settings', icon: "⚙️", text: "Settings", url: "settings" };
+                if(id === 'theme') widget = { id: 'theme', icon: "🎨", text: "Theme", url: "wallpaper" };
+            }
+            if (!widget) return null;
+            return (
+              <div key={id} className="flex flex-col items-center gap-2 cursor-pointer group" onClick={() => setCurrentApp(widget.url as any)}>
+                {/* 底部图标：同样大小 w-14 h-14 */}
+                <div className="w-14 h-14 rounded-2xl flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform overflow-hidden bg-white/20 backdrop-blur-md border border-white/20">
+                  {widget.customIcon ? (
+                    <img src={widget.customIcon} className="w-full h-full object-cover" alt={widget.text} />
+                  ) : (
+                    <div className="flex items-center justify-center text-3xl">
+                      <span>{widget.icon}</span>
+                    </div>
+                  )}
+                </div>
+                <span className="text-xs text-gray-800 font-bold drop-shadow-sm">{widget.text}</span>
+              </div>
+            );
+          })}
         </div>
       </div>
     </div>
@@ -601,32 +587,27 @@ return (
     {/* 桌面 (逻辑不变) */}
     {currentApp === 'home' && renderHome()}
 
-
-    {/* ChatApp - 绝对终极修复版：只垫顶部 + 确保高度拉满 + 输入框不挤走 + 消息不留白底 */}
+    {/* ChatApp (逻辑不变) */}
+   {/* ChatApp - 新全屏方案：和世界书、外观设置完全一致 */}
+{/* ChatApp - 终极修复版：绝对全屏容器，没有任何内边距，防止白条 */}
     {currentApp === 'chat' && (
-      <div className="h-full w-full flex flex-col min-h-0">
-        {/* 顶部刘海垫片 */}
-        <div className="h-[env(safe-area-inset-top)] flex-shrink-0" />
-        
-        {/* ChatApp 占满剩余，所有内部布局原样生效 */}
-        <div className="flex-1 flex flex-col">
-          <ChatApp
-            contacts={contacts}
-            setContacts={setContacts}
-            globalSettings={globalSettings}
-            setGlobalSettings={setGlobalSettings}
-            worldBooks={worldBooks}
-            setWorldBooks={setWorldBooks}
-            onExit={() => setCurrentApp('home')}
-            isBackground={false}
-            initialContactId={jumpToContactId}
-            onChatOpened={() => setJumpToContactId(null)}
-            onNewMessage={(contactId, name, avatar, content) => {
-              setGlobalNotification({ type: 'new_message', contactId, name, avatar, content });
-              setTimeout(() => setGlobalNotification(null), 5000);
-            }}
-          />
-        </div>
+      <div className="absolute inset-0 z-0 bg-black">
+        <ChatApp
+          contacts={contacts}
+          setContacts={setContacts}
+          globalSettings={globalSettings}
+          setGlobalSettings={setGlobalSettings}
+          worldBooks={worldBooks}
+          setWorldBooks={setWorldBooks}
+          onExit={() => setCurrentApp('home')}
+          isBackground={false}
+          initialContactId={jumpToContactId}
+          onChatOpened={() => setJumpToContactId(null)}
+          onNewMessage={(contactId, name, avatar, content) => {
+            setGlobalNotification({ type: 'new_message', contactId, name, avatar, content });
+            setTimeout(() => setGlobalNotification(null), 5000);
+          }}
+        />
       </div>
     )}
 

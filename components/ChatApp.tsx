@@ -2641,27 +2641,30 @@ useEffect(() => {
 
   // ==================== 视图部分 ====================
   if (view === 'list') {
-    return (
-      <div className="h-full w-full bg-gray-50 flex flex-col relative pt-[calc(44px+env(safe-area-inset-top))]"> {/* 加了 pt-16 */}
-        <SafeAreaHeader
-  title={navTab === 'chats' ? 'Chats' : navTab === 'moments' ? 'Moments' : 'Favorites'}
-  left={<button onClick={onExit} className="text-blue-500 font-medium text-lg">Exit</button>}
-  right={
-    navTab === 'chats' && (
-      <div className="flex items-center gap-4">
-        <label className="text-blue-500 text-xl cursor-pointer" title="Import Character Card">
-          📥
-          <input type="file" className="hidden" accept=".json,.png" onChange={handleCardImport} />
-        </label>
-        <button onClick={() => { setEditForm({}); setView('create'); }} className="text-blue-500 text-2xl leading-none">+</button>
-      </div>
-    )
-  }
-/>
+   return (
+      // 1. 外层容器：去掉 pt-[...]，只保留 h-full flex flex-col，背景铺满
+      <div className="h-full w-full bg-gray-50 flex flex-col relative overflow-hidden">
+<SafeAreaHeader
+          title={navTab === 'chats' ? 'Chats' : navTab === 'moments' ? 'Moments' : 'Favorites'}
+          left={<button onClick={onExit} className="text-blue-500 font-medium text-lg">Exit</button>}
+          right={
+            navTab === 'chats' && (
+              <div className="flex items-center gap-4">
+                <label className="text-blue-500 text-xl cursor-pointer" title="Import Character Card">
+                  📥
+                  <input type="file" className="hidden" accept=".json,.png" onChange={handleCardImport} />
+                </label>
+                <button onClick={() => { setEditForm({}); setView('create'); }} className="text-blue-500 text-2xl leading-none">+</button>
+              </div>
+            )
+          }
+        />
         {/* 列表内容区域 */}
-        <div className="flex-1 overflow-y-auto pb-16"> {/* 留出底部导航空间 */}
+ <div className="flex-1 overflow-y-auto pb-[calc(80px+env(safe-area-inset-bottom))]">
+        
+        
           {/* 1. 聊天列表 */}
-          {navTab === 'chats' && (
+ {navTab === 'chats' && (
             <>
               {contacts.length === 0 && (
                 <div className="flex flex-col items-center justify-center h-full text-gray-400">
@@ -2669,32 +2672,37 @@ useEffect(() => {
                   <p className="text-sm">Tap + to create a character.</p>
                 </div>
               )}
-            {contacts.map((c, index) => (
-  <ChatListItem
-    key={c.id}
-    contact={c}
-    onClick={() => {
-      setActiveContactId(c.id);
-      setView('chat');
-    }}
-    onDelete={handleDeleteContact}
-    onPin={handlePinContact}
-    isPinned={index === 0 && contacts.length > 1} // 简单判断：第一个就是置顶的
-  />
-))}
+              {contacts.map((c, index) => (
+                <ChatListItem
+                  key={c.id}
+                  contact={c}
+                  onClick={() => {
+                    setActiveContactId(c.id);
+                    setView('chat');
+                  }}
+                  onDelete={handleDeleteContact}
+                  onPin={handlePinContact}
+                  isPinned={index === 0 && contacts.length > 1}
+                />
+              ))}
             </>
           )}
+
+
+
           {/* 2. 动态 (暂位符) */}
           {navTab === 'moments' && (
             <div className="flex flex-col items-center justify-center h-full text-gray-400">
               <p>朋友圈功能开发中...</p>
             </div>
           )}
+
+
           {/* 3. 收藏夹 (新功能：支持显示“记录包”) */}
+
           {navTab === 'favorites' && (
             <div className="flex flex-col h-full bg-gray-50">
-              {/* 顶部：分类标签栏 */}
-              <div className="p-3 bg-white shadow-sm overflow-x-auto whitespace-nowrap no-scrollbar flex gap-2 z-10">
+              <div className="p-3 bg-white shadow-sm overflow-x-auto whitespace-nowrap no-scrollbar flex gap-2 z-10 sticky top-0">
                 {["全部", ...Array.from(new Set(favorites.map(f => f.category)))].map(cat => (
                   <button
                     key={cat}
@@ -2708,8 +2716,7 @@ useEffect(() => {
                   </button>
                 ))}
               </div>
-              {/* 列表内容 */}
-              <div className="flex-1 overflow-y-auto p-4 space-y-4">
+              <div className="flex-1 p-4 space-y-4">
                 {favorites.length === 0 && (
                   <div className="flex flex-col items-center justify-center h-64 text-gray-400">
                     <span className="text-4xl mb-2">⭐</span>
@@ -2720,7 +2727,6 @@ useEffect(() => {
                   .filter(f => activeFavCategory === '全部' || f.category === activeFavCategory)
                   .map((item) => (
                     <div key={item.id} className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100 relative group animate-slideUp">
-                      {/* 头部信息 (头像、名字、日期、标签) */}
                       <div className="flex items-center justify-between mb-3">
                         <div className="flex items-center gap-2">
                           <img src={item.avatar} className="w-8 h-8 rounded-full object-cover border border-gray-100" alt="avatar" />
@@ -2733,13 +2739,10 @@ useEffect(() => {
                           #{item.category}
                         </span>
                       </div>
-                      {/* ★★★ 核心逻辑：判断是“聊天记录包”还是“单条消息” ★★★ */}
                       {item.isPackage && item.messages ? (
-                        // === 样式 A: 聊天记录包 (黄色文件夹样式) ===
                         <div
                           className="bg-yellow-50 p-4 rounded-xl border border-yellow-100 cursor-pointer hover:bg-yellow-100 transition"
                           onClick={() => {
-                            // 简单的查看详情逻辑：把内容拼成字符串弹窗显示
                             const contentPreview = item.messages?.map(m => `${m.role === 'user' ? '我' : item.contactName}: ${m.content}`).join('\n');
                             alert(`📦 【${item.category}】详情:\n\n${contentPreview}`);
                           }}
@@ -2749,7 +2752,6 @@ useEffect(() => {
                             <span>聊天记录 ({item.messages.length}条)</span>
                           </div>
                           <div className="text-xs text-gray-500 space-y-1 pl-3 border-l-2 border-yellow-200">
-                            {/* 只显示前 3 条作为预览 */}
                             {item.messages.slice(0, 3).map((m, i) => (
                               <div key={i} className="truncate opacity-80 max-w-[200px]">
                                 <span className="mr-1 opacity-50">{m.role === 'user' ? '我:' : `${item.contactName}:`}</span>
@@ -2760,7 +2762,6 @@ useEffect(() => {
                           </div>
                         </div>
                       ) : (
-                        // === 样式 B: 单条消息气泡 (灰色背景) ===
                         <div className="bg-gray-50 p-3 rounded-xl text-sm text-gray-700 leading-relaxed font-mono">
                           {item.msg?.type === 'image' ? (
                             <div className="flex items-center gap-2 text-gray-500"><span>🖼️</span> [图片消息]</div>
@@ -2771,10 +2772,9 @@ useEffect(() => {
                           )}
                         </div>
                       )}
-                      {/* 删除按钮 (右上角红叉) */}
                       <button
                         onClick={(e) => {
-                          e.stopPropagation(); // 防止触发点击事件
+                          e.stopPropagation();
                           if (confirm("确定移除这条收藏吗？")) {
                             setFavorites(prev => prev.filter(f => f.id !== item.id));
                           }
@@ -2785,7 +2785,6 @@ useEffect(() => {
                       </button>
                     </div>
                   ))}
-                {/* 如果筛选后没有结果 */}
                 {favorites.length > 0 && favorites.filter(f => activeFavCategory === '全部' || f.category === activeFavCategory).length === 0 && (
                   <div className="text-center text-gray-400 text-xs mt-10">该分类下没有内容</div>
                 )}
@@ -2793,8 +2792,15 @@ useEffect(() => {
             </div>
           )}
         </div>
-        {/* ★★★ 底部导航栏 ★★★ */}
-        <div className="absolute bottom-0 left-0 right-0 bg-white border-t flex justify-around py-3 shadow-[0_-5px_15px_rgba(0,0,0,0.05)]">
+
+
+
+
+ {/* 4. 底部导航栏：增加 pb-[env(safe-area-inset-bottom)] 确保不被横条遮挡 */}
+<div 
+          className="absolute bottom-0 left-0 right-0 bg-white border-t flex justify-around pt-3 shadow-[0_-5px_15px_rgba(0,0,0,0.05)] z-50"
+          style={{ paddingBottom: `calc(12px + env(safe-area-inset-bottom))` }}
+        >
           <button onClick={() => setNavTab('chats')} className={`flex flex-col items-center ${navTab === 'chats' ? 'text-blue-500' : 'text-gray-400'}`}>
             <span className="text-xl">💬</span>
             <span className="text-[10px] font-bold">聊天</span>
@@ -3474,18 +3480,26 @@ if (view === 'settings' && activeContact) {
 }
 
   // ==================== 聊天界面 ====================
-  if (activeContact) {
+
     // 🟢 1. 插入：计算其他人的未读消息数
+    if (activeContact) {
     const otherUnreadCount = contacts.reduce((acc, c) => c.id !== activeContact.id ? acc + ((c as any).unread || 0) : acc, 0);
 
-    return (
-      <div className="h-full w-full flex flex-col relative" style={{
-        backgroundImage: activeContact.wallpaper ? `url(${activeContact.wallpaper})` : 'none',
-        backgroundColor: activeContact.wallpaper ? 'transparent' : '#f9fafb',
-        backgroundSize: 'cover',
-        backgroundPosition: 'center'
-      }}>
-        {activeContact.wallpaper && <div className="absolute inset-0 bg-black/20 pointer-events-none"></div>}
+return (
+      // 1. 外层容器：h-full flex flex-col overflow-hidden，背景图铺满
+      <div 
+        className="h-full w-full flex flex-col relative overflow-hidden bg-gray-50"
+        style={{
+          backgroundImage: activeContact.wallpaper ? `url(${activeContact.wallpaper})` : 'none',
+          backgroundColor: activeContact.wallpaper ? 'transparent' : '#f9fafb',
+          backgroundSize: 'cover',
+          backgroundPosition: 'center'
+        }}
+      >
+        {activeContact.wallpaper && <div className="absolute inset-0 bg-black/20 pointer-events-none z-0"></div>}
+        
+
+
         {/* 音乐弹窗 */}
         {showSongModal && (
           <div className="absolute inset-0 z-50 flex items-start justify-center p-4 pt-16 bg-black/50 animate-fadeIn">
@@ -3497,6 +3511,8 @@ if (view === 'settings' && activeContact) {
             </div>
           </div>
         )}
+
+
         {/* 消息菜单 */}
         {showMsgMenu && selectedMsg && (
           <div className="absolute inset-0 z-50 flex items-end justify-center bg-black/40 animate-fadeIn" onClick={() => setShowMsgMenu(false)}>
@@ -3519,6 +3535,9 @@ if (view === 'settings' && activeContact) {
             </div>
           </div>
         )}
+
+
+
         {/* Mood Modal */}
         {showMoodModal && (
           <div className="absolute inset-0 z-50 flex items-center justify-center p-6 bg-black/40 backdrop-blur-sm animate-fadeIn" onClick={() => setShowMoodModal(false)}>
@@ -3534,8 +3553,15 @@ if (view === 'settings' && activeContact) {
             </div>
           </div>
         )}
+
+
+
       {/* Header */}
-        <div className="bg-white/90 backdrop-blur border-b p-3 flex items-center justify-between sticky top-0 z-10 shadow-sm transition-all">
+        {/* 增加 pt-[env(safe-area-inset-top)] 让内容避开刘海，但背景色延伸到顶部 */}
+        <div 
+          className="bg-white/90 backdrop-blur border-b p-3 flex items-center justify-between sticky top-0 z-30 shadow-sm transition-all"
+          style={{ paddingTop: `calc(12px + env(safe-area-inset-top))` }}
+        >
           <button 
             onClick={() => {
               setView('list');
@@ -3544,7 +3570,6 @@ if (view === 'settings' && activeContact) {
             className="text-blue-500 text-lg relative flex items-center mr-4"
           >
             ‹
-            {/* 🟢 2. 插入：返回键红点 UI */}
             {otherUnreadCount > 0 && (
               <span className="ml-1 bg-red-500 text-white text-[10px] font-bold px-1.5 h-4 min-w-[1rem] flex items-center justify-center rounded-full shadow-sm">
                 {otherUnreadCount}
@@ -3552,14 +3577,16 @@ if (view === 'settings' && activeContact) {
             )}
           </button>
           <div className="flex flex-col items-center cursor-pointer" onClick={() => setShowPersonaPanel(true)}>
-        <span className="font-bold">{activeContact.name}</span>
-        <div className="flex items-center gap-1">
-             <span className={`w-2 h-2 rounded-full ${activeContact.mood.energyLevel > 30 ? 'bg-green-500' : 'bg-red-500'}`}></span>
-             <span className="text-[10px] text-gray-400">{activeContact.mood.current}</span>
-        </div>
-    </div>
+            <span className="font-bold">{activeContact.name}</span>
+            <div className="flex items-center gap-1">
+                 <span className={`w-2 h-2 rounded-full ${activeContact.mood.energyLevel > 30 ? 'bg-green-500' : 'bg-red-500'}`}></span>
+                 <span className="text-[10px] text-gray-400">{activeContact.mood.current}</span>
+            </div>
+          </div>
           <button onClick={() => { setEditForm({}); setView('settings'); }} className="text-gray-500 text-xl">≡</button>
         </div>
+
+
         {/* 悬浮播放器 */}
         {musicPlayerOpen && currentSong && (
           <div className={`sticky top-12 mx-4 mt-2 z-30 transition-all duration-300 ${isPlayerMinimized ? 'opacity-0 h-0 overflow-hidden' : 'opacity-100 h-auto'}`}>
@@ -3581,6 +3608,7 @@ if (view === 'settings' && activeContact) {
             </div>
           </div>
         )}
+
 {/* 核心消息列表 */}
 <div className={`flex-1 overflow-y-auto p-4 space-y-3 z-0 ${musicPlayerOpen && !isPlayerMinimized ? 'pt-4' : 'pt-2'}`}
   style={activeContact.chatBackground ? { backgroundImage: `url(${activeContact.chatBackground})`, backgroundSize: 'cover', backgroundPosition: 'center' } : {}}
@@ -3735,9 +3763,17 @@ const isConsecutive = index > 0 && activeContact.history[index - 1].role === msg
 
           <div ref={messagesEndRef} />
         </div>
+
+
+
+
         {/* Input Area */}
+      {/* 增加 paddingBottom: env(safe-area-inset-bottom) 确保输入框在黑条上方 */}
         {isSelectionMode ? (
-          <div className="bg-white border-t p-4 z-20 flex justify-between items-center animate-slideUp shadow-[0_-5px_15px_rgba(0,0,0,0.1)]">
+          <div 
+            className="bg-white border-t p-4 z-20 flex justify-between items-center animate-slideUp shadow-[0_-5px_15px_rgba(0,0,0,0.1)]"
+            style={{ paddingBottom: `calc(16px + env(safe-area-inset-bottom))` }}
+          >
             <button onClick={() => { setIsSelectionMode(false); setSelectedIds([]); }} className="text-gray-500 font-bold px-4">取消</button>
             <span className="text-sm font-bold text-gray-700">已选 {selectedIds.length} 条</span>
             <div className="flex gap-3">
@@ -3746,7 +3782,10 @@ const isConsecutive = index > 0 && activeContact.history[index - 1].role === msg
             </div>
           </div>
         ) : (
-          <div className="bg-white/90 backdrop-blur border-t p-3 z-10">
+          <div 
+            className="bg-white/90 backdrop-blur border-t p-3 z-10"
+            style={{ paddingBottom: `calc(12px + env(safe-area-inset-bottom))` }}
+          >
             {replyTo && (
               <div className="flex justify-between items-center bg-gray-100 p-2 rounded-t-lg text-xs text-gray-500 mb-2 border-b animate-slideUp">
                 <span>↪️ 回复 {replyTo.name}: {replyTo.content.substring(0, 15)}...</span><button onClick={() => setReplyTo(null)} className="font-bold text-gray-400 px-2">×</button>
@@ -3778,15 +3817,15 @@ const isConsecutive = index > 0 && activeContact.history[index - 1].role === msg
             )}
           </div>
         )}
-{showPersonaPanel && activeContact && (
-    <PersonaPanel
-        contact={activeContact}
-        globalSettings={globalSettings}
-        setContacts={setContacts}
-        onClose={() => setShowPersonaPanel(false)}
-        onRefineMemory={handleRefineMemory}
-    />
-)}
+        {showPersonaPanel && activeContact && (
+            <PersonaPanel
+                contact={activeContact}
+                globalSettings={globalSettings}
+                setContacts={setContacts}
+                onClose={() => setShowPersonaPanel(false)}
+                onRefineMemory={handleRefineMemory}
+            />
+        )}
       </div>
     );
   }
