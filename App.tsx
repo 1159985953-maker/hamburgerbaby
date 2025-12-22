@@ -603,32 +603,33 @@ return (
 
     {/* ChatApp (逻辑不变) */}
    {/* ChatApp - 新全屏方案：和世界书、外观设置完全一致 */}
-{currentApp === 'chat' && (
-  <div className="fixed inset-0 z-40 bg-white flex flex-col">
-    <SafeAreaHeader
-      title={contacts.find(c => c.id === jumpToContactId || c.id === contacts[0]?.id)?.name || "Chat"}
-      left={<button onClick={() => setCurrentApp('home')} className="text-blue-500 font-medium">关闭</button>}
-    />
-    <div className="flex-1 flex flex-col pt-[calc(44px + env(safe-area-inset-top))]">
-      <ChatApp
-        contacts={contacts}
-        setContacts={setContacts}
-        globalSettings={globalSettings}
-        setGlobalSettings={setGlobalSettings}
-        worldBooks={worldBooks}
-        setWorldBooks={setWorldBooks}
-        onExit={() => setCurrentApp('home')}
-        isBackground={false}
-        initialContactId={jumpToContactId}
-        onChatOpened={() => setJumpToContactId(null)}
-        onNewMessage={(contactId, name, avatar, content) => {
-          setGlobalNotification({ type: 'new_message', contactId, name, avatar, content });
-          setTimeout(() => setGlobalNotification(null), 5000);
-        }}
-      />
-    </div>
-  </div>
-)}
+    {/* ChatApp - 正确方案：全屏 + 留出刘海安全区 + 不覆盖原头部 */}
+    {currentApp === 'chat' && (
+      <div className="fixed inset-0 z-40 bg-white flex flex-col">
+        {/* 只留出顶部安全区高度，不加任何新 Header！！让 ChatApp 自己的头部正常显示 */}
+        <div className="h-[env(safe-area-inset-top)] bg-white" />
+        
+        {/* ChatApp 本身占满剩余空间 */}
+        <div className="flex-1 flex flex-col">
+          <ChatApp
+            contacts={contacts}
+            setContacts={setContacts}
+            globalSettings={globalSettings}
+            setGlobalSettings={setGlobalSettings}
+            worldBooks={worldBooks}
+            setWorldBooks={setWorldBooks}
+            onExit={() => setCurrentApp('home')}
+            isBackground={false}
+            initialContactId={jumpToContactId}
+            onChatOpened={() => setJumpToContactId(null)}
+            onNewMessage={(contactId, name, avatar, content) => {
+              setGlobalNotification({ type: 'new_message', contactId, name, avatar, content });
+              setTimeout(() => setGlobalNotification(null), 5000);
+            }}
+          />
+        </div>
+      </div>
+    )}
 
     {/* 其他 App (逻辑不变) */}
     {currentApp === 'coupleSpace' && contacts[0] && (
