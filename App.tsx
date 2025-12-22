@@ -544,9 +544,8 @@ const renderHome = () => {
 return (
   // 直接让这个 div 成为 App 的根容器，占满整个屏幕
   <div className="h-screen w-screen bg-black flex flex-col overflow-hidden relative">
-    {/* 我们删掉了外面的手机框和里面的刘海！ */}
-    
-    {/* 顶部弹窗通知 (这部分逻辑不变) */}
+
+
     {globalNotification && (
       <div
         onClick={() => {
@@ -588,26 +587,24 @@ return (
     {/* ChatApp (逻辑不变) */}
    {/* ChatApp - 新全屏方案：和世界书、外观设置完全一致 */}
 {/* ChatApp - 终极修复版：绝对全屏容器，没有任何内边距，防止白条 */}
-    {currentApp === 'chat' && (
-      <div className="absolute inset-0 z-0 bg-black">
-        <ChatApp
-          contacts={contacts}
-          setContacts={setContacts}
-          globalSettings={globalSettings}
-          setGlobalSettings={setGlobalSettings}
-          worldBooks={worldBooks}
-          setWorldBooks={setWorldBooks}
-          onExit={() => setCurrentApp('home')}
-          isBackground={false}
-          initialContactId={jumpToContactId}
-          onChatOpened={() => setJumpToContactId(null)}
-          onNewMessage={(contactId, name, avatar, content) => {
-            setGlobalNotification({ type: 'new_message', contactId, name, avatar, content });
-            setTimeout(() => setGlobalNotification(null), 5000);
-          }}
-        />
-      </div>
-    )}
+{currentApp === 'chat' && (
+  <ChatApp
+    contacts={contacts}
+    setContacts={setContacts}
+    globalSettings={globalSettings}
+    setGlobalSettings={setGlobalSettings}
+    worldBooks={worldBooks}
+    setWorldBooks={setWorldBooks}
+    onExit={() => setCurrentApp('home')}
+    isBackground={false}
+    initialContactId={jumpToContactId}
+    onChatOpened={() => setJumpToContactId(null)}
+    onNewMessage={(contactId, name, avatar, content) => {
+      setGlobalNotification({ type: 'new_message', contactId, name, avatar, content });
+      setTimeout(() => setGlobalNotification(null), 5000);
+    }}
+  />
+)}
 
     {/* 其他 App (逻辑不变) */}
     {currentApp === 'coupleSpace' && contacts[0] && (

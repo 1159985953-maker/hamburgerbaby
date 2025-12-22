@@ -2641,48 +2641,40 @@ useEffect(() => {
 
   // ==================== 视图部分 ====================
 // ==================== 视图部分：列表页 (修复顶部被遮挡问题) ====================
+ // 这是一组代码：完整替换列表页（view === 'list'）的整个 return 块
+// ==================== 视图部分：列表页 (已修复崩溃问题) ====================
   if (view === 'list') {
     return (
-      // 1. 外层容器：占满全屏，背景色铺满
-// 这是一组代码：替换列表页最外层 div（避免被 SafeAreaHeader 挡住）
-<div 
-  className="h-full w-full bg-gray-50 flex flex-col relative overflow-hidden"
-  style={{
-    paddingTop: 'calc(44px + env(safe-area-inset-top))'  // ★关键：和聊天页一样，内容从 header 下开始
-  }}
->
-        {/* 2. 顶部占位：处理刘海屏 (Status Bar) */}
-        {/* 这一行非常重要！它把内容往下推，避开手机的时间/电量栏 */}
-        <div style={{ height: `env(safe-area-inset-top)` }} className="w-full bg-gray-50 shrink-0" />
+      <div className="h-full w-full bg-gray-50 flex flex-col pt-[calc(44px+env(safe-area-inset-top))]">
+        
+        {/* ★★★ 修复点：列表页 Header 不应读取 activeContact ★★★ */}
+        <SafeAreaHeader
+          title="消息列表" 
+          right={
+            <button 
+              onClick={() => { setView('create'); }} // 这里通常是去创建页，或者你可以改为去设置
+              className="text-blue-500 font-bold text-xl px-2"
+            >
+              +
+            </button>
+          }
+          // 列表页通常不需要左侧返回按钮，或者你可以放一个设置入口
+          left={
+            <button onClick={() => { /* 打开全局设置等 */ }} className="text-gray-400">
+               {/* 这里的图标 */}
+            </button>
+          }
+        />
 
-        {/* 3. 头部导航栏：它是 flex 流的一部分，不会覆盖下面的内容 */}
-        <div className="shrink-0">
-          <SafeAreaHeader
-            title={navTab === 'chats' ? 'Chats' : navTab === 'moments' ? 'Moments' : 'Favorites'}
-            left={<button onClick={onExit} className="text-blue-500 font-medium text-lg">Exit</button>}
-            right={
-              navTab === 'chats' && (
-                <div className="flex items-center gap-4">
-                  <label className="text-blue-500 text-xl cursor-pointer" title="Import Character Card">
-                    📥
-                    <input type="file" className="hidden" accept=".json,.png" onChange={handleCardImport} />
-                  </label>
-                  <button onClick={() => { setEditForm({}); setView('create'); }} className="text-blue-500 text-2xl leading-none">+</button>
-                </div>
-              )
-            }
-          />
-        </div>
-
-        {/* 4. 列表内容区：flex-1 自动填满剩余空间，内部滚动 */}
+        {/* 列表内容区 */}
         <div className="flex-1 overflow-y-auto bg-gray-50 pb-[calc(80px+env(safe-area-inset-bottom))]">
-          {/* 1. 聊天列表 */}
+          {/* 聊天列表 */}
           {navTab === 'chats' && (
             <>
               {contacts.length === 0 && (
                 <div className="flex flex-col items-center justify-center h-full text-gray-400">
-                  <p>No chats yet.</p>
-                  <p className="text-sm">Tap + to create a character.</p>
+                  <p>暂无消息</p>
+                  <p className="text-sm">点击右上角 + 号创建一个新朋友吧</p>
                 </div>
               )}
               {contacts.map((c, index) => (
@@ -2700,15 +2692,15 @@ useEffect(() => {
               ))}
             </>
           )}
-          
-          {/* 2. 动态 */}
+
+          {/* 动态（占位） */}
           {navTab === 'moments' && (
             <div className="flex flex-col items-center justify-center h-full text-gray-400">
               <p>朋友圈功能开发中...</p>
             </div>
           )}
 
-          {/* 3. 收藏夹 */}
+          {/* 收藏夹 */}
           {navTab === 'favorites' && (
             <div className="flex flex-col min-h-full bg-gray-50">
               <div className="p-3 bg-white shadow-sm overflow-x-auto whitespace-nowrap no-scrollbar flex gap-2 z-10 sticky top-0">
@@ -2727,25 +2719,24 @@ useEffect(() => {
               </div>
               <div className="flex-1 p-4 space-y-4">
                 {favorites.map((item) => (
-                    <div key={item.id} className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100 relative group animate-slideUp">
-                      {/* ...收藏项内容保持不变... */}
-                      <div className="flex items-center justify-between mb-3">
-                        <div className="flex items-center gap-2">
-                          <img src={item.avatar} className="w-8 h-8 rounded-full object-cover border border-gray-100" alt="avatar" />
-                          <div>
-                            <div className="font-bold text-xs text-gray-700">{item.contactName}</div>
-                            <div className="text-[10px] text-gray-400">{new Date(item.timestamp).toLocaleDateString()}</div>
-                          </div>
+                  <div key={item.id} className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100 relative group animate-slideUp">
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center gap-2">
+                        <img src={item.avatar} className="w-8 h-8 rounded-full object-cover border border-gray-100" alt="avatar" />
+                        <div>
+                          <div className="font-bold text-xs text-gray-700">{item.contactName}</div>
+                          <div className="text-[10px] text-gray-400">{new Date(item.timestamp).toLocaleDateString()}</div>
                         </div>
-                        <span className="bg-blue-50 text-blue-500 text-[10px] px-2 py-1 rounded-lg font-bold">
-                          #{item.category}
-                        </span>
                       </div>
-                      <div className="bg-gray-50 p-3 rounded-xl text-sm text-gray-700 leading-relaxed font-mono">
-                          {item.msg?.content?.replace(/^>.*?\n\n/, '').replace(/\[.*?\]/g, '')}
-                      </div>
-                      <button onClick={(e) => { e.stopPropagation(); setFavorites(prev => prev.filter(f => f.id !== item.id)); }} className="absolute -top-2 -right-2 bg-red-500 text-white w-6 h-6 rounded-full flex items-center justify-center shadow-md text-xs opacity-0 group-hover:opacity-100 transition-opacity">×</button>
+                      <span className="bg-blue-50 text-blue-500 text-[10px] px-2 py-1 rounded-lg font-bold">
+                        #{item.category}
+                      </span>
                     </div>
+                    <div className="bg-gray-50 p-3 rounded-xl text-sm text-gray-700 leading-relaxed font-mono">
+                      {item.msg?.content?.replace(/^>.*?\n\n/, '').replace(/\[.*?\]/g, '')}
+                    </div>
+                    <button onClick={(e) => { e.stopPropagation(); setFavorites(prev => prev.filter(f => f.id !== item.id)); }} className="absolute -top-2 -right-2 bg-red-500 text-white w-6 h-6 rounded-full flex items-center justify-center shadow-md text-xs opacity-0 group-hover:opacity-100 transition-opacity">×</button>
+                  </div>
                 ))}
               </div>
             </div>
@@ -2753,11 +2744,10 @@ useEffect(() => {
         </div>
 
         {/* 5. 底部导航栏 */}
-       // 这是一组代码：替换底部导航栏为 fixed（真正全屏，不留白条）
-<div
-  className="fixed bottom-0 left-0 right-0 bg-white border-t flex justify-around pt-3 shadow-[0_-5px_15px_rgba(0,0,0,0.05)] z-50"
-  style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}  // 只留系统安全区，不额外加
->
+        <div 
+          className="absolute bottom-0 left-0 right-0 bg-white border-t flex justify-around pt-3 shadow-[0_-5px_15px_rgba(0,0,0,0.05)] z-50"
+          style={{ paddingBottom: `calc(12px + env(safe-area-inset-bottom))` }}
+        >
           <button onClick={() => setNavTab('chats')} className={`flex flex-col items-center ${navTab === 'chats' ? 'text-blue-500' : 'text-gray-400'}`}>
             <span className="text-xl">💬</span>
             <span className="text-[10px] font-bold">聊天</span>
@@ -3443,107 +3433,78 @@ if (view === 'settings' && activeContact) {
     const otherUnreadCount = contacts.reduce((acc, c) => c.id !== activeContact.id ? acc + ((c as any).unread || 0) : acc, 0);
 
 return (
-   // 这是一组代码：替换聊天界面最外层的 div（强制全屏 + 避开 fixed header）
-<div
-  className="h-full w-full flex flex-col relative overflow-hidden"
-  style={{
-    backgroundImage: activeContact.wallpaper ? `url(${activeContact.wallpaper})` : 'none',
-    backgroundColor: activeContact.wallpaper ? 'transparent' : '#f0f0f0',  // 稍微深一点的灰，避免纯白太刺眼
-    backgroundSize: 'cover',
-    backgroundPosition: 'center top',  // 从顶部对齐
-    backgroundAttachment: 'fixed',  // ★关键：固定背景，滚动时不跟着动，更沉浸
-    paddingTop: 'calc(44px + env(safe-area-inset-top))'  // 内容避开 header
-  }}
->
+      // 最外层容器：确保背景色和全屏
+      <div className="h-full w-full bg-gray-100 flex flex-col pt-[calc(44px+env(safe-area-inset-top))]">
+        
+        {/* ★★★ 核心修复：带情绪系统的 Header ★★★ */}
+        <SafeAreaHeader
+          // 1. 中间标题：名字 + 情绪状态 + 呼吸灯
+          title={
+            <div 
+              className="flex flex-col items-center justify-center leading-tight cursor-pointer"
+              onClick={() => setShowMoodModal(true)} // 点击标题也能打开详细情绪面板
+            >
+              <span className="font-bold text-lg text-gray-900">{activeContact.name}</span>
+              
+ {/* 情绪状态指示器 */}
+              <div className="flex items-center gap-1.5 mt-0.5">
+                <span className={`relative flex h-2 w-2`}>
+                  <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${activeContact.mood.energyLevel > 30 ? 'bg-green-400' : 'bg-red-400'}`}></span>
+                  <span className={`relative inline-flex rounded-full h-2 w-2 ${activeContact.mood.energyLevel > 30 ? 'bg-green-500' : 'bg-red-500'}`}></span>
+                </span>
+                <span className="text-[10px] text-gray-500 font-medium opacity-90 tracking-wide">
+                  {activeContact.mood.current}
+                </span>
+              </div>
+            </div>
+          }
+          
+          // 2. 左侧：返回按钮 (这里就是你丢失的那个键！)
+          left={
+            <button 
+              onClick={() => { setView('list'); setShowPersonaPanel(false); }} 
+              className="text-blue-500 text-xl pl-2 pr-4 py-2 relative flex items-center transition-opacity hover:opacity-70"
+            >
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M15 18l-6-6 6-6"/>
+              </svg>
+              {otherUnreadCount > 0 && (
+                <span className="absolute top-1 right-1 bg-red-500 text-white text-[9px] font-bold px-1 h-3.5 min-w-[14px] flex items-center justify-center rounded-full shadow-sm border border-white">
+                  {otherUnreadCount}
+                </span>
+              )}
+            </button>
+          }
+          
+          right={
+            <button 
+              onClick={() => { setEditForm({}); setView('settings'); }} 
+              className="text-gray-400 text-2xl pr-2 hover:text-gray-600 transition-colors"
+            >
+              ≡
+            </button>
+          }
+        />
+
+        {/* 背景壁纸层 */}
         {activeContact.wallpaper && <div className="absolute inset-0 bg-black/20 pointer-events-none z-0"></div>}
         
-
-
-        {/* 音乐弹窗 */}
+        {/* ... 下面是其他的代码 (MoodModal, 音乐弹窗, 消息列表等)，保持你原来的不变即可 ... */}
+        
+        {/* 为了方便，这里把后面的核心结构也写出来，防止你粘贴错位置 */}
+        
+        {/* 音乐弹窗 (保持不变) */}
         {showSongModal && (
           <div className="absolute inset-0 z-50 flex items-start justify-center p-4 pt-16 bg-black/50 animate-fadeIn">
-            <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl animate-slideDown">
-              <div className="p-4 border-b flex justify-between items-center"><h3 className="font-bold text-lg">🎧 导入网易云音乐</h3><button onClick={() => setShowSongModal(false)} className="text-gray-500 text-xl hover:text-gray-700">✕</button></div>
-              <div className="p-4"><div className="bg-gray-50 p-4 rounded-xl border border-gray-200 mb-4"><p className="text-xs text-gray-500 mb-2">粘贴链接</p><textarea className="w-full bg-transparent text-sm p-2 outline-none h-20 border-b border-gray-300 resize-none font-mono" placeholder="https://music.163.com/#/playlist?id=17484650679" value={songImportText} onChange={e => setSongImportText(e.target.value)} autoFocus /></div>
-                <div className="flex gap-3"><button onClick={() => { const match = songImportText.match(/id=(\d+)/); if (!match) { alert("链接里没找到 id=数字"); return; } const id = match[1]; setCurrentSong({ id: id, title: `网易云音乐 [ID:${id}]`, artist: '未知艺术家', url: `http://music.163.com/song/media/outer/url?id=${id}.mp3`, cover: 'https://p2.music.126.net/6y-UleORITEDbvrOLV0Q8A==/5639395138885805.jpg' }); setMusicPlayerOpen(true); setIsPlayerMinimized(false); setShowSongModal(false); setSongImportText(""); }} className="flex-1 bg-red-500 text-white py-3 rounded-xl font-bold shadow-md hover:bg-red-600 transition">▶️ 立即播放</button><button onClick={() => setShowSongModal(false)} className="flex-1 bg-gray-200 text-gray-700 py-3 rounded-xl font-bold hover:bg-gray-300 transition">取消</button></div>
-              </div>
-            </div>
+             {/* ...省略内部代码... */}
+             {/* 这一块可以直接用你原来的，或者复制下面的简化版占位 */}
+             <div className="bg-white p-4 rounded-xl"><p>Music Player Placeholder</p></div> 
           </div>
         )}
-
-
-        {/* 消息菜单 */}
-        {showMsgMenu && selectedMsg && (
-          <div className="absolute inset-0 z-50 flex items-end justify-center bg-black/40 animate-fadeIn" onClick={() => setShowMsgMenu(false)}>
-            <div className="bg-white w-full rounded-t-2xl p-4 animate-slideUp" onClick={e => e.stopPropagation()}>
-              <div className="text-center text-gray-400 text-xs mb-4">对消息进行操作</div>
-               {/* 👇👇👇 新增的按钮 👇👇👇 */}
-      <div className="grid grid-cols-2 gap-3">
-        <button onClick={handleStartEdit} className="py-3 bg-blue-50 text-blue-600 rounded-xl font-bold flex items-center justify-center gap-2">
-          <span>✏️</span> 编辑
-        </button>
-        <button onClick={handleReplyMessage} className="py-3 bg-gray-50 text-gray-700 rounded-xl font-bold flex items-center justify-center gap-2">
-          <span>↩️</span> 回复
-        </button>
-      </div>
-              <button onClick={handleCollectMessage} className="w-full py-3 border-b text-orange-500 font-bold">⭐ 收藏</button>
-              <button onClick={() => { setIsSelectionMode(true); toggleMessageSelection(selectedMsg.id); setShowMsgMenu(false); setSelectedMsg(null); }} className="w-full py-3 border-b text-purple-600 font-bold">☑️ 多选消息</button>
-              <button onClick={handleDeleteMessage} className="w-full py-3 text-red-500 font-bold">🗑️ 删除</button>
-              <div className="h-2 bg-gray-100 -mx-4"></div>
-              <button onClick={() => setShowMsgMenu(false)} className="w-full py-3 text-gray-500 font-bold">取消</button>
-            </div>
-          </div>
-        )}
-
-
-
-        {/* Mood Modal */}
-        {showMoodModal && (
-          <div className="absolute inset-0 z-50 flex items-center justify-center p-6 bg-black/40 backdrop-blur-sm animate-fadeIn" onClick={() => setShowMoodModal(false)}>
-            <div className="bg-white/90 rounded-2xl p-6 shadow-2xl w-full max-w-sm text-center transform scale-100" onClick={e => e.stopPropagation()}>
-              <div className="text-4xl mb-2">{activeContact.mood.energyLevel > 80 ? '🤩' : activeContact.mood.energyLevel > 50 ? '🙂' : '😴'}</div>
-              <h3 className="text-xl font-bold text-gray-800">{activeContact.mood.current}</h3>
-              <p className="text-sm text-gray-500 italic mt-1">{activeContact.mood.description || "Just chilling..."}</p>
-              <div className="mt-6">
-                <div className="flex justify-between text-xs text-gray-500 mb-1"><span>Energy</span><span>{activeContact.mood.energyLevel}%</span></div>
-                <div className="w-full bg-gray-200 rounded-full h-2"><div className="bg-green-500 h-2 rounded-full transition-all duration-1000" style={{ width: `${activeContact.mood.energyLevel}%` }}></div></div>
-              </div>
-              <p className="text-[10px] text-gray-400 mt-4">Updates based on time & conversation.</p>
-            </div>
-          </div>
-        )}
-
 
 
       {/* Header */}
         {/* 增加 pt-[env(safe-area-inset-top)] 让内容避开刘海，但背景色延伸到顶部 */}
-        <div 
-          className="bg-white/90 backdrop-blur border-b p-3 flex items-center justify-between sticky top-0 z-30 shadow-sm transition-all"
-          style={{ paddingTop: `calc(12px + env(safe-area-inset-top))` }}
-        >
-          <button 
-            onClick={() => {
-              setView('list');
-              setShowPersonaPanel(false); 
-            }} 
-            className="text-blue-500 text-lg relative flex items-center mr-4"
-          >
-            ‹
-            {otherUnreadCount > 0 && (
-              <span className="ml-1 bg-red-500 text-white text-[10px] font-bold px-1.5 h-4 min-w-[1rem] flex items-center justify-center rounded-full shadow-sm">
-                {otherUnreadCount}
-              </span>
-            )}
-          </button>
-          <div className="flex flex-col items-center cursor-pointer" onClick={() => setShowPersonaPanel(true)}>
-            <span className="font-bold">{activeContact.name}</span>
-            <div className="flex items-center gap-1">
-                 <span className={`w-2 h-2 rounded-full ${activeContact.mood.energyLevel > 30 ? 'bg-green-500' : 'bg-red-500'}`}></span>
-                 <span className="text-[10px] text-gray-400">{activeContact.mood.current}</span>
-            </div>
-          </div>
-          <button onClick={() => { setEditForm({}); setView('settings'); }} className="text-gray-500 text-xl">≡</button>
-        </div>
 
 
         {/* 悬浮播放器 */}
@@ -3661,23 +3622,10 @@ const isConsecutive = index > 0 && activeContact.history[index - 1].role === msg
                 </div>
               ) : (
                 // === 正常显示模式 UI ===
-// 这是一组代码：替换消息气泡的 className（让白气泡更立体 + 加微信式小尾巴）
-// 这是一组代码：替换整个气泡 div（只在每组消息的第一条显示小尾巴）
-<div className={
-  `content px-4 py-3 rounded-2xl text-sm leading-relaxed relative break-words whitespace-pre-wrap shadow-md max-w-full ` +
-  (!activeContact.customCSS 
-    ? (msg.role === 'user' 
-        ? 'bg-green-500 text-white'
-        : 'bg-white text-gray-800 border border-gray-200')
-    : '')
+                <div className={
+  `content px-3 py-[6px] rounded-xl text-sm leading-relaxed relative break-words whitespace-pre-wrap ` + // <--- 必须有 whitespace-pre-wrap
+  (!activeContact.customCSS ? (msg.role === 'user' ? 'bg-green-500 text-white' : 'bg-white text-gray-800 border border-gray-100') : '')
 }>
-  {/* ★核心修改：只有不是连续消息时才显示尾巴（即每组第一条）★ */}
-  {!isConsecutive && msg.role === 'assistant' && (
-    <div className="absolute left-0 top-3 w-3 h-3 bg-white border-l border-b border-gray-200 transform rotate-45 -translate-x-1.5"></div>
-  )}
-  {!isConsecutive && msg.role === 'user' && (
-    <div className="absolute right-0 top-3 w-3 h-3 bg-green-500 transform rotate-45 translate-x-1.5"></div>
-  )}
                   {/* 这里保留你原来的渲染逻辑 (引用、语音、图片等) */}
                   {msg.content.startsWith("> 引用") && (
                     <div className="quote-block text-xs mb-2 p-2 rounded opacity-80 bg-black/10">{msg.content.split('\n\n')[0]}</div>
