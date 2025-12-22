@@ -2648,20 +2648,18 @@ useEffect(() => {
       <div className="h-full w-full bg-gray-50 flex flex-col pt-[calc(44px+env(safe-area-inset-top))]">
         
         {/* ★★★ 修复点：列表页 Header 不应读取 activeContact ★★★ */}
-        <SafeAreaHeader
-          title="消息列表" 
-          right={
-            <button 
-              onClick={() => { setView('create'); }} // 这里通常是去创建页，或者你可以改为去设置
-              className="text-blue-500 font-bold text-xl px-2"
-            >
-              +
+<SafeAreaHeader
+          title="消息列表"
+          // 左边：点击调用 onExit，返回到手机桌面
+          left={
+            <button onClick={onExit} className="text-blue-500 text-base font-bold px-3 py-2 flex items-center hover:opacity-70 transition-opacity">
+              <span className="text-2xl mr-0.5 pb-1">‹</span>返回
             </button>
           }
-          // 列表页通常不需要左侧返回按钮，或者你可以放一个设置入口
-          left={
-            <button onClick={() => { /* 打开全局设置等 */ }} className="text-gray-400">
-               {/* 这里的图标 */}
+          // 右边：点击进入 create 视图（导入/新建）
+          right={
+            <button onClick={() => setView('create')} className="text-blue-500 text-3xl font-light px-3 py-1 hover:opacity-70 transition-opacity">
+              +
             </button>
           }
         />
@@ -3442,7 +3440,7 @@ return (
           title={
             <div 
               className="flex flex-col items-center justify-center leading-tight cursor-pointer"
-              onClick={() => setShowMoodModal(true)} // 点击标题也能打开详细情绪面板
+              onClick={() => setShowPersonaPanel(true)}  // 点击标题也能打开详细情绪面板
             >
               <span className="font-bold text-lg text-gray-900">{activeContact.name}</span>
               
@@ -3489,10 +3487,37 @@ return (
         {/* 背景壁纸层 */}
         {activeContact.wallpaper && <div className="absolute inset-0 bg-black/20 pointer-events-none z-0"></div>}
         
-        {/* ... 下面是其他的代码 (MoodModal, 音乐弹窗, 消息列表等)，保持你原来的不变即可 ... */}
-        
-        {/* 为了方便，这里把后面的核心结构也写出来，防止你粘贴错位置 */}
-        
+  
+
+{/* ★★★ 消息操作菜单 (长按触发) ★★★ */}
+        {showMsgMenu && selectedMsg && (
+          <div className="absolute inset-0 z-50 flex items-end justify-center bg-black/40 animate-fadeIn" onClick={() => setShowMsgMenu(false)}>
+            <div className="bg-white w-full rounded-t-2xl p-4 animate-slideUp" onClick={e => e.stopPropagation()}>
+              <div className="text-center text-gray-400 text-xs mb-4">对消息进行操作</div>
+              
+              {/* 编辑与回复 */}
+              <div className="grid grid-cols-2 gap-3 mb-3">
+                <button onClick={handleStartEdit} className="py-3 bg-blue-50 text-blue-600 rounded-xl font-bold flex items-center justify-center gap-2"><span>✏️</span> 编辑</button>
+                <button onClick={() => { /* 你如果有 handleReplyMessage 就填这里，没有就空着 */ setShowMsgMenu(false); }} className="py-3 bg-gray-50 text-gray-700 rounded-xl font-bold flex items-center justify-center gap-2"><span>↩️</span> 回复</button>
+              </div>
+
+              {/* 收藏功能 */}
+              <button onClick={handleCollectMessage} className="w-full py-3 border-b text-orange-500 font-bold">⭐ 收藏</button>
+              
+              {/* 多选功能 */}
+              <button onClick={() => { setIsSelectionMode(true); toggleMessageSelection(selectedMsg.id); setShowMsgMenu(false); setSelectedMsg(null); }} className="w-full py-3 border-b text-purple-600 font-bold">☑️ 多选消息</button>
+              
+              {/* 删除功能 */}
+              <button onClick={handleDeleteMessage} className="w-full py-3 text-red-500 font-bold">🗑️ 删除</button>
+              
+              <div className="h-2 bg-gray-100 -mx-4"></div>
+              <button onClick={() => setShowMsgMenu(false)} className="w-full py-3 text-gray-500 font-bold">取消</button>
+            </div>
+          </div>
+        )}
+
+
+
         {/* 音乐弹窗 (保持不变) */}
         {showSongModal && (
           <div className="absolute inset-0 z-50 flex items-start justify-center p-4 pt-16 bg-black/50 animate-fadeIn">
