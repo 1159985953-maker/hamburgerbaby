@@ -398,9 +398,12 @@ const renderHome = () => {
 
   return (
     // 主容器保持不变
-    <div
-      className="h-full w-full bg-cover bg-center text-white flex flex-col px-4 pt-4 pb-[env(safe-area-inset-bottom)]"
-      style={{ backgroundImage: `url(${globalSettings.wallpaper})` }}
+   <div
+      className="h-full w-full bg-cover bg-center bg-no-repeat bg-fixed text-white flex flex-col px-4 pt-4"
+      style={{ 
+        backgroundImage: `url(${globalSettings.wallpaper})`,
+        paddingBottom: `calc(env(safe-area-inset-bottom) + 4rem)`  // 关键：padding 足够大，盖住手势条
+      }}
     >
       <div style={{ height: `env(safe-area-inset-top)` }} />
 
@@ -520,28 +523,28 @@ const renderHome = () => {
           <div className={`w-2 h-2 rounded-full transition-all ${homePageIndex === 1 ? 'bg-white' : 'bg-white/30'}`}></div>
         </div>
 
-        <div
-          className="w-full flex justify-center gap-12 py-4"
-          style={{ paddingBottom: `calc(env(safe-area-inset-bottom) + 1rem)`}}
-        >
-          {['settings', 'theme'].map(id => {
-            const widget = globalSettings.widgets?.find(w => w.id === id);
-            if (!widget) return null;
-            return (
-              <div key={id} className="flex flex-col items-center gap-2 cursor-pointer group" onClick={() => setCurrentApp(widget.url as any)}>
-                <div className="w-14 h-14 rounded-2xl flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform overflow-hidden">
-                  {widget.customIcon ? (
-                    <img src={widget.customIcon} className="w-full h-full object-cover" alt={widget.text} />
-                  ) : (
-                    <div className="w-full h-full bg-gray-300 flex items-center justify-center text-4xl">
-                      <span>{widget.icon}</span>
-                    </div>
-                  )}
+        <div className="fixed bottom-0 left-0 right-0 flex justify-center pb-4 pointer-events-none"
+             style={{ paddingBottom: `env(safe-area-inset-bottom)` }}>
+          <div className="flex justify-center gap-12 pointer-events-auto">
+            {['settings', 'theme'].map(id => {
+              const widget = globalSettings.widgets?.find(w => w.id === id);
+              if (!widget) return null;
+              return (
+                <div key={id} className="flex flex-col items-center gap-2 cursor-pointer group" onClick={() => setCurrentApp(widget.url as any)}>
+                  <div className="w-14 h-14 rounded-2xl flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform overflow-hidden">
+                    {widget.customIcon ? (
+                      <img src={widget.customIcon} className="w-full h-full object-cover" alt={widget.text} />
+                    ) : (
+                      <div className="w-full h-full bg-gray-300 flex items-center justify-center text-4xl">
+                        <span>{widget.icon}</span>
+                      </div>
+                    )}
+                  </div>
+                  <span className="text-xs text-gray-800">{widget.text}</span>
                 </div>
-                <span className="text-xs text-gray-800">{widget.text}</span>
-              </div>
-            );
-          })}
+              );
+            })}
+          </div>
         </div>
       </div>
     </div>

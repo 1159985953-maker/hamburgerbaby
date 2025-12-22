@@ -144,7 +144,7 @@ const AppearanceApp: React.FC<AppearanceAppProps> = ({ settings, setSettings, on
                       <img src={widget.customIcon} className="w-full h-full object-cover" />
                     )}
                     <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                        <span className="text-white text-xs">更换背景</span>  // 改成“更换背景”
+                        <span className="text-white text-xs">更换背景</span> 
                     </div>
                     <input type="file" onChange={e => handleUpload(e, `widget-${widget.id}`)} className="hidden" accept="image/*" />
                   </label>
