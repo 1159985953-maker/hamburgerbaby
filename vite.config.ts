@@ -19,6 +19,7 @@ export default defineConfig({
       // 兼容 RN Web（如果你还有 Switch/Slider 等组件）
       'react-native': 'react-native-web',
     },
+    dedupe: ['react', 'react-dom']  // 去重 React
   },
 
   optimizeDeps: {

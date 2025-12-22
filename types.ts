@@ -32,12 +32,24 @@ export interface FinanceCategory {
 
 
 
+// 2. ★★★ 新增：资产账户 (银行卡、支付宝等) ★★★
+export interface AssetAccount {
+  id: string;
+  name: string; // "招商银行", "微信零钱"
+  type: 'cash' | 'debit' | 'credit' | 'alipay' | 'wechat' | 'other';
+  balance: number; // 当前余额 (初始余额 + 收入 - 支出)
+  color: string;   // 卡片颜色
+  icon: string;    // "💳"
+}
+
+
 // ★★★ 新增：交易记录 ★★★
 export interface Transaction {
   id: string;
   type: 'expense' | 'income';
   amount: number;
   categoryId: string;
+  accountId: string; // ★ 新增：这笔钱是从哪个账户出的/进的
   date: string; // "YYYY-MM-DD"
   note?: string;
   createdAt: number;
@@ -288,15 +300,30 @@ export interface PhotoFrame {
 
 // 核心类型：全局设置 (合并所有功能)
 export interface GlobalSettings {
+  serPersona?: string;
   wallpaper: string;
   customWallpapers: string[];
   apiPresets: ApiPreset[];
   activePresetId: string;
   systemTimezone: string;
 
+
+ // ★★★ 新增：生活AI助手配置 ★★★
+  lifeAI?: {
+    name: string;      // 助手名字，如 "Jarvis"
+    persona: string;   // 人设，如 "你是一个专业的财务顾问..."
+    avatar?: string;   // 助手头像(可选)
+    lifeAIHistory?: { role: 'user' | 'assistant'; content: string }[];
+  };
+
+
+
+
 // ★★★ 新增：记账数据 ★★★
   transactions: Transaction[];
   financeCategories: FinanceCategory[];
+  accounts: AssetAccount[]; // ★ 新增：资产账户列表
+  
 
   userTimezone: string;
   appearance: {

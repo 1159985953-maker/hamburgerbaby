@@ -1857,8 +1857,7 @@ const generateDefaultHEF = (name: string, persona: string = ""): HEF => {
     META: {
       source_world: "用户自定义世界",
       role_identity: `${name} / 虚拟伴侣 / 亲密关系对象`,
-      continuity_principle: "所有行为必须符合核心驱动力与现实人性",
-      continuity_principle: "严禁编造记忆，不知道就说不知道，绝不通过脑补来填补空白",
+      continuity_principle: "所有行为必须符合核心驱动力与现实人性，严禁编造记忆，不知道就说不知道，绝不通过脑补来填补空白",
       REALISM_RULE: true
     },
     CORE_DRIVES: {

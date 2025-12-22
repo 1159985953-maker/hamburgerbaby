@@ -135,6 +135,8 @@ const App: React.FC = () => {
     // 新增：保存用户自定义的名字和个性签名
 userName: string;
 userSignature: string;
+userPersona?: string;
+lifeAIHistory?: {role: 'user'|'assistant', content: string}[];
   } | null>(null);
 
   // ==================== 在这里粘贴新代码 ====================
@@ -173,13 +175,6 @@ const [homePageIndex, setHomePageIndex] = useState(0); // 0 代表第一页, 1 �
 const [globalSettings, setGlobalSettings] = useState<GlobalSettings>({
   wallpaper: "https://images.unsplash.com/photo-1557683316-973673baf926",
   apiPresets: [],
-   customWallpapers: [
-    "https://images.unsplash.com/photo-1557683316-973673baf926",
-    "https://images.unsplash.com/photo-1618331835717-801e976710b2",
-    "https://images.unsplash.com/photo-1579546929518-9e396f3cc809",
-    "https://images.unsplash.com/photo-1506744038136-46273834b3fb",
-    "https://images.unsplash.com/photo-1534796636912-3b95b3ab5986"
-  ],
   activePresetId: "",
   systemTimezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
   userTimezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
@@ -212,6 +207,7 @@ avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=User",
   ],
 userName: "Your Name",
 userSignature: "个性签名~",
+userPersona: "A kind and supportive partner.",
 });
 
 // --- 日历功能状态 ---
