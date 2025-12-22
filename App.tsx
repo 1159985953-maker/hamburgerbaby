@@ -379,7 +379,7 @@ const renderHome = () => {
             <div className="h-full flex flex-col justify-between py-4 gap-4">
 
               {/* --- 区域A: 顶部照片框 (内含头像和信息) --- */}
-              <div className="w-full h-40 relative rounded-3xl overflow-hidden shadow-xl border-2 border-white/50">
+              <div className="w-full h-60 relative rounded-3xl overflow-hidden shadow-xl border-2 border-white/50 ">
                 {/* 背景图 */}
                 <img src={topFrame} className="w-full h-full object-cover" alt="Top Frame" />
                 {/* 半透明遮罩，让文字更清晰 */}
@@ -410,16 +410,16 @@ const renderHome = () => {
                 <div className="w-1/2 grid grid-cols-2 grid-rows-2 gap-4">
                   {/* 图标现在会撑满格子，自动对齐 */}
                   <div className="cursor-pointer group" onClick={() => setCurrentApp('chat')}>
-                    <div className="w-full h-full bg-green-500/80 backdrop-blur-sm rounded-2xl flex items-center justify-center text-3xl shadow-lg group-hover:scale-110 transition-transform">💬</div>
+                    <div className="w-16 h-16 bg-green-500/80 backdrop-blur-sm rounded-2xl flex items-center justify-center text-3xl shadow-lg group-hover:scale-110 transition-transform">💬</div>
                   </div>
                   <div className="cursor-pointer group" onClick={() => setCurrentApp('worldbook')}>
-                    <div className="w-full h-full bg-orange-500/80 backdrop-blur-sm rounded-2xl flex items-center justify-center text-3xl shadow-lg group-hover:scale-110 transition-transform">📕</div>
+                    <div className="w-16 h-16 bg-orange-500/80 backdrop-blur-sm rounded-2xl flex items-center justify-center text-3xl shadow-lg group-hover:scale-110 transition-transform">📕</div>
                   </div>
                   <div className="cursor-pointer group" onClick={() => setCurrentApp('coupleSpace')}>
-                    <div className="w-full h-full bg-pink-500/80 backdrop-blur-sm rounded-2xl flex items-center justify-center text-3xl shadow-lg group-hover:scale-110 transition-transform">❤️</div>
+                    <div className="w-16 h-16 bg-pink-500/80 backdrop-blur-sm rounded-2xl flex items-center justify-center text-3xl shadow-lg group-hover:scale-110 transition-transform">❤️</div>
                   </div>
                   <div className="cursor-pointer group" onClick={() => setCurrentApp('diary')}>
-                    <div className="w-full h-full bg-blue-500/80 backdrop-blur-sm rounded-2xl flex items-center justify-center text-3xl shadow-lg group-hover:scale-110 transition-transform">📖</div>
+                    <div className="w-16 h-16 bg-blue-500/80 backdrop-blur-sm rounded-2xl flex items-center justify-center text-3xl shadow-lg group-hover:scale-110 transition-transform">📖</div>
                   </div>
                 </div>
               </div>
