@@ -3445,13 +3445,14 @@ if (view === 'settings' && activeContact) {
 return (
    // 这是一组代码：替换聊天界面最外层的 div（强制全屏 + 避开 fixed header）
 <div
-  className="h-full w-full flex flex-col relative overflow-hidden bg-gray-50"
+  className="h-full w-full flex flex-col relative overflow-hidden"
   style={{
     backgroundImage: activeContact.wallpaper ? `url(${activeContact.wallpaper})` : 'none',
-    backgroundColor: activeContact.wallpaper ? 'transparent' : '#f9fafb',
+    backgroundColor: activeContact.wallpaper ? 'transparent' : '#f0f0f0',  // 稍微深一点的灰，避免纯白太刺眼
     backgroundSize: 'cover',
-    backgroundPosition: 'center',
-    paddingTop: 'calc(44px + env(safe-area-inset-top))'  // ★关键：内容从 header 下面开始，避免被挡住
+    backgroundPosition: 'center top',  // 从顶部对齐
+    backgroundAttachment: 'fixed',  // ★关键：固定背景，滚动时不跟着动，更沉浸
+    paddingTop: 'calc(44px + env(safe-area-inset-top))'  // 内容避开 header
   }}
 >
         {activeContact.wallpaper && <div className="absolute inset-0 bg-black/20 pointer-events-none z-0"></div>}
@@ -3660,10 +3661,23 @@ const isConsecutive = index > 0 && activeContact.history[index - 1].role === msg
                 </div>
               ) : (
                 // === 正常显示模式 UI ===
-                <div className={
-  `content px-3 py-[6px] rounded-xl text-sm leading-relaxed relative break-words whitespace-pre-wrap ` + // <--- 必须有 whitespace-pre-wrap
-  (!activeContact.customCSS ? (msg.role === 'user' ? 'bg-green-500 text-white' : 'bg-white text-gray-800 border border-gray-100') : '')
+// 这是一组代码：替换消息气泡的 className（让白气泡更立体 + 加微信式小尾巴）
+// 这是一组代码：替换整个气泡 div（只在每组消息的第一条显示小尾巴）
+<div className={
+  `content px-4 py-3 rounded-2xl text-sm leading-relaxed relative break-words whitespace-pre-wrap shadow-md max-w-full ` +
+  (!activeContact.customCSS 
+    ? (msg.role === 'user' 
+        ? 'bg-green-500 text-white'
+        : 'bg-white text-gray-800 border border-gray-200')
+    : '')
 }>
+  {/* ★核心修改：只有不是连续消息时才显示尾巴（即每组第一条）★ */}
+  {!isConsecutive && msg.role === 'assistant' && (
+    <div className="absolute left-0 top-3 w-3 h-3 bg-white border-l border-b border-gray-200 transform rotate-45 -translate-x-1.5"></div>
+  )}
+  {!isConsecutive && msg.role === 'user' && (
+    <div className="absolute right-0 top-3 w-3 h-3 bg-green-500 transform rotate-45 translate-x-1.5"></div>
+  )}
                   {/* 这里保留你原来的渲染逻辑 (引用、语音、图片等) */}
                   {msg.content.startsWith("> 引用") && (
                     <div className="quote-block text-xs mb-2 p-2 rounded opacity-80 bg-black/10">{msg.content.split('\n\n')[0]}</div>
