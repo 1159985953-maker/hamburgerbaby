@@ -154,7 +154,10 @@ const [globalSettings, setGlobalSettings] = useState<GlobalSettings>({
   ],
   photoFrames: [
     { id: 'top', photo: "https://picsum.photos/800/300?random=1" },
-    { id: 'left', photo: "https://picsum.photos/400/400?random=2" }
+    { id: 'left', photo: "https://picsum.photos/400/400?random=2" },
+     { id: 'polaroid-1', photo: "https://picsum.photos/200/200?random=3" },
+  { id: 'polaroid-2', photo: "https://picsum.photos/200/200?random=4" },
+  { id: 'polaroid-3', photo: "https://picsum.photos/200/200?random=5" }
   ],
   avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=User"
 });
@@ -353,17 +356,19 @@ const topFrame = globalSettings.photoFrames?.find(f => f.id === 'top')?.photo ||
 const avatar = globalSettings.avatar || "https://api.dicebear.com/7.x/avataaars/svg?seed=User";
 
   return (
-    <div
-      className="h-full w-full bg-cover bg-center flex flex-col relative overflow-hidden"
-      style={{ backgroundImage: `url(${globalSettings.wallpaper})` }}
-    >
+<div
+  className="h-full w-full bg-cover bg-center overflow-y-auto"
+  style={{ backgroundImage: `url(${globalSettings.wallpaper})` }}
+>
+  {/* ↓↓↓ 新增一个总的内容容器，让所有东西都在这里面，并给它一个整体的上下边距 ↓↓↓ */}
+  <div className="flex flex-col min-h-full p-6 pt-8 pb-8">
       {/* 刘海 + 状态栏 */}
       <div className="absolute top-0 left-0 right-0 h-0 bg-black/0 backdrop-blur-md flex items-end justify-between px-0 pb-0 text-white/0 z-0">
 
       </div>
 
       {/* 顶部大长方形照片框 + 小头像 */}
-      <div className="relative pt-24 px-6 pb-10">
+      <div className="relative">
         <div className="relative rounded-3xl overflow-hidden shadow-xl border-2 border-white/80">
           {/* 照片框（点击换照片） */}
           <img 
@@ -429,100 +434,119 @@ setGlobalSettings(prev => ({
         </label>
       </div>
 
-      {/* 中间部分：左边小照片框 + 右边四个小图标 */}
-      <div className="left-12 bottom-2 w-200/3 flex-10 flex px-6 py-6 gap-8">
+ {/* ==================== 从这里开始完整复制并粘贴 ==================== */}
 
-        {/* 左边小正方形照片框 */}
-        <div className="left- bottom-1 w-1/3 rounded-3xl overflow-hidden shadow-2xl border-8 border-white/80 relative mt-0">
-          <img 
-  src={leftFrame || "https://picsum.photos/400/400?random=2"} 
-  className="w-full h-full object-cover" 
-  alt="Left Frame" 
-/>
-          <label className="absolute inset-0 flex items-center justify-center bg-black/40 cursor-pointer opacity-0 hover:opacity-0 transition-opacity">
-            <span className="text-white text-2xl">📷 更换</span>
-            <input
-              type="file"
-              onChange={(e) => {
-                const file = e.target.files?.[0];
-                if (file) {
-                  const reader = new FileReader();
-                  reader.onload = (ev) => {
-                    if (ev.target?.result) {
-                      setGlobalSettings(prev => ({
-  ...prev,
-  photoFrames: (prev.photoFrames ?? [
-    { id: 'top', photo: "https://picsum.photos/800/300?random=1" },
-    { id: 'left', photo: "https://picsum.photos/400/400?random=2" }
-  ]).map(f =>
-    f.id === 'left' ? { ...f, photo: ev.target!.result as string } : f
-  )
-}));
-                    }
-                  };
-                  reader.readAsDataURL(file);
-                }
-              }}
-              className="hidden"
-              accept="image/*"
+      {/* 中间内容区: 这个 div 会占据所有剩余空间，并让里面的内容垂直分布 */}
+      <div className="flex-1 flex flex-col justify-around my-4">
+
+        {/* --- 区域一: 左照片 + 4个图标 --- */}
+        <div className="w-full flex items-end gap-4 px-2">
+          
+          {/* 左边小正方形照片框 */}
+          <div className="w-1/3 aspect-square rounded-3xl overflow-hidden shadow-2xl border-4 border-white/80 relative">
+            <img 
+              src={leftFrame || "https://picsum.photos/400/400?random=2"} 
+              className="w-full h-full object-cover" 
+              alt="Left Frame" 
             />
-          </label>
+            <label className="absolute inset-0 flex items-center justify-center bg-black/40 cursor-pointer opacity-0 hover:opacity-100 transition-opacity">
+              <span className="text-white text-xl">📷</span>
+              <input
+                type="file"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) {
+                    const reader = new FileReader();
+                    reader.onload = (ev) => {
+                      if (ev.target?.result) {
+                        setGlobalSettings(prev => ({
+                          ...prev,
+                          photoFrames: (prev.photoFrames ?? []).map(f =>
+                            f.id === 'left' ? { ...f, photo: ev.target!.result as string } : f
+                          )
+                        }));
+                      }
+                    };
+                    reader.readAsDataURL(file);
+                  }
+                }}
+                className="hidden"
+                accept="image/*"
+              />
+            </label>
+          </div>
+
+          {/* 右边四个小图标 */}
+          <div className="flex-1 grid grid-cols-2 gap-4">
+            <div className="flex flex-col items-center gap-1 cursor-pointer group" onClick={() => setCurrentApp('chat')}>
+              <div className="w-12 h-12 bg-gradient-to-br from-green-400 to-green-600 rounded-2xl flex items-center justify-center text-3xl shadow-lg group-hover:scale-110 transition-transform">💬</div>
+              <span className="text-white text-xs font-medium drop-shadow-md">Chat</span>
+            </div>
+            <div className="flex flex-col items-center gap-1 cursor-pointer group" onClick={() => setCurrentApp('worldbook')}>
+              <div className="w-12 h-12 bg-gradient-to-br from-orange-400 to-orange-600 rounded-2xl flex items-center justify-center text-3xl shadow-lg group-hover:scale-110 transition-transform">📕</div>
+              <span className="text-white text-xs font-medium drop-shadow-md">Book</span>
+            </div>
+            <div className="flex flex-col items-center gap-1 cursor-pointer group" onClick={() => setCurrentApp('coupleSpace')}>
+              <div className="w-12 h-12 bg-gradient-to-br from-pink-400 to-pink-600 rounded-2xl flex items-center justify-center text-3xl shadow-lg group-hover:scale-110 transition-transform">❤️</div>
+              <span className="text-white text-xs font-medium drop-shadow-md">Couple</span>
+            </div>
+            <div className="flex flex-col items-center gap-1 cursor-pointer group" onClick={() => setCurrentApp('diary')}>
+              <div className="w-12 h-12 bg-gradient-to-br from-blue-400 to-blue-600 rounded-2xl flex items-center justify-center text-3xl shadow-lg group-hover:scale-110 transition-transform">📖</div>
+              <span className="text-white text-xs font-medium drop-shadow-md">Diary</span>
+            </div>
+          </div>
         </div>
 
-        {/* 右边四个小图标 */}
-        <div className="flex-1 grid grid-cols-2 gap-4">
-          <div className="flex flex-col items-center gap-1 cursor-pointer group" onClick={() => setCurrentApp('chat')}>
-            <div className="w-12 h-12 bg-gradient-to-br from-green-400 to-green-600 rounded-2xl flex items-center justify-center text-3xl shadow-lg group-hover:scale-110 transition-transform">
-              💬
-            </div>
-            <span className="text-white text-xs font-medium drop-shadow-md">Chat</span>
-          </div>
-
-          <div className="flex flex-col items-center gap-1 cursor-pointer group" onClick={() => setCurrentApp('worldbook')}>
-            <div className="w-12 h-12 bg-gradient-to-br from-orange-400 to-orange-600 rounded-2xl flex items-center justify-center text-3xl shadow-lg group-hover:scale-110 transition-transform">
-              📕
-            </div>
-            <span className="text-white text-xs font-medium drop-shadow-md">Book</span>
-          </div>
-
-          <div className="flex flex-col items-center gap-1 cursor-pointer group" onClick={() => setCurrentApp('coupleSpace')}>
-            <div className="w-12 h-12 bg-gradient-to-br from-pink-400 to-pink-600 rounded-2xl flex items-center justify-center text-3xl shadow-lg group-hover:scale-110 transition-transform">
-              ❤️
-            </div>
-            <span className="text-white text-xs font-medium drop-shadow-md">Couple</span>
-          </div>
-
-          <div className="flex flex-col items-center gap-1 cursor-pointer group" onClick={() => setCurrentApp('diary')}>
-            <div className="w-12 h-12 bg-gradient-to-br from-blue-400 to-blue-600 rounded-2xl flex items-center justify-center text-3xl shadow-lg group-hover:scale-110 transition-transform">
-              📖
-            </div>
-            <span className="text-white text-xs font-medium drop-shadow-md">Diary</span>
-          </div>
+        {/* --- 区域二: 拍立得小组件 --- */}
+        <div className="w-full flex justify-center items-center gap-2">
+          {globalSettings.photoFrames?.filter(f => f.id.includes('polaroid')).map((frame, index) => (
+            <label 
+              key={frame.id} 
+              className={`w-24 h-28 bg-white p-2 rounded-md shadow-lg border border-gray-200 cursor-pointer hover:scale-105 hover:shadow-2xl transition-transform duration-300 ${index === 0 ? '-rotate-6' : ''} ${index === 1 ? 'rotate-3 scale-110 z-10' : ''} ${index === 2 ? '-rotate-2' : ''}`}
+            >
+              <img src={frame.photo || "https://picsum.photos/200/200"} className="w-full h-full object-cover" alt={`Polaroid ${index + 1}`} />
+              <input
+                type="file"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) {
+                    const reader = new FileReader();
+                    reader.onload = (ev) => {
+                      if (ev.target?.result) {
+                        setGlobalSettings(prev => ({
+                          ...prev,
+                          photoFrames: prev.photoFrames?.map(f => f.id === frame.id ? { ...f, photo: ev.target!.result as string } : f)
+                        }));
+                      }
+                    };
+                    reader.readAsDataURL(file);
+                  }
+                }}
+                className="hidden"
+                accept="image/*"
+              />
+            </label>
+          ))}
         </div>
       </div>
 
-      {/* 最下面两个图标（再往下移一点） */}
-    {/* ... 上面的照片框和图标 ... */}
-
-
-<div className="absolute bottom-12 left-0 right-0 px-6 flex justify-center gap-16">
-  <div className="flex flex-col items-center gap-2 cursor-pointer group" onClick={() => setCurrentApp('settings')}>
-    <div className="w-12 h-12 bg-gradient-to-br from-gray-600 to-gray-800 rounded-2xl flex items-center justify-center text-4xl shadow-xl group-hover:scale-110 transition-transform">
-      ⚙️
+      {/* --- 区域三: 最下面两个图标 --- */}
+      <div className="w-full flex justify-center gap-16">
+        <div className="flex flex-col items-center gap-2 cursor-pointer group" onClick={() => setCurrentApp('settings')}>
+          <div className="w-12 h-12 bg-gradient-to-br from-gray-600 to-gray-800 rounded-2xl flex items-center justify-center text-4xl shadow-xl group-hover:scale-110 transition-transform">⚙️</div>
+          <span className="text-white text-sm font-medium drop-shadow-md">Settings</span>
+        </div>
+        <div className="flex flex-col items-center gap-2 cursor-pointer group" onClick={() => setCurrentApp('wallpaper')}>
+          <div className="w-12 h-12 bg-gradient-to-br from-purple-500 to-indigo-600 rounded-2xl flex items-center justify-center text-4xl shadow-xl group-hover:scale-110 transition-transform">🎨</div>
+          <span className="text-white text-sm font-medium drop-shadow-md">Theme</span>
+        </div>
+      </div>
     </div>
-    <span className="text-white text-sm font-medium drop-shadow-md">Settings</span>
   </div>
-
-  <div className="flex flex-col items-center gap-2 cursor-pointer group" onClick={() => setCurrentApp('wallpaper')}>
-    <div className="w-12 h-12 bg-gradient-to-br from-purple-500 to-indigo-600 rounded-2xl flex items-center justify-center text-4xl shadow-xl group-hover:scale-110 transition-transform">
-      🎨
-    </div>
-    <span className="text-white text-sm font-medium drop-shadow-md">Theme</span>
-  </div>
-</div>
-    </div>
-  );
+);
 };
+
+
 
 
   // ==================== 7. 主渲染 JSX ====================
