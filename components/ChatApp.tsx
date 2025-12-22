@@ -16,6 +16,11 @@ import SafeAreaHeader from './SafeAreaHeader';  // ← 确保路径正确（如�
 
 
 
+
+
+
+
+
 // 1. 模拟 Switch 开关 (★ 补全了内部实现代码 ★)
 const Switch = ({ value, onValueChange, style, trackColor, ...props }: any) => (
   <div className="relative inline-block w-10 mr-2 align-middle select-none transition duration-200 ease-in" style={style}>
@@ -88,6 +93,8 @@ const AppState = {
     },
     removeEventListener: () => {}
 };
+
+
 
 
 
@@ -184,13 +191,13 @@ const activeContact = contacts.find(c => c.id === activeContactId);
 
 
 
-    const longPressTimer = useRef<any>(null); // 长按计时器
-  const isLongPress = useRef(false); // 标记是否触发了长按
-// 在 const ChatApp = ... 里面，所有 useState 下面，插入这一行：
+
+const longPressTimer = useRef<any>(null); // 长按计时器
+const isLongPress = useRef(false); // 标记是否触发了长按
 const isBackgroundRef = useRef(isBackground); // ★★★ 1. 追踪后台状态的 Ref
- const viewRef = useRef(view);               // 盯着现在的页面状态
-  const activeContactIdRef = useRef(activeContactId); // 盯着现在正在跟谁聊
-    const messagesEndRef = useRef<HTMLDivElement>(null);
+const viewRef = useRef(view);               // 盯着现在的页面状态
+const activeContactIdRef = useRef(activeContactId); // 盯着现在正在跟谁聊
+const messagesEndRef = useRef<HTMLDivElement>(null);
 
 
 
@@ -226,6 +233,11 @@ const isBackgroundRef = useRef(isBackground); // ★★★ 1. 追踪后台状态
   };
 
 
+
+
+
+
+
   const getLocalTime = (timezone: string): string => {
     return new Intl.DateTimeFormat('zh-CN', {
       timeZone: timezone,
@@ -234,6 +246,14 @@ const isBackgroundRef = useRef(isBackground); // ★★★ 1. 追踪后台状态
       hour12: false
     }).format(new Date());
   };
+
+
+
+
+
+  
+
+
 
 
 const handleCardImport = async (e: ChangeEvent<HTMLInputElement>) => {
@@ -334,6 +354,13 @@ const handleCardImport = async (e: ChangeEvent<HTMLInputElement>) => {
   };
 
 
+
+
+
+
+
+
+
   const handleCreateContact = () => {
     // 1. 从 editForm (状态) 中获取新角色的名字和设定
     const newName = editForm.name || "New Friend";
@@ -379,10 +406,21 @@ const handleCardImport = async (e: ChangeEvent<HTMLInputElement>) => {
   };
 
 
+
+
+
+
+
+
   const handleUpdateContact = (updates: Partial<Contact>) => {
     if (!activeContact) return;
     setContacts(prev => prev.map(c => c.id === activeContact.id ? { ...c, ...updates } : c));
   };
+
+
+
+
+
 
 
 const saveSettings = () => {
@@ -405,7 +443,14 @@ const saveSettings = () => {
 };
 
 
-  const handleImageUpload = async (e: ChangeEvent<HTMLInputElement>, field: keyof Contact) => {
+
+
+
+
+
+
+
+const handleImageUpload = async (e: ChangeEvent<HTMLInputElement>, field: keyof Contact) => {
     if (e.target.files && e.target.files[0]) {
       const base64 = await fileToBase64(e.target.files[0]);
       setEditForm(prev => ({ ...prev, [field]: base64 }));
@@ -413,13 +458,25 @@ const saveSettings = () => {
   };
 
 
-  const handleMemorySave = () => {
+
+
+
+
+
+const handleMemorySave = () => {
     handleUpdateContact({ summary: tempSummary });
     setShowMemoryModal(false);
   };
 
 
-  const toggleWorldBook = (wbName: string) => {
+
+
+
+
+
+
+
+const toggleWorldBook = (wbName: string) => {
     const currentList = editForm.enabledWorldBooks || activeContact?.enabledWorldBooks || [];
     const newList = currentList.includes(wbName)
       ? currentList.filter(n => n !== wbName)
@@ -428,7 +485,15 @@ const saveSettings = () => {
   };
 
 
-  const handleDeleteMessage = () => {
+
+
+
+
+
+
+
+
+const handleDeleteMessage = () => {
     if (!activeContact || !selectedMsg) return;
     if (confirm("确定删除这条消息吗？")) {
       setContacts(prev => prev.map(c => c.id === activeContact.id ? { ...c, history: c.history.filter(m => m.id !== selectedMsg.id) } : c));
@@ -437,7 +502,15 @@ const saveSettings = () => {
   };
 
 
-  const handleClearChat = () => {
+
+
+
+
+
+
+
+
+const handleClearChat = () => {
     if (!activeContact) return;
     if (confirm("确定要清空与该角色的所有聊天记录吗？此操作不可恢复！")) {
       setContacts(prev => prev.map(c =>
@@ -447,11 +520,23 @@ const saveSettings = () => {
   };
 
 
-  const toggleMessageSelection = (msgId: string) => {
+
+
+
+
+
+
+const toggleMessageSelection = (msgId: string) => {
     setSelectedIds(prev =>
       prev.includes(msgId) ? prev.filter(id => id !== msgId) : [...prev, msgId]
     );
   };
+
+
+
+
+
+
 
 
   const handleBatchDelete = () => {
@@ -466,6 +551,12 @@ const saveSettings = () => {
       setSelectedIds([]);
     }
   };
+
+
+
+
+
+
 
 
   const handleBatchCollect = () => {
@@ -491,6 +582,11 @@ const saveSettings = () => {
   };
 
 
+
+
+
+
+
   const handleCollectMessage = () => {
     if (!activeContact || !selectedMsg) return;
     const category = prompt("请输入收藏分类 (例如: 可爱, 约定, 搞笑):", "默认");
@@ -510,11 +606,21 @@ const saveSettings = () => {
   };
 
 
+
+
+
+
   const handleReplyMessage = () => {
     if (!activeContact || !selectedMsg) return;
     setReplyTo({ id: selectedMsg.id, content: selectedMsg.content.replace(/\[.*?\]/g, ''), name: selectedMsg.role === 'user' ? activeContact.userName : activeContact.name });
     setShowMsgMenu(false); setSelectedMsg(null);
   };
+
+
+
+
+
+
 
 
 const handlePinContact = (contactId: string) => {
@@ -525,6 +631,12 @@ const handlePinContact = (contactId: string) => {
     return [pinned, ...prev.filter(c => c.id !== contactId)];
   });
 };
+
+
+
+
+
+
 
 
 const handleDeleteContact = (contactIdToDelete: string) => {
@@ -540,6 +652,11 @@ const handleDeleteContact = (contactIdToDelete: string) => {
 };
 
 
+
+
+
+
+
   // 1. 开始长按（按下手指/鼠标）
   const handleTouchStart = (msg: Message) => {
     isLongPress.current = false;
@@ -553,6 +670,11 @@ const handleDeleteContact = (contactIdToDelete: string) => {
     }, 600); // 600毫秒算长按
   };
 
+
+
+
+
+
   // 2. 结束长按（松开手指/鼠标）
   const handleTouchEnd = () => {
     if (longPressTimer.current) {
@@ -560,6 +682,11 @@ const handleDeleteContact = (contactIdToDelete: string) => {
       longPressTimer.current = null;
     }
   };
+
+
+
+
+
 
   // 3. 点击“编辑”按钮，进入编辑模式
   const handleStartEdit = () => {
@@ -569,6 +696,10 @@ const handleDeleteContact = (contactIdToDelete: string) => {
     setShowMsgMenu(false); // 关闭菜单
     setSelectedMsg(null);
   };
+
+
+
+
 
   // 4. 保存编辑后的内容
   const handleSaveEdit = () => {
@@ -598,11 +729,22 @@ const handleDeleteContact = (contactIdToDelete: string) => {
     setEditContent("");
   };
 
+
+
+
+
+
   // 5. 取消编辑
   const handleCancelEdit = () => {
     setEditingMsgId(null);
     setEditContent("");
   };
+
+
+
+
+
+
 
   // 6. 撤回消息（让 AI 感知到撤回）
   const handleWithdrawMessage = () => {
@@ -621,6 +763,11 @@ const handleDeleteContact = (contactIdToDelete: string) => {
     setShowMsgMenu(false); 
     setSelectedMsg(null);
   };
+
+
+
+
+
 
 
   const handleUserSend = (type: 'text' | 'voice' | 'location' = 'text', contentOverride?: string) => {
@@ -672,6 +819,13 @@ const handleDeleteContact = (contactIdToDelete: string) => {
         });
     }, 2000);
   };
+
+
+
+
+
+
+
 
 
 // 1. 全部精炼 (修复 HTTP 400)
@@ -761,6 +915,14 @@ ${memoryContent}
   }
 };
 
+
+
+
+
+
+
+
+
 // 2. 自动总结 (修复 HTTP 400)
 const checkAutoSummary = async (currentContact: Contact, currentHistory: Message[]) => {
     const triggerCount = currentContact.summaryTrigger || 50;
@@ -836,6 +998,9 @@ ${historyText}
 };
 
 
+
+
+
   const handleImageSend = async (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !activeContact) return;
@@ -852,12 +1017,26 @@ ${historyText}
   };
 
 
+
+
+
+
+
+
   const sendVoiceMessage = () => {
     if (!voiceInput.trim() || !activeContact) return;
     handleUserSend('voice', voiceInput);
     setShowVoiceInput(false);
     setVoiceInput("");
   };
+
+
+
+
+
+
+
+
 
 
   const handleRegenerateLast = async () => {
@@ -895,7 +1074,13 @@ ${historyText}
   };
 
 
-const scheduleProactiveMessage = async (contact: Contact) => {
+
+
+
+
+
+
+  const scheduleProactiveMessage = async (contact: Contact) => {
   if (!contact.proactiveConfig?.enabled) {
   console.log(`[ChatApp] ${contact.name} 主动消息已关闭，跳过`);
   return;
@@ -1073,7 +1258,7 @@ Now, generate:
   };
 
 
-const findRelevantWorldBookEntries = (
+  const findRelevantWorldBookEntries = (
     history: Message[],
     worldBooks: WorldBookCategory[],
     enabledBookNames: string[]
@@ -1100,10 +1285,20 @@ const findRelevantWorldBookEntries = (
         }
     }
     return Array.from(relevantEntries);
-};
+ };
 
 
-const handleAiReplyTrigger = async (historyOverride?: Message[]) => {
+
+
+
+
+
+
+
+
+
+  const handleAiReplyTrigger = async (historyOverride?: Message[]) => {
+
   // 1. 基础安全检查
   if (!activeContact || !Array.isArray(activeContact.history)) {
     console.error("Critical Error: activeContact or history is invalid", activeContact);
@@ -1273,6 +1468,25 @@ const handleAiReplyTrigger = async (historyOverride?: Message[]) => {
     }
 
 
+
+
+const generateSystemPrompt = (contact: Contact, gapDesc: string, aiTime: string) => {
+  // 1. 根据关系状态，决定 AI 的态度底色
+  let relationshipInstruction = "";
+  switch (contact.relationshipStatus) {
+    case 'Honeymoon': relationshipInstruction = "处于热恋/蜜月期，无论说什么都带着爱意和包容，极其粘人。"; break;
+    case 'Stable': relationshipInstruction = "关系稳定，像老夫老妻或挚友，默契，不需要过多的客套。"; break;
+    case 'Conflict': relationshipInstruction = "【⚠️处于冷战/冲突状态⚠️】语气冷淡、简短。对用户的示好要保持怀疑。除非用户明确道歉或给出极合理的解释，否则不要轻易缓和语气。"; break;
+    case 'Broken': relationshipInstruction = "关系破裂。表现出极度的疏离、礼貌但拒人千里，或者干脆不想理人。"; break;
+    default: relationshipInstruction = "普通朋友关系，礼貌且友好。";
+  }
+
+  // 2. 检查是否处于“勿扰模式”的边缘（比如刚醒或正要睡）
+  let dndContext = "";
+  if (contact.aiDND.enabled) {
+    dndContext = `你当前处于【${contact.aiDND.reason || "忙碌"}】状态。用户强行找你说话，你的反应应该是简短、略带被打扰的惊讶，或者匆忙结束对话。`;
+  }
+}
     
 // 3. System Prompt
     const systemPrompt = `
@@ -1466,9 +1680,10 @@ Lore: ${loreText || "无"}
 
 
     // ▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼ 解析与更新逻辑 (含好感度) ▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼
-    let parts: { type: string; content: string; thought_chain?: any }[] = [];
+let parts: { type: string; content: string; thought_chain?: any }[] = [];
     let extractedThought: any = null;
     let scoreChange = 0; // 默认不变化
+    let hefUpdateData: any = null; // ★ 新增：用于存 AI 返回的情绪变化
 
     try {
         const jsonMatch = finalResp.match(/\[\s*\{[\s\S]*\}\s*\]/);
@@ -1482,12 +1697,14 @@ Lore: ${loreText || "无"}
                 extractedThought = parsed[0];
                 console.log("【隐藏思考链】", extractedThought);
                 
-                // ★★★ 核心：获取好感度变化值 ★★★
+                // (1) 获取好感度变化值
                 if (typeof extractedThought.affection_score_change === 'number') {
                     scoreChange = Math.round(extractedThought.affection_score_change);
-                    if (scoreChange !== 0) {
-                        console.log(`❤️ 好感度变化: ${scoreChange > 0 ? '+' : ''}${scoreChange}`);
-                    }
+                }
+                
+                // (2) ★ 新增：获取 HEF 情绪更新 ★
+                if (extractedThought.hef_update) {
+                    hefUpdateData = extractedThought.hef_update;
                 }
 
                 parts = parsed.slice(1).filter((item: any) => (item.type === 'text' || item.type === 'voice') && item.content?.trim()).map((item: any) => ({ ...item, thought_chain: extractedThought }));
@@ -1602,8 +1819,6 @@ const isReadingNow = !isBackgroundRef.current && viewRef.current === 'chat' && a
 
 
 
-
-    // 如果切后台了，发通知
     if (isBackgroundRef.current && newMessages.length > 0) {
       const lastMsg = newMessages[newMessages.length - 1];
       onNewMessage(activeContact.id, activeContact.name, activeContact.avatar, lastMsg.content, activeContact.id);
@@ -1631,6 +1846,12 @@ const isReadingNow = !isBackgroundRef.current && viewRef.current === 'chat' && a
 };
       
       
+
+
+
+
+
+
 const generateDefaultHEF = (name: string, persona: string = ""): HEF => {
   return {
     META: {
@@ -1738,6 +1959,17 @@ const generateDefaultHEF = (name: string, persona: string = ""): HEF => {
 };
 
 
+
+
+
+
+
+
+
+
+
+
+
 // ==================== ★★★ 用这个版本替换掉旧的 PresetSelector ★★★ ====================
 const PresetSelector: React.FC<{ onSelect: (preset: any) => void; globalSettings: GlobalSettings }> = ({ onSelect, globalSettings }) => {
   // 如果没有预设，显示提示信息
@@ -1811,6 +2043,15 @@ const fileToBase64 = (file: File): Promise<string> => {
 };
 
 
+
+
+
+
+
+
+
+
+
 const readTavernPng = async (file: File): Promise<any | null> => {
   return new Promise((resolve) => {
     const reader = new FileReader();
@@ -1846,6 +2087,17 @@ const readTavernPng = async (file: File): Promise<any | null> => {
     reader.readAsArrayBuffer(file);
   });
 };
+
+
+
+
+
+
+
+
+
+
+
 
 
 const HiddenBracketText: React.FC<{ content: string; fontSize?: string }> = ({ content, fontSize = 'text-sm' }) => {
@@ -1892,6 +2144,15 @@ const HiddenBracketText: React.FC<{ content: string; fontSize?: string }> = ({ c
 };
 
 
+
+
+
+
+
+
+
+
+
   const scrollToBottom = (behavior: ScrollBehavior = 'auto') => {
     if (messagesEndRef.current) {
       // 1. 优先尝试 scrollIntoView (最稳)
@@ -1904,6 +2165,16 @@ const HiddenBracketText: React.FC<{ content: string; fontSize?: string }> = ({ c
       }
     }
   };
+
+
+
+
+
+
+
+
+
+
 
 
 const VoiceBubble: React.FC<{
@@ -1979,6 +2250,11 @@ interface ChatAppProps {
   onChatOpened: () => void;
   onNewMessage: (contactId: string, name: string, avatar: string, content: string) => void;
 }
+
+
+
+
+
 
 
 
@@ -2142,6 +2418,11 @@ const ChatListItem: React.FC<{
 
 
 
+
+
+
+
+
 // ==================== 灵魂控制台组件 (菜谱) ====================
 
 const MemoryNote: React.FC<{
@@ -2241,6 +2522,12 @@ const MemoryNote: React.FC<{
     </div>
   );
 };
+
+
+
+
+
+
 
 
 
@@ -2486,6 +2773,8 @@ ${memoryContent}
 
       
       
+
+
       
 
 
@@ -2648,10 +2937,6 @@ useEffect(() => {
 
 
 
-
-  // ==================== 视图部分 ====================
-// ==================== 视图部分：列表页 (修复顶部被遮挡问题) ====================
- // 这是一组代码：完整替换列表页（view === 'list'）的整个 return 块
 // ==================== 视图部分：列表页 (已修复崩溃问题) ====================
   if (view === 'list') {
     return (

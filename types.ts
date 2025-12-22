@@ -80,6 +80,7 @@ export interface ThemePreset {
 
 // HEF 情感框架
 export interface HEF {
+  
   META: {
     source_world: string;
     role_identity: string;
@@ -131,6 +132,7 @@ export interface HEF {
   INDIVIDUAL_VARIATION: {
     personality_big5: { openness: number; conscientiousness: number; extraversion: number; agreeableness: number; neuroticism: number; };
     habits_quirks: string[];
+     core_strength: number; // ★ 新增：内核强度 (1-10)，决定了负面情绪对他的影响有多大
     speech_style: string;
     body_language: string;
     irrationalities: string[];
@@ -192,11 +194,11 @@ export interface Contact {
   affectionScore: number;
   relationshipStatus: 'Acquaintance' | 'Friend' | 'Close Friend' | 'Intimate' | 'Conflict' | 'Breaking' | 'Broken';
   
-  // AI 状态
-  aiDND: {
+// ★★★ AI 生理状态 ★★★
+  aiDND: { // Do Not Disturb 勿扰模式
     enabled: boolean;
-    until: number;
-    reason?: string;
+    until: number; // 时间戳，直到几点前都不回消息
+    reason?: string; // "睡觉", "上课", "生气"
   };
   
   // 长期记忆 (新版)
@@ -207,6 +209,8 @@ export interface Contact {
     timestamp: number;
     meta?: any; // 用于存储来源等信息
   }[];
+
+  
   
   // 其他游戏化/高级功能
   interventionPoints: number;
