@@ -601,15 +601,15 @@ return (
     {/* 桌面 (逻辑不变) */}
     {currentApp === 'home' && renderHome()}
 
-    {/* ChatApp (逻辑不变) */}
-    {/* ChatApp - 终极修复版：只垫高顶部安全区，保持原生头部和输入框完全不动 */}
+
+    {/* ChatApp - 绝对终极修复版：只垫顶部 + 确保高度拉满 + 输入框不挤走 + 消息不留白底 */}
     {currentApp === 'chat' && (
-      <div className="h-full w-full flex flex-col">
-        {/* 唯一的作用：防止刘海遮住ChatApp自己的头部 */}
+      <div className="h-full w-full flex flex-col min-h-0">
+        {/* 顶部刘海垫片 */}
         <div className="h-[env(safe-area-inset-top)] flex-shrink-0" />
         
-        {/* ChatApp 原样放进去，什么都不包 */}
-        <div className="flex-1 flex flex-col min-h-0">
+        {/* ChatApp 占满剩余，所有内部布局原样生效 */}
+        <div className="flex-1 flex flex-col">
           <ChatApp
             contacts={contacts}
             setContacts={setContacts}
