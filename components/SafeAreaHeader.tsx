@@ -16,10 +16,10 @@ const SafeAreaHeader: React.FC<SafeAreaHeaderProps> = ({ title, left, right }) =
     left: 0,
     right: 0,
     zIndex: 50,
-    background: 'rgba(255, 255, 255, 0.9)',
+    background: 'white',  // 原来是 'rgba(255, 255, 255, 0.9)' →
     backdropFilter: 'blur(12px)',
     WebkitBackdropFilter: 'blur(12px)',
-    borderBottom: '1px solid rgba(0, 0, 0, 0.1)',
+   borderBottom: '1px solid rgba(0, 0, 0, 0.05)',  // 边框也淡一点，更自然
     paddingTop: 'env(safe-area-inset-top)',  // 只在刘海区加 padding
     paddingBottom: '0.5rem',
     paddingLeft: '1rem',

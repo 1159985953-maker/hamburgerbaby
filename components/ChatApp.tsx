@@ -2644,8 +2644,13 @@ useEffect(() => {
   if (view === 'list') {
     return (
       // 1. 外层容器：占满全屏，背景色铺满
-      <div className="h-full w-full bg-gray-50 flex flex-col relative overflow-hidden">
-        
+// 这是一组代码：替换列表页最外层 div（避免被 SafeAreaHeader 挡住）
+<div 
+  className="h-full w-full bg-gray-50 flex flex-col relative overflow-hidden"
+  style={{
+    paddingTop: 'calc(44px + env(safe-area-inset-top))'  // ★关键：和聊天页一样，内容从 header 下开始
+  }}
+>
         {/* 2. 顶部占位：处理刘海屏 (Status Bar) */}
         {/* 这一行非常重要！它把内容往下推，避开手机的时间/电量栏 */}
         <div style={{ height: `env(safe-area-inset-top)` }} className="w-full bg-gray-50 shrink-0" />
@@ -2748,10 +2753,11 @@ useEffect(() => {
         </div>
 
         {/* 5. 底部导航栏 */}
-        <div 
-          className="absolute bottom-0 left-0 right-0 bg-white border-t flex justify-around pt-3 shadow-[0_-5px_15px_rgba(0,0,0,0.05)] z-50"
-          style={{ paddingBottom: `calc(12px + env(safe-area-inset-bottom))` }}
-        >
+       // 这是一组代码：替换底部导航栏为 fixed（真正全屏，不留白条）
+<div
+  className="fixed bottom-0 left-0 right-0 bg-white border-t flex justify-around pt-3 shadow-[0_-5px_15px_rgba(0,0,0,0.05)] z-50"
+  style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}  // 只留系统安全区，不额外加
+>
           <button onClick={() => setNavTab('chats')} className={`flex flex-col items-center ${navTab === 'chats' ? 'text-blue-500' : 'text-gray-400'}`}>
             <span className="text-xl">💬</span>
             <span className="text-[10px] font-bold">聊天</span>
