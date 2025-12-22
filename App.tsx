@@ -433,7 +433,7 @@ setGlobalSettings(prev => ({
       <div className="left-12 bottom-2 w-200/3 flex-10 flex px-6 py-6 gap-8">
 
         {/* 左边小正方形照片框 */}
-        <div className="left- bottom-1 w-1/3 aspect-square rounded-3xl overflow-hidden shadow-2xl border-8 border-white/80 relative mt-0">
+        <div className="left- bottom-1 w-1/3 rounded-3xl overflow-hidden shadow-2xl border-8 border-white/80 relative mt-0">
           <img 
   src={leftFrame || "https://picsum.photos/400/400?random=2"} 
   className="w-full h-full object-cover" 
@@ -526,122 +526,123 @@ setGlobalSettings(prev => ({
 
 
   // ==================== 7. 主渲染 JSX ====================
+// ========== 用这段新代码替换上面的一整块 ==========
 return (
-  <div className="h-screen w-screen bg-black flex items-center justify-center overflow-hidden">
-    {/* 手机外框容器 */}
-    <div className="w-full h-full sm:w-[375px] sm:h-[812px] bg-black sm:rounded-[3rem] sm:border-[8px] sm:border-gray-800 overflow-hidden shadow-2xl relative ring-4 ring-gray-900/50 flex flex-col">
-      {/* 1. 刘海 (Dynamic Island) */}
-      <div className="absolute top-0 left-1/2 transform -translate-x-1/2 w-[120px] h-[35px] bg-black rounded-b-3xl z-[100] hidden sm:block pointer-events-none"></div>
-
-      {/* 2. 顶部弹窗通知 */}
-      {globalNotification && (
-        <div
-          onClick={() => {
-            setJumpToContactId(globalNotification.contactId);
-            setCurrentApp('chat');
-            setGlobalNotification(null);
-          }}
-          className="absolute top-12 left-3 right-3 z-[999] bg-white/95 backdrop-blur-md rounded-2xl p-3 shadow-[0_8px_30px_rgb(0,0,0,0.12)] border border-gray-100 flex items-center gap-3 cursor-pointer animate-slideDown active:scale-95 transition-transform duration-200"
-        >
-          <div className="relative">
-            <img src={globalNotification.avatar} className="w-10 h-10 rounded-full object-cover border border-gray-200" alt="avatar" />
-            {globalNotification.type === 'proactive_thinking' && (
-              <span className="absolute bottom-0 right-0 w-3 h-3 bg-blue-500 border-2 border-white rounded-full animate-ping"></span>
-            )}
-          </div>
-          <div className="flex-1 min-w-0 flex flex-col justify-center">
-            <div className="flex justify-between items-center">
-              <span className="font-bold text-sm text-gray-900 truncate">{globalNotification.name}</span>
-              <span className="text-[10px] text-gray-400">刚刚</span>
-            </div>
-            {globalNotification.type === 'proactive_thinking' ? (
-              <p className="text-xs text-blue-600 font-medium truncate flex items-center gap-1">
-                <span>正在输入...</span><span className="animate-pulse">💬</span>
-              </p>
-            ) : (
-              <p className="text-xs text-gray-600 truncate leading-tight">
-                {globalNotification.content || '发来一条新消息'}
-              </p>
-            )}
-          </div>
+  // 直接让这个 div 成为 App 的根容器，占满整个屏幕
+  <div className="h-screen w-screen bg-black flex flex-col overflow-hidden relative">
+    {/* 我们删掉了外面的手机框和里面的刘海！ */}
+    
+    {/* 顶部弹窗通知 (这部分逻辑不变) */}
+    {globalNotification && (
+      <div
+        onClick={() => {
+          setJumpToContactId(globalNotification.contactId);
+          setCurrentApp('chat');
+          setGlobalNotification(null);
+        }}
+        className="absolute top-12 left-3 right-3 z-[999] bg-white/95 backdrop-blur-md rounded-2xl p-3 shadow-[0_8px_30px_rgb(0,0,0,0.12)] border border-gray-100 flex items-center gap-3 cursor-pointer animate-slideDown active:scale-95 transition-transform duration-200"
+        // ↓↓↓ 新增一个 style 来处理刘海屏，让通知往下移一点 ↓↓↓
+        style={{ top: `calc(env(safe-area-inset-top, 0rem) + 1rem)` }}
+      >
+        <div className="relative">
+          <img src={globalNotification.avatar} className="w-10 h-10 rounded-full object-cover border border-gray-200" alt="avatar" />
+          {globalNotification.type === 'proactive_thinking' && (
+            <span className="absolute bottom-0 right-0 w-3 h-3 bg-blue-500 border-2 border-white rounded-full animate-ping"></span>
+          )}
         </div>
-      )}
+        <div className="flex-1 min-w-0 flex flex-col justify-center">
+          <div className="flex justify-between items-center">
+            <span className="font-bold text-sm text-gray-900 truncate">{globalNotification.name}</span>
+            <span className="text-[10px] text-gray-400">刚刚</span>
+          </div>
+          {globalNotification.type === 'proactive_thinking' ? (
+            <p className="text-xs text-blue-600 font-medium truncate flex items-center gap-1">
+              <span>正在输入...</span><span className="animate-pulse">💬</span>
+            </p>
+          ) : (
+            <p className="text-xs text-gray-600 truncate leading-tight">
+              {globalNotification.content || '发来一条新消息'}
+            </p>
+          )}
+        </div>
+      </div>
+    )}
 
-      {/* 3. 桌面 */}
-      {currentApp === 'home' && renderHome()}
+    {/* 桌面 (逻辑不变) */}
+    {currentApp === 'home' && renderHome()}
 
-      {/* 4. ChatApp (后台隐身) */}
-      <div className="w-full h-full bg-white" style={{ display: currentApp === 'chat' ? 'block' : 'none' }}>
-        <ChatApp
+    {/* ChatApp (逻辑不变) */}
+    <div className="w-full h-full bg-white" style={{ display: currentApp === 'chat' ? 'block' : 'none' }}>
+      <ChatApp
+        contacts={contacts}
+        setContacts={setContacts}
+        globalSettings={globalSettings}
+        setGlobalSettings={setGlobalSettings}
+        worldBooks={worldBooks}
+        setWorldBooks={setWorldBooks}
+        onExit={() => setCurrentApp('home')}
+        isBackground={currentApp !== 'chat'}
+        initialContactId={jumpToContactId}
+        onChatOpened={() => setJumpToContactId(null)}
+        onNewMessage={(contactId, name, avatar, content) => {
+          setGlobalNotification({ type: 'new_message', contactId, name, avatar, content });
+          setTimeout(() => setGlobalNotification(null), 5000);
+        }}
+      />
+    </div>
+
+    {/* 其他 App (逻辑不变) */}
+    {currentApp === 'coupleSpace' && contacts[0] && (
+      (() => {
+        let target = contacts[0];
+        const safeProfile = {
+          ...target,
+          name: target.name || "Unknown",
+          avatar: target.avatar || "",
+          mood: target.mood || { current: "Content", energyLevel: 80, lastUpdate: Date.now() },
+          userName: target.userName || "Darling",
+          diaries: target.diaries || [],
+          coupleSpaceUnlocked: target.coupleSpaceUnlocked || false,
+          history: target.history || [],
+          summary: target.summary || ""
+        };
+        const recentHistory = Array.isArray(target.history) && target.history.length > 0
+          ? target.history.slice(-5).map((msg: any) => `${msg?.role === 'user' ? target.userName : target.name}: ${msg?.content || ''}`).join('\n')
+          : "暂无历史对话";
+        return (
+          <CoupleSpace
+            profile={safeProfile}
+            chatMemorySummary={`Summary: ${target.summary}\nRecent:\n${recentHistory}`}
+            onClose={() => setCurrentApp('home')}
+            onUnlock={() => updatePrimaryContact(prev => ({ ...prev, coupleSpaceUnlocked: true }))}
+          />
+        );
+      })()
+    )}
+
+    {currentApp === 'settings' && (
+      <div className="absolute inset-0 z-50">
+        <SettingsApp
+          settings={globalSettings}
+          setSettings={setGlobalSettings}
           contacts={contacts}
           setContacts={setContacts}
-          globalSettings={globalSettings}
-          setGlobalSettings={setGlobalSettings}
           worldBooks={worldBooks}
           setWorldBooks={setWorldBooks}
-          onExit={() => setCurrentApp('home')}
-          isBackground={currentApp !== 'chat'}
-          initialContactId={jumpToContactId}
-          onChatOpened={() => setJumpToContactId(null)}
-          onNewMessage={(contactId, name, avatar, content) => {
-            setGlobalNotification({ type: 'new_message', contactId, name, avatar, content });
-            setTimeout(() => setGlobalNotification(null), 5000);
-          }}
+          onClose={() => setCurrentApp('home')}
         />
       </div>
+    )}
+    {currentApp === 'worldbook' && (
+      <WorldBookApp worldBooks={worldBooks} setWorldBooks={setWorldBooks} onClose={() => setCurrentApp('home')} />
+    )}
 
-      {/* 5. 其他 App */}
-      {currentApp === 'coupleSpace' && contacts[0] && (
-        (() => {
-          let target = contacts[0];
-          const safeProfile = {
-            ...target,
-            name: target.name || "Unknown",
-            avatar: target.avatar || "",
-            mood: target.mood || { current: "Content", energyLevel: 80, lastUpdate: Date.now() },
-            userName: target.userName || "Darling",
-            diaries: target.diaries || [],
-            coupleSpaceUnlocked: target.coupleSpaceUnlocked || false,
-            history: target.history || [],
-            summary: target.summary || ""
-          };
-          const recentHistory = Array.isArray(target.history) && target.history.length > 0
-            ? target.history.slice(-5).map((msg: any) => `${msg?.role === 'user' ? target.userName : target.name}: ${msg?.content || ''}`).join('\n')
-            : "暂无历史对话";
-          return (
-            <CoupleSpace
-              profile={safeProfile}
-              chatMemorySummary={`Summary: ${target.summary}\nRecent:\n${recentHistory}`}
-              onClose={() => setCurrentApp('home')}
-              onUnlock={() => updatePrimaryContact(prev => ({ ...prev, coupleSpaceUnlocked: true }))}
-            />
-          );
-        })()
-      )}
-
-{currentApp === 'settings' && (
-  <div className="absolute inset-0 z-50">  {/* inset-0 = top-0 right-0 bottom-0 left-0 */}
-    <SettingsApp
-      settings={globalSettings}
-      setSettings={setGlobalSettings}
-      contacts={contacts}
-      setContacts={setContacts}
-      worldBooks={worldBooks}
-      setWorldBooks={setWorldBooks}
-      onClose={() => setCurrentApp('home')}
-    />
-  </div>
-)}
-      {currentApp === 'worldbook' && (
-        <WorldBookApp worldBooks={worldBooks} setWorldBooks={setWorldBooks} onClose={() => setCurrentApp('home')} />
-      )}
-
-      {currentApp === 'wallpaper' && (
-        <WallpaperApp settings={globalSettings} setSettings={setGlobalSettings} onClose={() => setCurrentApp('home')} />
-      )}
-    </div>
+    {currentApp === 'wallpaper' && (
+      <WallpaperApp settings={globalSettings} setSettings={setGlobalSettings} onClose={() => setCurrentApp('home')} />
+    )}
   </div>
 );
 };
+// ========== 新代码到此结束 ==========
 
 export default App;
