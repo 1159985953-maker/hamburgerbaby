@@ -2024,7 +2024,7 @@ const generateDefaultHEF = (name: string, persona: string = ""): HEF => {
         triggers: ["被命令式语气", "被忽视意见"]
       },
       peers: {
-        default_style: "互损互爱",
+        default_style: "根据人设",
         jealousy_points: ["依据设定（占有欲强者易吃醋，独立者则不在意）"],
         trust_rules: "信任需要互动积累"
       },
@@ -4266,6 +4266,7 @@ return (
   
   
 {/* 这是一组代码：消息渲染核心 (完美还原尖角样式 + 整体缩放支持) */}
+{/* 这是一组代码：消息渲染核心 (修复头像变形 + 统一左右间距 + 紧凑布局) */}
 {activeContact.history.map((msg, index) => {
     // 1. 计算时间间隔
     let showInterval = false;
@@ -4276,9 +4277,7 @@ return (
       if (intervalMinutes > 20) { showInterval = true; }
     }
     
-    // 2. 连续发言判断 (逻辑：同一个人发 + 间隔短 = 连续)
-    // 如果是连续的，头像会隐藏，且气泡不需要尖角
-    // 如果是第一条 (!isConsecutive)，需要显示头像 + 尖角
+    // 2. 连续发言判断
     const isConsecutive = index > 0 && activeContact.history[index - 1].role === msg.role && !showInterval;
     const isSelected = selectedIds.includes(msg.id);
     const duration = msg.voiceDuration || 10;
@@ -4286,12 +4285,11 @@ return (
     const isEditing = editingMsgId === msg.id;
 
     // ★★★ 3. 计算缩放后的尺寸 ★★★
-    // 默认比例是 1。基础头像40px，基础字体14px。
     const scale = activeContact.chatScale || 1; 
     const currentAvatarSize = 40 * scale; 
     const currentFontSize = `${14 * scale}px`;
-    const currentPaddingY = `${5 * scale}px`; // 纵向内边距随比例缩放
-    const currentPaddingX = `${12 * scale}px`; // 横向内边距随比例缩放
+    const currentPaddingY = `${6 * scale}px`; 
+    const currentPaddingX = `${12 * scale}px`;
 
     // 颜色设置
     const userBg = activeContact.bubbleColorUser || '#22c55e';
@@ -4308,47 +4306,48 @@ return (
         )}
 
        <div 
-         className={`message-wrapper ${msg.role === 'user' ? 'user' : 'ai'} flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'} animate-slideUp mb-4`}
-         style={{ minHeight: `${currentAvatarSize}px` }} // 确保行高至少容纳头像
+         // ▼▼▼ 修复点 1：mb-1 让上下消息非常紧凑；gap-3 统一拉开头像与气泡的距离 ▼▼▼
+         className={`message-wrapper ${msg.role === 'user' ? 'user' : 'ai'} flex gap-3 ${msg.role === 'user' ? 'justify-end' : 'justify-start'} animate-slideUp mb-1`}
+         style={{ minHeight: `${currentAvatarSize}px` }} 
        >
           {/* 多选勾选框 */}
           {isSelectionMode && (
-            <div className={`mx-2 flex items-center justify-center ${msg.role === 'user' ? 'order-2' : 'order-1'}`}>
+            <div className={`flex items-center justify-center ${msg.role === 'user' ? 'order-2' : 'order-1'}`}>
               <div onClick={() => toggleMessageSelection(msg.id)} className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${isSelected ? 'bg-blue-500 border-blue-500' : 'border-gray-300 bg-white'}`}>
                 {isSelected && <span className="text-white text-xs font-bold">✓</span>}
               </div>
             </div>
           )}
 
-          {/* ★★★ 头像区域 (大小随 scale 变化) ★★★ */}
+          {/* ★★★ 头像区域 (修复变形的关键) ★★★ */}
           <div 
-             className={`shrink-0 self-start flex ${msg.role === 'user' ? 'justify-end order-3' : 'justify-start order-1'}`}
-             style={{ width: `${currentAvatarSize}px` }}
+             // ▼▼▼ 修复点 2：flex-none 禁止压缩，minWidth 强制保留宽度，解决头像变成半月形的问题 ▼▼▼
+             className={`flex-none flex ${msg.role === 'user' ? 'justify-end order-3' : 'justify-start order-1'}`}
+             style={{ width: `${currentAvatarSize}px`, height: `${currentAvatarSize}px`, minWidth: `${currentAvatarSize}px` }}
           >
             {msg.role === 'assistant' && !isConsecutive && (
                 <img 
                     src={activeContact.avatar} 
-                    className="rounded-full object-cover border border-gray-100" 
-                    style={{ width: `${currentAvatarSize}px`, height: `${currentAvatarSize}px` }} 
+                    className="rounded-full object-cover border border-gray-100 shadow-sm w-full h-full block" 
                     alt="AI" 
                 />
             )}
             {msg.role === 'user' && !isConsecutive && (
                 <img 
                     src={activeContact.userAvatar} 
-                    className="rounded-full ml-2 object-cover border border-white" 
-                    style={{ width: `${currentAvatarSize}px`, height: `${currentAvatarSize}px` }} 
+                    className="rounded-full object-cover border border-white shadow-sm w-full h-full block" 
                     alt="user" 
                 />
             )}
-            {/* 连续发言占位，保持缩进 */}
+            {/* 连续发言占位 */}
             {isConsecutive && <div style={{ width: `${currentAvatarSize}px` }}></div>}
           </div>
 
           {/* ★★★ 气泡核心区域 ★★★ */}
-          <div className={`flex items-end gap-2 order-2 ${msg.role === 'user' ? 'flex-row-reverse' : 'flex-row'} max-w-[75%]`}>
+          {/* ▼▼▼ 修复点 3：gap-1.5 缩小时间戳和气泡的间距，max-w-[75%] 保持气泡宽度限制 ▼▼▼ */}
+          <div className={`flex items-end gap-1.5 order-2 ${msg.role === 'user' ? 'flex-row-reverse' : 'flex-row'} max-w-[75%]`}>
             <div
-              className={`message-bubble min-w-0 relative group transition-transform duration-75 active:scale-95`} // 修复：长按缩放动画 active:scale-95
+              className={`message-bubble min-w-0 relative group transition-transform duration-75 active:scale-95`}
               onTouchStart={() => handleTouchStart(msg)}
               onTouchEnd={handleTouchEnd}
               onMouseDown={() => handleTouchStart(msg)}
@@ -4357,7 +4356,6 @@ return (
               onContextMenu={(e) => e.preventDefault()}
             >
               {isEditing ? (
-                // 编辑模式
                 <div className="bg-white border-2 border-blue-400 rounded-xl p-2 shadow-lg min-w-[200px]">
                   <textarea
                     value={editContent}
@@ -4374,7 +4372,6 @@ return (
                   </div>
                 </div>
               ) : (
-                // ★★★ 正常气泡 (尖角逻辑在这里！) ★★★
                 <div 
                    className={
                     `content rounded-xl leading-relaxed relative break-words whitespace-pre-wrap shadow-sm ` + 
@@ -4388,12 +4385,9 @@ return (
                        paddingLeft: currentPaddingX,
                        paddingRight: currentPaddingX,
                        
-                       // ★★★ 核心样式修复：尖尖角 ★★★
-                       // 如果是用户(user) 且 是第一条(!isConsecutive) -> 右上角变成直角(2px)
+                       // 尖角逻辑
                        borderTopRightRadius: (msg.role === 'user' && !isConsecutive) ? '2px' : '16px',
-                       // 如果是AI(assistant) 且 是第一条(!isConsecutive) -> 左上角变成直角(2px)
                        borderTopLeftRadius: (msg.role === 'assistant' && !isConsecutive) ? '2px' : '16px',
-                       // 其他角保持圆润
                        borderBottomLeftRadius: '16px',
                        borderBottomRightRadius: '16px',
                    }}
@@ -4417,14 +4411,14 @@ return (
                     <HiddenBracketText
                         content={msg.content.replace(/^>.*?\n\n/, '')}
                         msgId={msg.id}
-                        fontSize={""} // 使用继承的 font-size
+                        fontSize={""}
                     />
                   )}
                 </div>
               )}
             </div>
-            {/* 时间戳 */}
-            {!isEditing && <div className="text-[10px] text-gray-400 whitespace-nowrap shrink-0 pb-1">{timeStr}</div>}
+            {/* 时间戳 (去掉 pb-1，让它更紧凑) */}
+            {!isEditing && <div className="text-[9px] text-gray-300 whitespace-nowrap shrink-0 opacity-60 select-none mb-0.5">{timeStr}</div>}
           </div>
         </div>
       </React.Fragment>
@@ -4496,7 +4490,7 @@ style={{ paddingBottom: '12px' }}  // 只留一点内间距，让输入框不紧
               <div className="flex justify-around mt-4 pb-2 animate-slideUp border-t pt-3">
                 <label className="flex flex-col items-center gap-1 cursor-pointer hover:opacity-80 transition"><div className="w-12 h-12 bg-blue-500 rounded-full flex items-center justify-center text-white text-xl shadow-md hover:scale-105 transition">📷</div><span className="text-xs text-gray-600">照片</span><input type="file" accept="image/*" className="hidden" onChange={handleImageSend} /></label>
                 <div onClick={() => { const text = prompt("输入图片描述:"); if (text) handleUserSend('text', `[FakeImage] ${text}`); setShowPlusMenu(false); }} className="flex flex-col items-center gap-1 cursor-pointer hover:opacity-80 transition"><div className="w-12 h-12 bg-green-500 rounded-full flex items-center justify-center text-white text-xl shadow-md hover:scale-105 transition">🖼️</div><span className="text-xs text-gray-600">伪图</span></div>
-                <div onClick={() => { setShowVoiceInput(true); setVoiceInput(""); setShowPlusMenu(false); }} className="flex flex-col items-center gap-1 cursor-pointer hover:opacity-80 transition"><div className="w-12 h-12 bg-purple-500 rounded-full flex items-center justify-center text-white text-xl shadow-md hover:scale-105 transition">🎙️</div><span className="text-xs text-gray-600">语音</span></div>
+                <div onClick={() => { setShowVoiceInput(true); setVoiceInput(""); setShowPlusMenu(false); }} className="flex flex-col items-center gap-1 cursor-pointer hover:opacity-80 transition"><div className="w-12 h-12 bg-purple-500 rounded-full flex items-center justify-center text-white text-xl shadow-md hover:scale-105 transition">💬</div><span className="text-xs text-gray-600">语音</span></div>
                 <div onClick={() => setShowSongModal(true)} className="flex flex-col items-center gap-1 cursor-pointer hover:opacity-80 transition"><div className="w-12 h-12 bg-pink-500 rounded-full flex items-center justify-center text-white text-xl shadow-md hover:scale-105 transition">🎵</div><span className="text-xs text-gray-600">点歌</span></div>
                 {activeContact?.history.some(m => m.role === 'assistant') && (<div onClick={() => { handleRegenerateLast(); setShowPlusMenu(false); }} className="flex flex-col items-center gap-1 cursor-pointer hover:opacity-80 transition"><div className="w-12 h-12 bg-orange-500 rounded-full flex items-center justify-center text-white text-xl shadow-md hover:scale-105 transition">🔄</div><span className="text-xs text-gray-600">重roll</span></div>)}
               </div>
