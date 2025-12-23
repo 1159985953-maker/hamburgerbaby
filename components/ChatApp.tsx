@@ -3925,30 +3925,25 @@ if (view === 'settings' && activeContact) {
           <h3 className="text-xs font-bold text-gray-400 uppercase mb-3">🎨 Appearance Customization</h3>
 
 {/* 聊天窗口整体大小调节 */}
+{/* 聊天气泡整体缩放 */}
 <section className="bg-white rounded-2xl p-4 shadow-sm border border-gray-200">
-  <h3 className="text-xs font-bold text-gray-400 uppercase mb-3">💬 聊天元素整体缩放</h3>
-  <div className="space-y-4">
-    <div>
-      <label className="text-xs font-bold text-gray-500 block mb-1">整体大小比例（头像 + 气泡同步）</label>
-      <div className="flex items-center gap-3">
-        <input
-          type="range"
-          min="0.8"
-          max="1.5"
-          step="0.1"
-          value={form.chatScale || 1}
-          onChange={e => setEditForm({ ...editForm, chatScale: parseFloat(e.target.value) || 1 })}
-          className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-500"
-        />
-        <span className="text-sm font-bold text-blue-600 w-12 text-right">
-          {(form.chatScale || 1).toFixed(1)}x
-        </span>
-      </div>
-      <p className="text-[10px] text-gray-500 mt-1">滑块越大，头像和气泡都同步变大，间距也会自动保持协调</p>
-    </div>
+  <h3 className="text-xs font-bold text-gray-400 uppercase mb-3">💬 气泡+头像整体缩放</h3>
+  <div className="flex items-center gap-3">
+    <input
+      type="range"
+      min="0.8"
+      max="1.4"
+      step="0.05"
+      value={form.chatScale || 1}
+      onChange={e => setEditForm({ ...editForm, chatScale: parseFloat(e.target.value) || 1 })}
+      className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-500"
+    />
+    <span className="text-sm font-bold text-blue-600 w-12 text-right">
+      {(form.chatScale || 1).toFixed(2)}x
+    </span>
   </div>
+  <p className="text-[10px] text-gray-500 mt-2">调整头像和气泡大小，保持完美协调</p>
 </section>
-
 
 
 {/* 列表页自定义 */}
