@@ -1,32 +1,199 @@
+// --- 这是全新的、多页面沉浸式情侣空间组件 ---
 import React, { useState, useEffect } from 'react';
-import { DiaryEntry, QAEntry, LoveLetter, Contact } from '../types'; 
-import { generateDailyDiary, generateDailyQuestion } from '../services/geminiService';
-import SafeAreaHeader from './SafeAreaHeader';  // ← 确保路径正确（如果在 components 同级）
+import { Contact, DiaryEntry, QAEntry, LoveLetter, Message } from '../types';
+import SafeAreaHeader from './SafeAreaHeader';
+
+// ★ 新增：一个回调函数类型，用于通知ChatApp发生了什么
+type CoupleSpaceActionCallback = (systemMessage: string) => void;
 
 interface CoupleSpaceProps {
-  // 注意：App.tsx 传进来的是经过防御处理的 safeProfile，本质是 Contact 类型
-  profile: any; 
-  chatMemorySummary: string; 
+  profile: Contact;
   onClose: () => void;
-  onUnlock: () => void;
+  onUnlock: (contactId: string) => void;
+  setContacts: React.Dispatch<React.SetStateAction<Contact[]>>;
+  // ★ 新增：接收这个回调函数
+  onCoupleSpaceAction: CoupleSpaceActionCallback; 
 }
 
-const CoupleSpace: React.FC<CoupleSpaceProps> = ({ profile, chatMemorySummary, onClose, onUnlock }) => {
-  const [activeTab, setActiveTab] = useState<'diary' | 'qa' | 'letters'>('diary');
-  const [diaries, setDiaries] = useState<DiaryEntry[]>(profile.diaries || []);
-  const [questions, setQuestions] = useState<QAEntry[]>(profile.questions || []);
-  const [letters, setLetters] = useState<LoveLetter[]>(profile.letters || []);
-  const [loading, setLoading] = useState(false);
+const CoupleSpace: React.FC<CoupleSpaceProps> = ({ profile, onClose, onUnlock, setContacts, onCoupleSpaceAction }) => {
+  // --- 核心状态：当前在哪个“房间” ---
+  const [currentPage, setCurrentPage] = useState<'hub' | 'diary' | 'qa' | 'letters' | 'album'>('hub');
+  const [qaTempAnswers, setQaTempAnswers] = useState<{ [qaId: string]: string }>({});
 
-  // 初始化检查
-  useEffect(() => {
-    if (!diaries || diaries.length === 0) {
-      generateDailyContent();
+  // --- 渲染主页 (Hub) ---
+  const renderHub = () => (
+    <div className="p-6 pt-12 space-y-6 animate-fadeIn">
+      <div className="text-center">
+        <img src={profile.avatar} className="w-20 h-20 rounded-full mx-auto mb-3 border-4 border-white shadow-lg" alt="avatar" />
+        <h2 className="text-2xl font-bold text-gray-800">我们的空间</h2>
+        <p className="text-sm text-gray-500">和 {profile.name} 在一起的第 {Math.floor((Date.now() - (profile.created || Date.now())) / 86400000) + 1} 天</p>
+      </div>
+      
+      <div className="grid grid-cols-2 gap-4">
+        {/* 日记本入口 */}
+        <div onClick={() => setCurrentPage('diary')} className="bg-yellow-50 border-2 border-yellow-200 rounded-2xl p-4 flex flex-col items-center justify-center aspect-square cursor-pointer hover:shadow-lg hover:scale-105 transition-all">
+          <span className="text-5xl">📖</span>
+          <h3 className="font-bold mt-2 text-yellow-800">心情日记</h3>
+        </div>
+        
+        {/* 问答信箱入口 */}
+        <div onClick={() => setCurrentPage('qa')} className="bg-blue-50 border-2 border-blue-200 rounded-2xl p-4 flex flex-col items-center justify-center aspect-square cursor-pointer hover:shadow-lg hover:scale-105 transition-all">
+          <span className="text-5xl">❓</span>
+          <h3 className="font-bold mt-2 text-blue-800">问答信箱</h3>
+        </div>
+
+        {/* 告白信入口 */}
+        <div onClick={() => setCurrentPage('letters')} className="bg-pink-50 border-2 border-pink-200 rounded-2xl p-4 flex flex-col items-center justify-center aspect-square cursor-pointer hover:shadow-lg hover:scale-105 transition-all">
+          <span className="text-5xl">💌</span>
+          <h3 className="font-bold mt-2 text-pink-800">告白信件</h3>
+        </div>
+        
+        {/* 回忆相册入口 */}
+        <div onClick={() => setCurrentPage('album')} className="bg-purple-50 border-2 border-purple-200 rounded-2xl p-4 flex flex-col items-center justify-center aspect-square cursor-pointer hover:shadow-lg hover:scale-105 transition-all">
+          <span className="text-5xl">🖼️</span>
+          <h3 className="font-bold mt-2 text-purple-800">回忆相册</h3>
+        </div>
+      </div>
+    </div>
+  );
+
+  // --- 渲染日记本页面 ---
+  const renderDiary = () => (
+    <div className="p-4 space-y-4 animate-fadeIn">
+      {(profile.diaries || []).length === 0 ? (
+        <div className="text-center py-20 text-gray-400">还没写过日记呢...</div>
+      ) : (
+        [...(profile.diaries || [])].sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime()).map(diary => (
+          <div key={diary.id} className="bg-white p-5 rounded-lg shadow-sm border">
+            <div className="flex justify-between items-center mb-2">
+              <span className="text-xs font-bold text-gray-600">{diary.date}</span>
+              <span className="text-lg">{diary.weather} {diary.moodEmoji}</span>
+            </div>
+            <p className="text-gray-700 text-sm leading-relaxed whitespace-pre-wrap font-serif">{diary.content}</p>
+          </div>
+        ))
+      )}
+    </div>
+  );
+
+  // --- 渲染问答卡片箱页面 ---
+  const renderQACards = () => {
+    const questions = [...(profile.questions || [])].sort((a,b) => b.timestamp - a.timestamp);
+    return (
+      <div className="p-4 h-full flex flex-col animate-fadeIn">
+        <div className="flex-1 overflow-y-auto space-y-4">
+          {questions.length === 0 ? (
+             <div className="text-center py-20 text-gray-400">还没有提问过...</div>
+          ) : (
+            questions.map(qa => (
+              <div key={qa.id} className="bg-white p-4 rounded-xl shadow-lg border border-gray-100 space-y-3">
+                <p className="font-bold text-gray-800">"{qa.question}"</p>
+                {qa.userAnswer ? (
+                  <div>
+                    <p className="text-xs text-blue-500 font-bold mb-1">你的回答:</p>
+                    <p className="text-sm italic bg-blue-50 p-3 rounded-lg text-blue-800">"{qa.userAnswer}"</p>
+                  </div>
+                ) : (
+                  <div className="flex flex-col items-end">
+                    <textarea
+                      placeholder="写下你的回答..."
+                      value={qaTempAnswers[qa.id] || ''}
+                      onChange={e => setQaTempAnswers(prev => ({ ...prev, [qa.id]: e.target.value }))}
+                      className="w-full text-sm p-3 rounded-lg border focus:ring-2 focus:ring-blue-200 outline-none"
+                      rows={3}
+                    />
+                    <button
+                      onClick={() => {
+                        const answer = qaTempAnswers[qa.id]?.trim();
+                        if (!answer) return alert("回答不能为空！");
+                        // 1. 更新数据
+                        setContacts(prev => prev.map(c => 
+                          c.id === profile.id ? { ...c, questions: (c.questions || []).map(q => q.id === qa.id ? {...q, userAnswer: answer} : q) } : c
+                        ));
+                        // 2. ★ 发送系统消息回传给聊天窗口！
+                        onCoupleSpaceAction(`[情侣空间] 我回答了问题“${qa.question}”，我的答案是：“${answer}”`);
+                        alert("回答已保存！AI稍后可能会在聊天里提到哦~");
+                      }}
+                      className="mt-2 bg-blue-500 text-white px-4 py-2 rounded-lg font-bold text-xs"
+                    >
+                      确认回答
+                    </button>
+                  </div>
+                )}
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+    );
+  };
+  
+  // --- 渲染信箱页面 ---
+  const renderMailbox = () => {
+     const letters = [...(profile.letters || [])].sort((a,b) => b.timestamp - a.timestamp);
+     return (
+       <div className="p-4 space-y-3 animate-fadeIn">
+          {letters.length === 0 ? (
+             <div className="text-center py-20 text-gray-400">信箱是空的...</div>
+          ) : (
+            letters.map(letter => (
+              <div key={letter.id} 
+                onClick={() => {
+                  if (!letter.isOpened) {
+                    setContacts(prev => prev.map(c => c.id === profile.id ? {...c, letters: (c.letters || []).map(l => l.id === letter.id ? {...l, isOpened: true} : l) } : c));
+                  }
+                }}
+                className={`p-4 rounded-lg shadow-md border flex items-start gap-4 cursor-pointer transition-all ${letter.isOpened ? 'bg-white' : 'bg-pink-100 animate-pulse'}`}>
+                  <div className="text-3xl mt-1">{letter.isOpened ? '💌' : '✉️'}</div>
+                  <div className="flex-1">
+                      <h4 className="font-bold text-gray-800">{letter.title}</h4>
+                      {letter.isOpened ? (
+                        <p className="text-sm text-gray-600 mt-1">{letter.content}</p>
+                      ) : (
+                        <p className="text-sm text-pink-700 font-bold mt-1">点击拆开信件...</p>
+                      )}
+                      <p className="text-xs text-gray-400 text-right mt-2">{new Date(letter.timestamp).toLocaleDateString()}</p>
+                  </div>
+              </div>
+            ))
+          )}
+       </div>
+     );
+  };
+
+  // --- 渲染相册页面 ---
+  const renderAlbum = () => {
+    const images = (profile.history || []).filter(msg => msg.type === 'image' || (msg.content && msg.content.startsWith('data:image')));
+    return (
+      <div className="p-4 animate-fadeIn">
+        {images.length === 0 ? (
+          <div className="text-center py-20 text-gray-400">相册里还没有照片...</div>
+        ) : (
+          <div className="grid grid-cols-2 gap-2">
+            {images.map(img => (
+              <div key={img.id} className="rounded-lg overflow-hidden shadow-md">
+                <img src={img.content} className="w-full h-full object-cover aspect-square" alt="memory"/>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    )
+  };
+
+  // --- 根据当前页面状态，决定渲染哪个页面 ---
+  const renderCurrentPage = () => {
+    switch (currentPage) {
+      case 'hub': return renderHub();
+      case 'diary': return renderDiary();
+      case 'qa': return renderQACards();
+      case 'letters': return renderMailbox();
+      case 'album': return renderAlbum();
+      default: return renderHub();
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  };
 
-  // 1. 未解锁状态的视图
+  // --- 未解锁视图 (保持不变) ---
   if (!profile.coupleSpaceUnlocked) {
     return (
       <div className="h-full w-full bg-pink-50 flex flex-col items-center justify-center p-6 text-center animate-fadeIn">
@@ -36,171 +203,39 @@ const CoupleSpace: React.FC<CoupleSpaceProps> = ({ profile, chatMemorySummary, o
           这是属于你们两个人的私密领地。在这里，{profile.name} 会记录关于你的点点滴滴。
         </p>
         <button
-          onClick={onUnlock}
-          className="bg-pink-500 hover:bg-pink-600 text-white px-10 py-4 rounded-full shadow-xl transform transition active:scale-95 font-bold tracking-wide"
+          onClick={() => onUnlock(profile.id)}
+          className="bg-pink-500 hover:bg-pink-600 text-white px-10 py-4 rounded-full shadow-xl"
         >
           💌 向 {profile.name} 发送空间邀请
         </button>
-        <button onClick={onClose} className="mt-6 text-gray-400 text-xs underline hover:text-pink-400 transition">
+        <button onClick={onClose} className="mt-6 text-gray-400 text-xs underline">
           返回桌面
         </button>
       </div>
     );
   }
 
-  // 2. 生成每日内容逻辑
-  // 在 CoupleSpace.tsx 里替换原来的 generateDailyContent
-
-  const generateDailyContent = async () => {
-    if (loading) return;
-    setLoading(true);
-
-    // ★★★ 暂时屏蔽真实 API，用假数据测试 UI 是否白屏 ★★★
-    setTimeout(() => {
-      const newDiary: DiaryEntry = {
-        id: Date.now().toString(),
-        author: 'ai',
-        date: new Date().toLocaleDateString(),
-        content: "这是测试日记。如果你能看到这条消息，说明你的 UI 没问题，是 Gemini API 报错导致的白屏！", 
-        mood: profile.mood?.current || "Testing"
-      };
-      setDiaries(prev => [newDiary, ...prev]);
-
-      const newQuestion: QAEntry = {
-        id: (Date.now() + 1).toString(),
-        question: "我们去吃火锅好不好？",
-        aiAnswer: "只要和你一起，吃什么都开心！",
-        date: new Date().toLocaleDateString()
-      };
-      setQuestions(prev => [newQuestion, ...prev]);
-      
-      setLoading(false);
-    }, 1000);
-  };
-
+  // --- 已解锁主视图 ---
   return (
-    <div className="h-full w-full bg-white flex flex-col overflow-hidden animate-slideUp">
-      {/* 顶部导航 */}
-      <div className="bg-gradient-to-r from-pink-500 to-purple-500 text-white p-4 flex justify-between items-center shadow-lg z-20">
-        <button onClick={onClose} className="text-2xl font-bold hover:opacity-70 transition">←</button>
-        <div className="text-center">
-          <h1 className="font-bold text-base">❤️ 我们的秘密空间</h1>
-          <p className="text-[10px] opacity-80">已陪伴 {Math.floor((Date.now() - (profile.created || Date.now())) / 86400000) + 1} 天</p>
-        </div>
-        <button 
-          onClick={generateDailyContent} 
-          disabled={loading}
-          className={`text-xs bg-white/20 px-3 py-1.5 rounded-full backdrop-blur transition active:scale-90 ${loading ? 'animate-pulse' : ''}`}
-        >
-          {loading ? '撰写中...' : '同步心跳'}
-        </button>
+    <div className="h-full w-full bg-gray-50 flex flex-col overflow-hidden">
+      <SafeAreaHeader
+        title={
+          <span className="font-bold text-white">
+            {currentPage === 'hub' ? '我们的空间' : 
+             currentPage === 'diary' ? '心情日记' :
+             currentPage === 'qa' ? '问答信箱' :
+             currentPage === 'letters' ? '告白信件' : '回忆相册'}
+          </span>
+        }
+        left={
+          currentPage === 'hub' ? 
+          <button onClick={onClose} className="text-white text-2xl">←</button> :
+          <button onClick={() => setCurrentPage('hub')} className="text-white text-sm">返回空间</button>
+        }
+      />
+      <div className="flex-1 overflow-y-auto">
+        {renderCurrentPage()}
       </div>
-
-      {/* 分类切换 */}
-      <div className="flex bg-white border-b shadow-sm z-10">
-        {(['diary', 'qa', 'letters'] as const).map((tab) => (
-          <button
-            key={tab}
-            onClick={() => setActiveTab(tab)}
-            className={`flex-1 py-3 text-xs font-bold transition-all relative ${
-              activeTab === tab ? 'text-pink-600' : 'text-gray-400'
-            }`}
-          >
-            {tab === 'diary' ? '观察日记' : tab === 'qa' ? '每日一问' : '告白信'}
-            {activeTab === tab && (
-              <div className="absolute bottom-0 left-1/4 right-1/4 h-1 bg-pink-500 rounded-full animate-scaleIn"></div>
-            )}
-          </button>
-        ))}
-      </div>
-
-      {/* 内容展示区 */}
-      <div className="flex-1 overflow-y-auto bg-gradient-to-b from-pink-50/50 to-white p-4">
-        <div className="max-w-md mx-auto space-y-4">
-          
-          {/* --- Tab 1: 日记列表 --- */}
-          {activeTab === 'diary' && (
-            <div className="space-y-4 animate-fadeIn">
-              {diaries.length === 0 ? (
-                <div className="text-center py-20 text-gray-300 text-sm">
-                  <div className="text-4xl mb-2">✍️</div>
-                  还没开始记录呢，点点“同步心跳”试试
-                </div>
-              ) : (
-                diaries.map(diary => (
-                  <div key={diary.id} className="bg-white p-5 rounded-2xl shadow-sm border border-pink-100 hover:shadow-md transition">
-                    <div className="flex justify-between items-center mb-3">
-                      <div className="flex items-center gap-2">
-                        <img src={profile.avatar} className="w-6 h-6 rounded-full object-cover" alt="avt" />
-                        <span className="text-xs font-bold text-pink-600">{profile.name} 的心情日记</span>
-                      </div>
-                      <span className="text-[10px] text-gray-400 font-mono">{diary.date}</span>
-                    </div>
-                    <p className="text-gray-700 text-sm leading-relaxed whitespace-pre-wrap font-serif">
-                      {diary.content}
-                    </p>
-                    <div className="mt-3 pt-3 border-t border-dashed border-pink-50 flex justify-end">
-                      <span className="text-[10px] bg-pink-50 text-pink-400 px-2 py-0.5 rounded-full"># 当前状态: {diary.mood}</span>
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-          )}
-
-          {/* --- Tab 2: Q&A 列表 --- */}
-          {activeTab === 'qa' && (
-            <div className="space-y-6 animate-fadeIn">
-              {questions.length === 0 ? (
-                <div className="text-center py-20 text-gray-300 text-sm">暂无提问</div>
-              ) : (
-                questions.map(qa => (
-                  <div key={qa.id} className="space-y-3">
-                    <div className="bg-purple-100 text-purple-700 p-4 rounded-2xl rounded-tl-none mr-10 shadow-sm">
-                      <p className="text-xs font-bold mb-1">今日问题：</p>
-                      <p className="text-sm font-medium">{qa.question}</p>
-                    </div>
-                    <div className="bg-white border border-purple-100 p-4 rounded-2xl rounded-tr-none ml-10 shadow-sm">
-                      <p className="text-xs font-bold text-pink-500 mb-1">{profile.name} 的想法：</p>
-                      <p className="text-sm text-gray-600 italic">"{qa.aiAnswer}"</p>
-                    </div>
-                    <div className="text-center text-[10px] text-gray-300 font-mono">{qa.date}</div>
-                  </div>
-                ))
-              )}
-            </div>
-          )}
-
-          {/* --- Tab 3: 信件列表 --- */}
-          {activeTab === 'letters' && (
-            <div className="space-y-4 animate-fadeIn">
-               {letters.length === 0 ? (
-                <div className="text-center py-20 text-gray-300 text-sm">
-                  <div className="text-4xl mb-2">✉️</div>
-                  那些藏在心底的话，还没落笔成信...
-                </div>
-              ) : (
-                letters.map(letter => (
-                  <div key={letter.id} className="bg-amber-50 p-6 rounded-sm shadow-inner border-l-4 border-amber-200 relative overflow-hidden">
-                    <div className="absolute top-0 right-0 opacity-10 text-6xl -rotate-12">💌</div>
-                    <p className="text-sm text-amber-900 leading-loose font-serif italic">
-                      {letter.content}
-                    </p>
-                    <div className="mt-4 text-right">
-                      <p className="text-xs font-bold text-amber-700">— 永远爱你的 {profile.name}</p>
-                      <p className="text-[9px] text-amber-600/50 mt-1">{letter.date}</p>
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-          )}
-
-        </div>
-      </div>
-      
-      {/* 底部装饰 */}
-      <div className="h-2 bg-gradient-to-r from-pink-200 via-purple-200 to-pink-200"></div>
     </div>
   );
 };

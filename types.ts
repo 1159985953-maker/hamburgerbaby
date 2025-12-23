@@ -1,8 +1,4 @@
-// ==================== 从这里开始完整复制 ====================
-// 这是一个“合并修复版”的类型定义文件。
-// 它解决了所有重复声明的问题，并包含了所有你需要的功能（拍立得、小组件等）。
-
-// 基础类型
+// --- 这是一个“合并修复版”的类型定义文件 ---
 export interface Song {
   id: string;
   title: string;
@@ -11,46 +7,44 @@ export interface Song {
   cover: string;
 }
 
-
+export interface UserTag {
+  id: string;
+  content: string;
+  timestamp: number;
+  style?: number;
+  note?: string;
+}
 
 export interface TaskCategory {
   id: string;
-  name: string; // 例如 "工作", "生活"
-  color: string; // 例如 "#FF5733", "rgb(0,0,0)"
-}
-
-
-
-// ★★★ 新增：记账分类 ★★★
-export interface FinanceCategory {
-  id: string;
-  name: string; // "餐饮", "工资"
-  type: 'expense' | 'income'; // 支出还是收入
-  icon: string; // "🍔", "💰"
+  name: string;
   color: string;
 }
 
-
-
-// 2. ★★★ 新增：资产账户 (银行卡、支付宝等) ★★★
-export interface AssetAccount {
+export interface FinanceCategory {
   id: string;
-  name: string; // "招商银行", "微信零钱"
-  type: 'cash' | 'debit' | 'credit' | 'alipay' | 'wechat' | 'other';
-  balance: number; // 当前余额 (初始余额 + 收入 - 支出)
-  color: string;   // 卡片颜色
-  icon: string;    // "💳"
+  name: string;
+  type: 'expense' | 'income';
+  icon: string;
+  color: string;
 }
 
+export interface AssetAccount {
+  id: string;
+  name: string;
+  type: 'cash' | 'debit' | 'credit' | 'alipay' | 'wechat' | 'other';
+  balance: number;
+  color: string;
+  icon: string;
+}
 
-// ★★★ 新增：交易记录 ★★★
 export interface Transaction {
   id: string;
   type: 'expense' | 'income';
   amount: number;
   categoryId: string;
-  accountId: string; // ★ 新增：这笔钱是从哪个账户出的/进的
-  date: string; // "YYYY-MM-DD"
+  accountId: string;
+  date: string;
   note?: string;
   createdAt: number;
 }
@@ -60,13 +54,12 @@ export interface TodoItem {
   text: string;
   completed: boolean;
   createdAt: number;
-  date: string;       // 格式 "2023-10-01"，标记任务归属哪一天
-  time?: string;      // "14:00"
-  location?: string;  // "星巴克"
-  note?: string;      // "记得带电脑"
-  categoryId?: string; // ★ 新增：关联到某个分类ID
+  date: string;
+  time?: string;
+  location?: string;
+  note?: string;
+  categoryId?: string;
 }
-
 
 export interface Message {
   id: string;
@@ -84,6 +77,12 @@ export interface CharacterMood {
   description?: string;
   energyLevel: number;
   lastUpdate: number;
+  energy?: {
+    current: number;
+    max: number;
+    status: 'Awake' | 'Sleeping' | 'Tired' | 'Exhausted';
+    lastUpdate: number;
+  };
 }
 
 export interface ScheduleItem {
@@ -102,7 +101,6 @@ export interface FavoriteEntry {
   timestamp: number;
 }
 
-// 世界书类型
 export interface WorldBookEntry {
   id: string;
   keys: string[];
@@ -116,7 +114,6 @@ export interface WorldBookCategory {
   entries: WorldBookEntry[];
 }
 
-// API 和 主题预设
 export interface ApiPreset {
   id: string;
   name: string;
@@ -135,9 +132,7 @@ export interface ThemePreset {
   css: string;
 }
 
-// HEF 情感框架
 export interface HEF {
-  
   META: {
     source_world: string;
     role_identity: string;
@@ -188,8 +183,8 @@ export interface HEF {
   };
   INDIVIDUAL_VARIATION: {
     personality_big5: { openness: number; conscientiousness: number; extraversion: number; agreeableness: number; neuroticism: number; };
+    core_strength: number; 
     habits_quirks: string[];
-     core_strength: number; // ★ 新增：内核强度 (1-10)，决定了负面情绪对他的影响有多大
     speech_style: string;
     body_language: string;
     irrationalities: string[];
@@ -211,19 +206,74 @@ export interface HEF {
     checks: string[];
     pass_threshold: number;
   };
+  joy?: number;
+  anger?: number;
+  sadness?: number;
+  fear?: number;
+  trust?: number;
+  current_emotions?: { joy: number; anger: number; sadness: number; fear: number; trust: number; };
+  triggers?: string;
+  decay?: string;
 }
 
-// 核心类型：角色 (合并所有功能)
+export interface DiaryEntry {
+  id: string;
+  author: 'user' | 'ai';
+  date: string;
+  content: string;
+  mood?: string;
+  weather?: string;
+  moodEmoji?: string;
+  images?: string[];
+  comments?: { id: string; author: 'user' | 'ai'; content: string; timestamp: number; }[];
+}
+
+export interface QAEntry {
+  id: string;
+  question: string;
+  aiAnswer: string;
+  userAnswer?: string;
+  date: string;
+  timestamp: number;
+}
+
+export interface LoveLetter {
+  id: string;
+  title: string;
+  content: string;
+  timestamp: number;
+  isOpened: boolean;
+  from: 'user' | 'ai';
+  unlockDate?: number;
+}
+
+export interface RelationshipAchievement {
+  id: string;
+  name: string;
+  icon: string;
+  desc: string;
+  unlocked?: boolean;
+  unlockedDate?: number;
+  isSecret?: boolean;
+}
+
+export interface Anniversary {
+  id: string;
+  name: string;
+  date: string;
+  type: 'custom' | 'system';
+}
+
 export interface Contact {
-  bubbleColorUser?: string; // 用户气泡颜色（默认 '#22c55e'）
-  bubbleColorAI?: string; // AI 气泡颜色（默认 '#ffffff'）
-  bubbleFontSize?: string; // 字体大小（默认 'text-sm'，如 'text-xs' 或 'text-base'）
-  chatScale?: number; // 整体缩放（0.8-1.5，默认1，影响气泡/头像大小）
-
-listBubbleColor?: string;     // 列表条目背景色（默认 #ffffff）
-  listFontSize?: string;        // 字体大小（默认 text-sm）
-  listAvatarSize?: number;      // 头像大小 px（默认 44）
-
+  userTags: UserTag[];
+  isAffectionLocked?: boolean;
+  bubbleColorUser?: string;
+  bubbleColorAI?: string;
+  bubbleFontSize?: string;
+  chatScale?: number;
+  listBubbleColor?: string;
+  listFontSize?: string;
+  listAvatarSize?: number;
   id: string;
   created: number;
   name: string;
@@ -247,7 +297,6 @@ listBubbleColor?: string;     // 列表条目背景色（默认 #ffffff）
   chatBackground?: string;
   unread?: number;
   
-  // 主动消息
   proactiveConfig?: {
     enabled: boolean;
     minGapMinutes: number;
@@ -256,50 +305,45 @@ listBubbleColor?: string;     // 列表条目背景色（默认 #ffffff）
   proactiveLastSent?: { [date: string]: number; };
   pendingProactive?: boolean;
 
-  // 关系系统
   affectionScore: number;
-  relationshipStatus: 'Acquaintance' | 'Friend' | 'Close Friend' | 'Intimate' | 'Conflict' | 'Breaking' | 'Broken';
+  relationshipStatus: 'Feud' | 'Conflict' | 'Acquaintance' | 'Friend' | 'Honeymoon' | 'Stable' | 'Close Friend' | 'Intimate' | 'Breaking' | 'Broken';
   
-// ★★★ AI 生理状态 ★★★
-  aiDND: { // Do Not Disturb 勿扰模式
+  aiDND: {
     enabled: boolean;
-    until: number; // 时间戳，直到几点前都不回消息
-    reason?: string; // "睡觉", "上课", "生气"
+    until: number;
+    reason?: string;
   };
   
-  // 长期记忆 (新版)
   longTermMemories: {
     id: string;
     content: string;
     importance: number;
     timestamp: number;
-    meta?: any; // 用于存储来源等信息
+    meta?: any;
   }[];
 
-  
-  
-  // 其他游戏化/高级功能
   interventionPoints: number;
   currentChatMode: 'Casual' | 'Probing' | 'Intimate' | 'Cooling';
-  hef: Partial<HEF>; // 使用 Partial 让 HEF 成为可选
+  hef: Partial<HEF>;
   
-  // Couple Space 预留字段 (避免报错)
-  diaries?: any[];
-  questions?: any[];
-  letters?: any[];
+  diaries?: DiaryEntry[];
+  questions?: QAEntry[];
+  letters?: LoveLetter[];
+  anniversaries?: Anniversary[];
   summary?: string;
+  
+  voiceSampleText?: string;
+  wallpaper?: string; 
 }
 
-// 桌面小组件类型
-
 export interface Widget {
-  id: string; // 'chat', 'book', 'couple', 'diary', 'settings', 'theme'
-  icon: string; // emoji or a placeholder
-  customIcon?: string; // 用户上传的图片 URL
+  id: string;
+  icon: string;
+  customIcon?: string;
   text: string;
   url: string;
   bgColor?: string;
-  background?: string; // 新增：背景，可以是颜色或图片 URL
+  background?: string;
 }
 
 export interface PhotoFrame {
@@ -307,33 +351,25 @@ export interface PhotoFrame {
   photo: string;
 }
 
-// 核心类型：全局设置 (合并所有功能)
 export interface GlobalSettings {
-  serPersona?: string;
+  userPersona?: string;
   wallpaper: string;
   customWallpapers: string[];
   apiPresets: ApiPreset[];
   activePresetId: string;
   systemTimezone: string;
 
-
- // ★★★ 新增：生活AI助手配置 ★★★
   lifeAI?: {
-    name: string;      // 助手名字，如 "Jarvis"
-    persona: string;   // 人设，如 "你是一个专业的财务顾问..."
-    avatar?: string;   // 助手头像(可选)
+    name: string;
+    persona: string;
+    avatar?: string;
     lifeAIHistory?: { role: 'user' | 'assistant'; content: string }[];
   };
 
-
-
-
-// ★★★ 新增：记账数据 ★★★
   transactions: Transaction[];
   financeCategories: FinanceCategory[];
-  accounts: AssetAccount[]; // ★ 新增：资产账户列表
+  accounts: AssetAccount[];
   
-
   userTimezone: string;
   appearance: {
     bubbleColorUser: string;
@@ -353,10 +389,11 @@ export interface GlobalSettings {
     model: string;
     serviceArea?: 'domestic' | 'international';
   };
-  userPresets?: any[]; // 用户人设预设
+  userPresets?: any[];
+  userName?: string;
+  userSignature?: string;
 }
 
-// 备份类型
 export interface AppDataBackup {
   version: number;
   date: string;
@@ -365,34 +402,4 @@ export interface AppDataBackup {
   worldBooks: WorldBookCategory[];
 }
 
-// Couple Space 相关 (保持兼容)
-export interface DiaryEntry {
-  id: string;
-  author: 'user' | 'ai';
-  date: string; // 或 number
-  content: string;
-  mood?: string;
-  weather?: string;
-  moodEmoji?: string;
-  images?: string[];
-}
-
-export interface QAEntry {
-  id: string;
-  question: string;
-  aiAnswer: string;
-  userAnswer?: string;
-  date: string;
-}
-
-export interface LoveLetter {
-  id: string;
-  title: string;
-  content: string;
-  timestamp: number;
-  isOpened: boolean;
-  from: string;
-}
-
 export type CharacterProfile = Contact;
-// ==================== 复制到这里结束 ====================

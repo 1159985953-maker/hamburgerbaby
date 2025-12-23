@@ -147,6 +147,13 @@ const [homePageIndex, setHomePageIndex] = useState(0); // 0 代表第一页, 1 �
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [isLoaded, setIsLoaded] = useState(false);
   const [quickAddMode, setQuickAddMode] = useState(false); // 快速添加任务弹窗状态
+const [isAnalyzing, setIsAnalyzing] = useState(false); // 控制加载画面
+  const [loadingText, setLoadingText] = useState("正在建立连接..."); // 
+
+
+
+
+
 
   // 核心功能：任务自动顺延 (Rollover)
   useEffect(() => {
@@ -338,7 +345,20 @@ userName: savedSettings.userName || globalSettings.userName,
         }
         
         // 恢复设置
-        if (savedSettings) setGlobalSettings(savedSettings);
+        // ==================== 新代码：修复 globalSettings 加载时的 apiPresets undefined 问题 ====================
+if (savedSettings) {
+  setGlobalSettings({
+    ...globalSettings,                    // 先用初始化的默认值兜底
+    ...savedSettings,                     // 再覆盖保存的数据
+    apiPresets: savedSettings.apiPresets ?? [],          // 强制兜底为空数组
+    activePresetId: savedSettings.activePresetId ?? "",  // 兜底为空字符串
+    widgets: savedSettings.widgets ?? globalSettings.widgets,
+    photoFrames: savedSettings.photoFrames ?? globalSettings.photoFrames,
+    avatar: savedSettings.avatar ?? globalSettings.avatar,
+    userName: savedSettings.userName ?? globalSettings.userName,
+    userSignature: savedSettings.userSignature ?? globalSettings.userSignature,
+  });
+}
         
         // 恢复世界书
         if (savedBooks) setWorldBooks(savedBooks);
@@ -720,59 +740,81 @@ return (
       </div>
     )}
 
+
+
     {/* 桌面 (逻辑不变) */}
     {currentApp === 'home' && renderHome()}
 
-    {/* ChatApp (逻辑不变) */}
-   {/* ChatApp - 新全屏方案：和世界书、外观设置完全一致 */}
-{/* ChatApp - 终极修复版：绝对全屏容器，没有任何内边距，防止白条 */}
-{currentApp === 'chat' && (
-  <ChatApp
-    contacts={contacts}
-    setContacts={setContacts}
-    globalSettings={globalSettings}
-    setGlobalSettings={setGlobalSettings}
-    worldBooks={worldBooks}
-    setWorldBooks={setWorldBooks}
-    onExit={() => setCurrentApp('home')}
-    isBackground={false}
-    initialContactId={jumpToContactId}
-    onChatOpened={() => setJumpToContactId(null)}
-    onNewMessage={(contactId, name, avatar, content) => {
-      setGlobalNotification({ type: 'new_message', contactId, name, avatar, content });
-      setTimeout(() => setGlobalNotification(null), 5000);
-    }}
-  />
-)}
+
+
+
+
+{/* ChatApp - 终极修复版：加上了跳转设置的“传送门” */}
+    {currentApp === 'chat' && (
+      <ChatApp
+        contacts={contacts}
+        setContacts={setContacts}
+        globalSettings={globalSettings}
+        setGlobalSettings={setGlobalSettings}
+        worldBooks={worldBooks}
+        setWorldBooks={setWorldBooks}
+        onExit={() => setCurrentApp('home')}
+        isBackground={false}
+        initialContactId={jumpToContactId}
+        onChatOpened={() => setJumpToContactId(null)}
+        onNewMessage={(contactId, name, avatar, content) => {
+          setGlobalNotification({ type: 'new_message', contactId, name, avatar, content });
+          setTimeout(() => setGlobalNotification(null), 5000);
+        }}
+        // ★★★★★ 核心修复：这就是传送门开关！ ★★★★★
+        onOpenSettings={() => setCurrentApp('settings')} 
+      />
+    )}
+
+
+
+
 
     {/* 其他 App (逻辑不变) */}
-    {currentApp === 'coupleSpace' && contacts[0] && (
-      (() => {
-        let target = contacts[0];
-        const safeProfile = {
-          ...target,
-          name: target.name || "Unknown",
-          avatar: target.avatar || "",
-          mood: target.mood || { current: "Content", energyLevel: 80, lastUpdate: Date.now() },
-          userName: target.userName || "用户名",
-          diaries: target.diaries || [],
-          coupleSpaceUnlocked: target.coupleSpaceUnlocked || false,
-          history: target.history || [],
-          summary: target.summary || ""
-        };
-        const recentHistory = Array.isArray(target.history) && target.history.length > 0
-          ? target.history.slice(-5).map((msg: any) => `${msg?.role === 'user' ? target.userName : target.name}: ${msg?.content || ''}`).join('\n')
-          : "暂无历史对话";
-        return (
-          <CoupleSpace
-            profile={safeProfile}
-            chatMemorySummary={`Summary: ${target.summary}\nRecent:\n${recentHistory}`}
-            onClose={() => setCurrentApp('home')}
-            onUnlock={() => updatePrimaryContact(prev => ({ ...prev, coupleSpaceUnlocked: true }))}
-          />
-        );
-      })()
-    )}
+
+{currentApp === 'coupleSpace' && contacts[0] && (
+  (() => {
+    let target = contacts[0];
+    const safeProfile = { ...target, diaries: target.diaries || [], questions: target.questions || [], letters: target.letters || [], history: target.history || [] };
+    
+    return (
+      <CoupleSpace
+        profile={safeProfile}
+        onClose={() => setCurrentApp('home')}
+        onUnlock={(contactId) => {
+          setContacts(prev => prev.map(c => 
+            c.id === contactId ? { ...c, coupleSpaceUnlocked: true } : c
+          ));
+        }}
+        setContacts={setContacts}
+        // ★★★ 核心连接：把CoupleSpace的行动，变成一条系统消息发回聊天 ★★★
+        onCoupleSpaceAction={(systemMessage) => {
+          const newMessage: Message = {
+            id: Date.now().toString(),
+            role: 'system',
+            content: systemMessage,
+            timestamp: Date.now(),
+            type: 'text'
+          };
+          // 找到当前角色并把这条系统消息塞进历史记录
+          setContacts(prev => prev.map(c => 
+             c.id === safeProfile.id ? { ...c, history: [...c.history, newMessage] } : c
+          ));
+          // 同时，自动切回聊天界面，让用户看到并让AI能回应
+          setCurrentApp('chat'); 
+        }}
+      />
+    );
+  })()
+)}
+
+
+
 
     {currentApp === 'settings' && (
       <div className="absolute inset-0 z-50">
@@ -787,6 +829,9 @@ return (
         />
       </div>
     )}
+
+
+
     {currentApp === 'worldbook' && (
       <WorldBookApp worldBooks={worldBooks} setWorldBooks={setWorldBooks} onClose={() => setCurrentApp('home')} />
     )}

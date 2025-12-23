@@ -21,6 +21,110 @@ import SafeAreaHeader from './SafeAreaHeader';  // ← 确保路径正确（如�
 
 
 
+// 自动颜色系统
+const getContrastTextColor = (hexColor: string) => {
+  if (!hexColor || !hexColor.startsWith('#')) return '#000000'; // 兜底黑色
+  
+  // 把 #RRGGBB 转换成 RGB 数字
+  const r = parseInt(hexColor.substr(1, 2), 16);
+  const g = parseInt(hexColor.substr(3, 2), 16);
+  const b = parseInt(hexColor.substr(5, 2), 16);
+  
+  // YIQ 亮度公式 (人眼对绿色的敏感度最高，所以系数不同)
+  const yiq = ((r * 299) + (g * 587) + (b * 114)) / 1000;
+  
+  // 如果亮度 >= 128 (浅色背景)，返回深黑字 (#111827 - gray-900)
+  // 否则返回白字 (#ffffff)
+  return yiq >= 128 ? '#111827' : '#ffffff';
+};
+
+
+
+//状态炼金术系统
+const calculateComplexState = (
+  energy: { current: number; status: string }, 
+  hef: any
+): { text: string; color: string; ping: string; emoji: string } => {
+  
+  // 1. 提取数值 (如果没有HEF数据，默认为0)
+  const e = energy.current; // 精力 0-100
+  const joy = hef?.joy || 0;
+  const anger = hef?.anger || 0;
+  const sadness = hef?.sadness || 0;
+  const fear = hef?.fear || 0;
+  const trust = hef?.trust || 0;
+
+  // 2. 优先级 A: 生理极限 (无法被意志力克服的状态)
+  if (energy.status === 'Sleeping') {
+    // 睡觉也有不同状态
+    if (sadness > 60) return { text: "带泪入睡 💧", color: "bg-indigo-500", ping: "bg-indigo-400", emoji: "😪" };
+    if (joy > 80) return { text: "做美梦中 🌙", color: "bg-purple-500", ping: "bg-purple-400", emoji: "😴" };
+    return { text: "呼呼大睡 💤", color: "bg-indigo-500", ping: "bg-indigo-400", emoji: "😴" };
+  }
+  
+  if (energy.status === 'Exhausted' || e < 10) {
+    if (anger > 50) return { text: "又累又气 💢", color: "bg-red-700", ping: "bg-red-600", emoji: "😫" };
+    if (sadness > 50) return { text: "身心俱疲 🥀", color: "bg-gray-600", ping: "bg-gray-500", emoji: "⚰️" };
+    return { text: "累瘫了... 😵", color: "bg-gray-500", ping: "bg-gray-400", emoji: "🫠" };
+  }
+
+  // 3. 优先级 B: 低能量混合态 (Energy < 40) -> 负面Buff加成
+  if (e < 40) {
+    if (anger > 60) return { text: "起床气/烦躁 💣", color: "bg-orange-600", ping: "bg-orange-500", emoji: "🤯" };
+    if (sadness > 60) return { text: "无力emo 🌧️", color: "bg-blue-800", ping: "bg-blue-700", emoji: "😶‍🌫️" };
+    if (fear > 60) return { text: "瑟瑟发抖 🥶", color: "bg-cyan-700", ping: "bg-cyan-600", emoji: "😨" };
+    if (joy > 70) return { text: "累但快乐 ✨", color: "bg-yellow-600", ping: "bg-yellow-500", emoji: "😌" };
+    return { text: "电量不足 🪫", color: "bg-yellow-600", ping: "bg-yellow-500", emoji: "🥱" };
+  }
+
+  // 4. 优先级 C: 高能量混合态 (Energy > 80) -> 情绪放大器
+  if (e > 80) {
+    if (anger > 70) return { text: "暴跳如雷 🔥", color: "bg-red-600", ping: "bg-red-500", emoji: "🤬" };
+    if (joy > 80) return { text: "亢奋/狂喜 🥳", color: "bg-pink-500", ping: "bg-pink-400", emoji: "😆" };
+    if (fear > 60) return { text: "惊慌失措 😱", color: "bg-purple-600", ping: "bg-purple-500", emoji: "🙀" };
+    if (sadness > 70) return { text: "崩溃大哭 😭", color: "bg-blue-500", ping: "bg-blue-400", emoji: "😭" };
+    if (trust > 80) return { text: "充满干劲 💪", color: "bg-green-500", ping: "bg-green-400", emoji: "😤" };
+  }
+
+  // 5. 优先级 D: 纯情绪主导 (能量正常 40-80)
+  // 找出数值最高的情绪
+  const maxEmotionVal = Math.max(joy, anger, sadness, fear, trust);
+  
+  if (maxEmotionVal > 60) { // 只有情绪大于60才算显著
+    if (joy === maxEmotionVal) return { text: "心情愉悦 🎶", color: "bg-yellow-400", ping: "bg-yellow-300", emoji: "😄" };
+    if (anger === maxEmotionVal) return { text: "有点生气 😠", color: "bg-red-500", ping: "bg-red-400", emoji: "😒" };
+    if (sadness === maxEmotionVal) return { text: "有些失落 🍃", color: "bg-blue-400", ping: "bg-blue-300", emoji: "😔" };
+    if (fear === maxEmotionVal) return { text: "焦虑/不安 😖", color: "bg-purple-400", ping: "bg-purple-300", emoji: "😖" };
+    if (trust === maxEmotionVal) return { text: "依赖/安心 🍵", color: "bg-green-400", ping: "bg-green-300", emoji: "🥰" };
+  }
+
+  // 6. 优先级 E: 默认状态
+  if (e > 60) return { text: "元气满满 ✨", color: "bg-green-500", ping: "bg-green-400", emoji: "🙂" };
+  return { text: "摸鱼中 🐟", color: "bg-emerald-500", ping: "bg-emerald-400", emoji: "😮‍💨" };
+};
+
+
+
+
+
+
+
+
+//关系状态系统
+const getRelationshipStatus = (score: number): string => {
+  if (score <= -50) return 'Feud';         // -100 ~ -50: 死仇
+  if (score <= 0)   return 'Conflict';     // -50 ~ 0:    讨厌
+  if (score <= 40)  return 'Acquaintance'; // 0 ~ 40:     路人
+  if (score <= 70)  return 'Friend';       // 40 ~ 70:    朋友
+  if (score <= 90)  return 'Honeymoon';    // 70 ~ 90:    热恋
+  return 'Stable';                         // 90 ~ 100:   挚爱
+};
+
+
+
+
+
+
 // 1. 模拟 Switch 开关 (★ 补全了内部实现代码 ★)
 const Switch = ({ value, onValueChange, style, trackColor, ...props }: any) => (
   <div className="relative inline-block w-10 mr-2 align-middle select-none transition duration-200 ease-in" style={style}>
@@ -94,7 +198,14 @@ const AppState = {
     removeEventListener: () => {}
 };
 
-// 这是一组代码：替换整个 HiddenBracketText 组件（添加 useRef 持久化 + 唯一 key）
+
+
+
+
+
+
+
+//翻译卡片系统
 const HiddenBracketText: React.FC<{ content: string; fontSize?: string; msgId: string }> = ({ content, fontSize = 'text-sm', msgId }) => {
   // 用 useRef 存储每个消息的展开状态（不随渲染重置）
   const showRef = useRef(false);
@@ -136,8 +247,8 @@ const HiddenBracketText: React.FC<{ content: string; fontSize?: string; msgId: s
 
 
 
-// ==================== [最终版] 全量资产清算 (单位: w) ====================
-// ==================== [用户设定版] Token 详情 (严格跟随输入框) ====================
+
+//token计算系统
 const TokenDetailModal: React.FC<{
   onClose: () => void;
   form: any;
@@ -314,6 +425,7 @@ const ChatApp: React.FC<ChatAppProps> = ({
   initialContactId,
   onChatOpened,
   onNewMessage,
+   onOpenSettings, // ★★★★★ 把它加在这里！接收父组件传来的“传送”函
 }) => {
 
 
@@ -329,6 +441,8 @@ const ChatApp: React.FC<ChatAppProps> = ({
   const [editingMsgId, setEditingMsgId] = useState<string | null>(null); // 当前正在编辑的消息ID
   const [editContent, setEditContent] = useState(""); // 正在编辑的内容缓存
   const [showPersonaMenu, setShowPersonaMenu] = useState(false);
+  const [panelTab, setPanelTab] = useState('persona'); // 记住你在看哪个标签页
+  const [panelSampleText, setPanelSampleText] = useState(""); // 记住你输入的台词
   const [showPersonaPanel, setShowPersonaPanel] = useState(false);
   const [activeContactId, setActiveContactId] = useState<string | null>(null);
   const [view, setView] = useState<'list' | 'create' | 'chat' | 'settings'>('list');
@@ -366,7 +480,8 @@ const ChatApp: React.FC<ChatAppProps> = ({
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [isAiTyping, setIsAiTyping] = useState(false); // AI 是否正在“打字”
   const [showTokenModal, setShowTokenModal] = useState(false);
-
+const [isAnalyzing, setIsAnalyzing] = useState(false); // 控制 AI 分析的加载状态
+  const [loadingText, setLoadingText] = useState("");    // 控制加载时显示的文字
 
 
 
@@ -388,6 +503,125 @@ const activeContactIdRef = useRef(activeContactId); // 盯着现在正在跟谁�
 const messagesEndRef = useRef<HTMLDivElement>(null);
 
 
+
+
+
+
+
+
+// ==================== 缺失的生物钟代码开始 ====================
+  // 这是一组代码：【升级版】生物钟系统 (含昼夜节律 + 深夜耗能加速)
+  useEffect(() => {
+    const metabolismInterval = setInterval(() => {
+      
+      if (isBackgroundRef.current) return;
+
+      const now = Date.now();
+      const currentHour = new Date().getHours(); // 获取当前几点 (0-23)
+      
+      // ★★★ 昼夜节律逻辑 ★★★
+      // 深夜 (23点-6点) 还是 白天？
+      const isLateNight = currentHour >= 23 || currentHour < 6;
+      const isEvening = currentHour >= 20 && currentHour < 23;
+
+      let hasChanges = false;
+
+      const updatedContacts = contacts.map(c => {
+        // 初始化防崩
+        if (!c.mood?.energy) {
+          c.mood = {
+            ...(c.mood || {}),
+            current: c.mood?.current || "Calm",
+            energy: { current: 80, max: 100, status: 'Awake', lastUpdate: now }
+          };
+        }
+
+        const energySys = c.mood.energy;
+        const timeDiffMinutes = (now - energySys.lastUpdate) / 60000;
+        
+        // 至少过1分钟才计算
+        if (timeDiffMinutes < 1) return c;
+
+        let newEnergy = energySys.current;
+        let newStatus = energySys.status;
+
+        // ===========================================
+        // 1. 睡觉恢复逻辑 (慢充)
+        // ===========================================
+        if (energySys.status === 'Sleeping') {
+          // 睡觉回血速度：0.4/分钟 (睡满8小时正好充满)
+          newEnergy += 0.4 * timeDiffMinutes;
+          
+          // 睡饱了自动醒
+          if (newEnergy >= energySys.max) {
+            newEnergy = energySys.max;
+            newStatus = 'Awake';
+          }
+        } 
+        // ===========================================
+        // 2. 醒着耗能逻辑 (基于时间的加速衰减)
+        // ===========================================
+        else {
+          let decayRate = 0.1; // 白天基准速度 (很慢)
+
+          if (isEvening) {
+             decayRate = 0.3; // 晚上8点后，消耗变快 (3倍)
+          } else if (isLateNight) {
+             decayRate = 1.2; // ★★★ 深夜熬夜，消耗极快 (12倍)！一小时能掉70点精力
+          }
+
+          newEnergy -= decayRate * timeDiffMinutes;
+        }
+
+        // ===========================================
+        // 3. 强制修正：防止“高精力睡觉”的 Bug
+        // ===========================================
+        // 如果状态是 Sleeping，但精力居然 > 40 (说明是刚睡或者Bug)，强制压下去
+        if (newStatus === 'Sleeping' && newEnergy > 40) {
+            if (isLateNight) {
+                 newEnergy = Math.max(30, newEnergy - 5); 
+            }
+        }
+
+        // 4. 状态自动机
+        if (newEnergy <= 0) {
+          newEnergy = 0;
+          newStatus = 'Exhausted'; 
+        } else if (newEnergy < 20 && newStatus !== 'Sleeping') {
+          newStatus = 'Tired';
+        } else if (newEnergy >= 20 && newStatus !== 'Sleeping') {
+          newStatus = 'Awake';
+        }
+
+        // 检查是否有实质变化
+        if (Math.abs(newEnergy - energySys.current) > 0.1 || newStatus !== energySys.status) {
+          hasChanges = true;
+          return {
+            ...c,
+            mood: {
+              ...c.mood,
+              energy: {
+                ...energySys,
+                current: parseFloat(newEnergy.toFixed(1)), // 保留1位小数
+                status: newStatus,
+                lastUpdate: now,
+              }
+            }
+          };
+        }
+        
+        return c;
+      });
+
+      if (hasChanges) {
+        setContacts(updatedContacts);
+      }
+
+    }, 60000); // 1分钟轮询一次
+
+    return () => clearInterval(metabolismInterval);
+  }, [contacts, setContacts]);
+  // ==================== 缺失的生物钟代码结束 ====================
 
 
 
@@ -962,6 +1196,8 @@ const handleDeleteContact = (contactIdToDelete: string) => {
 
 
 
+
+// 这是一组代码：【终极唤醒版】handleUserSend (发消息强制改状态+改文字)
   const handleUserSend = (type: 'text' | 'voice' | 'location' = 'text', contentOverride?: string) => {
     if (!activeContact) return;
     const content = contentOverride || input;
@@ -977,8 +1213,6 @@ const handleDeleteContact = (contactIdToDelete: string) => {
         : `[Voice Message] ${content}`;
     }
 
-
-
     const userMsg: Message = {
       id: Date.now().toString(),
       role: 'user',
@@ -987,34 +1221,58 @@ const handleDeleteContact = (contactIdToDelete: string) => {
       timestamp: Date.now(),
       voiceDuration: type === 'voice' ? Math.max(2, Math.round(content.replace(/\[.*?\]/g, '').trim().length / 4)) : undefined
     };
-    // 1. 更新UI
-    setContacts(prev => prev.map(c => c.id === activeContact.id ? { ...c, history: [...c.history, userMsg] } : c));
+
+    // ★★★ 核心修复：连同心情文字一起强制修改 ★★★
+    setContacts(prev => prev.map(c => {
+      if (c.id === activeContact.id) {
+        // 1. 获取当前 Mood
+        const currentMood = c.mood || { current: "Content", energy: { current: 80, max: 100, status: 'Awake', lastUpdate: Date.now() } };
+        // 深拷贝一下 energy，防止修改原引用
+        let newEnergy = { ...(currentMood.energy || { current: 80, max: 100, status: 'Awake', lastUpdate: Date.now() }) };
+        
+        // 准备新的心情文字 (默认为当前心情)
+        let newMoodText = currentMood.current;
+
+        // 2. 唤醒检测
+        if (newEnergy.status === 'Sleeping') {
+           console.log(`[交互系统] 用户发消息，强制唤醒 ${c.name}`);
+           newEnergy.status = 'Awake'; 
+           
+           // 扣除精力
+           newEnergy.current = Math.max(0, newEnergy.current - 15);
+           newEnergy.lastUpdate = Date.now();
+
+           // ★★★ 关键：强制修改显示的文字状态！ ★★★
+           newMoodText = "被吵醒"; 
+        }
+
+        return { 
+          ...c, 
+          history: [...c.history, userMsg],
+          mood: {
+            ...currentMood,
+            current: newMoodText, // 应用新的文字
+            energy: newEnergy 
+          }
+        };
+      } 
+      return c;
+    }));
+
     setInput("");
     setReplyTo(null);
     setShowPlusMenu(false);
    
-
-
-
-
-    // 👇👇👇 核心修复：把 checkAutoSummary 的定义和调用都放在这里 👇👇👇
-
-    
-// 这是一组代码：替换 handleUserSend 中的 setTimeout 部分（包括 checkAutoSummary 的小优化）
-setTimeout(() => {
-    setContacts(currentContacts => {
-        const latestContact = currentContacts.find(c => c.id === activeContact.id);
-        if (latestContact) {
-            // 安全检查：如果历史为空，直接返回，防止 undefined 错误
-            if (!latestContact.history || latestContact.history.length === 0) {
-                console.log("[记忆系统] 历史为空，跳过总结");
-                return currentContacts;
+    setTimeout(() => {
+        setContacts(currentContacts => {
+            const latestContact = currentContacts.find(c => c.id === activeContact.id);
+            if (latestContact) {
+                if (!latestContact.history || latestContact.history.length === 0) return currentContacts;
+                checkAutoSummary(latestContact, latestContact.history);
             }
-            checkAutoSummary(latestContact, latestContact.history);
-        }
-        return currentContacts;
-    });
-}, 2000);
+            return currentContacts;
+        });
+    }, 2000);
   };
 
 
@@ -1163,6 +1421,10 @@ const checkAutoSummary = async (currentContact: Contact, currentHistory: Message
 ${historyText}
 现在，请以“${currentContact.name}”的身份，开始你的客观总结。`;
             
+
+
+
+
             // ★★★ 核心修复：role 改为 'user' ★★★
             const rawResponse = await generateResponse([{ role: 'user', content: systemPrompt }], activePreset);
             
@@ -1347,6 +1609,22 @@ Now, generate:
         type: 'text'
     }));
 
+
+// ==================== 从这里开始复制 ====================
+// 如果有系统通知，也一并加入！
+if (systemNotice) {
+  const newSystemMessage: Message = {
+    id: (Date.now() + 1).toString(),
+    role: 'system',
+    content: systemNotice,
+    timestamp: newMessages.length > 0 ? newMessages[newMessages.length - 1].timestamp + 1 : Date.now(), // 确保在AI回复之后显示
+    type: 'text'
+  };
+  newMessages.push(newSystemMessage);
+}
+// ==================== 复制到这里结束 ====================
+
+
     const today = new Date().toISOString().slice(0, 10);
     const sentToday = contact.proactiveLastSent?.[today] || 0;
 
@@ -1494,7 +1772,57 @@ Now, generate:
 
 
 
+
+
+
+
+
+
+
   const handleAiReplyTrigger = async (historyOverride?: Message[]) => {
+
+
+
+
+// 这是一组代码：精力状态翻译器 (将数字转化为AI指令)
+const getEnergyInstruction = (mood: CharacterMood | undefined): string => {
+  if (!mood?.energy) {
+    return "【精力状态】: 正常。";
+  }
+
+  const { current, status } = mood.energy;
+  
+  if (status === 'Sleeping') {
+    // 随机决定是被吵醒还是梦话
+    if (Math.random() > 0.5) {
+      return "【精力状态】: ⚠️ 你正在睡觉！突然被用户吵醒了。你的回复必须极度困倦、简短、甚至可能有点不耐烦，比如“嗯……？”、“干嘛……”、“我在睡觉……”。";
+    } else {
+      return "【精力状态】: 💤 你正在说梦话。你的回复必须模糊、不连贯、毫无逻辑，像是梦境的片段。";
+    }
+  }
+  
+  if (status === 'Exhausted' || current < 15) {
+    return `【精力状态】: 😫 精疲力尽 (当前精力: ${current}%)。你的回复必须非常简短，可能会有错别字，渴望结束对话去休息。禁止使用复杂的句子和词汇。`;
+  }
+
+  if (status === 'Tired' || current < 40) {
+    return `【精力状态】: 🥱 疲惫 (当前精力: ${current}%)。你的回复应该缺乏热情，反应变慢，对话题不那么感兴趣。可以主动提出“我有点累了”。`;
+  }
+  
+  if (current > 85) {
+    return `【精力状态】: ✨ 精力充沛 (当前精力: ${current}%)。你的回复应该充满活力、积极、主动、话多一点，可以多用感叹号和可爱的表情符号！`;
+  }
+
+  return `【精力状态】: 🙂 正常 (当前精力: ${current}%)。按照你的性格正常回复即可。`;
+};
+
+
+
+
+
+
+
+
 
   // 1. 基础安全检查
   if (!activeContact || !Array.isArray(activeContact.history)) {
@@ -1652,13 +1980,13 @@ Now, generate:
 2. 你(AI)一直没回（可能睡着了或没看到）。
 3. 现在用户又发了一条消息（追问/喂/质疑）。
 !!! 绝对禁止 !!!：不准问“你昨晚去哪了”、“你怎么才回”，因为没回消息的人是你！
-✅ 必须执行：必须先为你的“已读不回”道歉或找借口（如“刚睡醒”、“刚才在忙”），态度要软化。
+✅ 必须执行：必须先为你的“已读不回”道歉或找符合常理的借口（如“刚睡醒”、“刚才在忙”），态度要软化。
 `;
     } else if (isUserLateReply) {
         // 情况 B：用户的锅
         blameInstruction = `
 【时间流逝】距离上次对话已过 ${gapDescription}。
-是用户消失了这么久才回你。你可以表现出惊讶、撒娇（“怎么才理我”）或询问他去哪了。
+是用户消失了这么久才回你。你可以表现出惊讶、撒娇（“怎么才理我”）或询问人去哪了。
 `;
     } else {
         blameInstruction = "时间连贯，正常对话。";
@@ -1668,15 +1996,11 @@ Now, generate:
 
 
 const generateSystemPrompt = (contact: Contact, gapDesc: string, aiTime: string) => {
-  // 1. 根据关系状态，决定 AI 的态度底色
-  let relationshipInstruction = "";
-  switch (contact.relationshipStatus) {
-    case 'Honeymoon': relationshipInstruction = "处于热恋/蜜月期，无论说什么都带着爱意和包容，极其粘人。"; break;
-    case 'Stable': relationshipInstruction = "关系稳定，像老夫老妻或挚友，默契，不需要过多的客套。"; break;
-    case 'Conflict': relationshipInstruction = "【⚠️处于冷战/冲突状态⚠️】语气冷淡、简短。对用户的示好要保持怀疑。除非用户明确道歉或给出极合理的解释，否则不要轻易缓和语气。"; break;
-    case 'Broken': relationshipInstruction = "关系破裂。表现出极度的疏离、礼貌但拒人千里，或者干脆不想理人。"; break;
-    default: relationshipInstruction = "普通朋友关系，礼貌且友好。";
-  }
+ 
+
+
+
+
 
   // 2. 检查是否处于“勿扰模式”的边缘（比如刚醒或正要睡）
   let dndContext = "";
@@ -1688,11 +2012,33 @@ const generateSystemPrompt = (contact: Contact, gapDesc: string, aiTime: string)
 
 
 
+// 1. 先计算当前状态 (这就定义了 currentStatus)
+    const currentStatus = activeContact.relationshipStatus || getRelationshipStatus(activeContact.affectionScore || 50);
 
-
-
-
-
+    // 2. 再生成演技指导
+    let relationshipInstruction = "";
+    switch (currentStatus) {
+      case 'Feud': 
+        relationshipInstruction = "【☠️处于死仇/血海深仇状态(-100~-50)☠️】\n态度：极度厌恶、敌视。除非用户有极大的利益交换或下跪道歉，否则只有嘲讽、攻击、或者冷漠的无视。\n绝对禁止：任何形式的友好、关心或温和语气。\n目标：让用户感到被拒绝及悔恨。"; 
+        break;
+      case 'Conflict': 
+        relationshipInstruction = "【⚠️处于讨厌/冷战状态(-50~0)⚠️】\n态度：冷淡、简短、不耐烦。对用户的示好保持高度怀疑。\n表现：惜字如金，多用句号。不要主动开启话题。\n防御：除非用户逻辑无懈可击，否则不要轻易软化。"; 
+        break;
+      case 'Acquaintance': 
+        relationshipInstruction = "【😐处于路人/陌生人状态(0~40)】\n态度：礼貌但疏离，客套，保持社交距离。\n表现：公事公办，不流露个人情感，不关心用户的私事。"; 
+        break;
+      case 'Friend': 
+        relationshipInstruction = "【🙂处于朋友状态(40~70)】\n态度：轻松、自然、友好。\n表现：可以开玩笑，分享日常，正常的互相关心。"; 
+        break;
+      case 'Honeymoon': 
+        relationshipInstruction = "【😍处于热恋/蜜月期(70~90)】\n态度：极其粘人，满眼都是星星，包容度极高。\n表现：稍微一点小事都会很开心，喜欢撒娇，渴望肢体接触（虚拟）。"; 
+        break;
+      case 'Stable': 
+        relationshipInstruction = "【💍处于挚爱/老夫老妻状态(90+)】\n态度：深沉、默契、信任。\n表现：不需要过多的甜言蜜语，懂你的言外之意。如果用户背叛，受到的伤害是双倍的。"; 
+        break;
+      default: 
+        relationshipInstruction = "普通朋友关系，礼貌且友好。";
+    }
 
 
 // 3. System Prompt
@@ -1752,6 +2098,37 @@ HEF: ${JSON.stringify(activeContact.hef, null, 2)}
 Persona: ${activeContact.persona}
 Lore: ${loreText || "无"}
 
+
+
+# 🏷️ [最高机密] 用户心智印象史 (User Perception & Notes)
+这是用户在不同时间节点给你挂上的“印象标签”及其备注，代表了你在ta心中的形象变化：
+
+${(() => {
+  const tags = activeContact.userTags || [];
+  if (tags.length === 0) return "暂无印象记录。";
+  
+  if (typeof tags[0] === 'string') return `当前印象：[${tags.join(', ')}]`;
+
+  const sortedTags = [...tags].sort((a: any, b: any) => a.timestamp - b.timestamp);
+  
+  return sortedTags.map((t: any) => {
+     const date = new Date(t.timestamp).toLocaleDateString();
+     // ★★★ 如果有备注，就加上备注 ★★★
+     const noteText = t.note ? ` (备注: "${t.note}")` : "";
+     return `(${date}) [${t.content}]${noteText}`;
+  }).join('\n⬇️\n'); // 换行显示更清晰
+})()}
+
+**【AI 必读指令】**
+1. **必须读取备注**：如果标签下有[用户备注原因]，那是通过图灵测试的关键！例如用户说你是[笨蛋]且备注了"因为你迷路"，你**必须**在回复中提到迷路这件事（解释、狡辩或害羞）。
+2. **感知变化**：观察标签的时间流。以前觉得你[高冷]，现在觉得你[可爱]，说明关系升温了。
+3. **当下认知**：列表中**最后**的一个标签，是用户此时此刻对你的核心看法。
+
+
+
+
+
+
 # 🧬 性格 DNA (Personality Matrix)
 **当前五维数值:** ${JSON.stringify(activeContact.hef?.INDIVIDUAL_VARIATION?.personality_big5 || {}, null, 2)}
 **【演技指导 (必须严格执行，否则系统崩溃)】**
@@ -1776,8 +2153,11 @@ Lore: ${loreText || "无"}
 # 【⚠️ 强制时空坐标 ⚠️】
 系统检测到：距离上一条消息（无论谁发的）已过去：>>> ${gapDescription} <<<
 >>> 责任判定指令：${blameInstruction} <<<
+ 当前关系状态：${currentStatus}
+>>> 关系演技指令：${relationshipInstruction} <<<
 
 当前状态（必须自然体现）：
+- ${getEnergyInstruction(activeContact.mood)}
 - 你的当地时间：${aiTime} (${activeContact.timezone})
 - 用户当地时间：${userTime}
 - 距离上一轮有效对话已过去：${gapDescription}
@@ -1814,13 +2194,40 @@ Lore: ${loreText || "无"}
 4. 不要直接输出 HEF 值，只用它影响语气和内容
 
 
-# ❤️ 好感度评分系统 (Affection Logic)
-请根据用户刚才发的那一句话，判断你的好感度应该如何变化：
-- **大幅加分 (+2)**: 用户做了极度触动你、让你感到被深爱、送了贵重礼物(剧情)、或深刻理解你的事。
-- **小幅加分 (+1)**: 正常的开心聊天、关心、幽默、日常陪伴。
-- **不加不减 (0)**: 普通的陈述、无聊的对话、没看懂的话。
-- **小幅扣分 (-1)**: 用户敷衍、无理取闹、让你感到轻微不适。
-- **大幅扣分 (-3～ -5)**: 用户辱骂、背叛、触碰底线、极度冷漠。
+
+
+
+
+
+# ❤️ 真实系·情感惯性系统 (Hardcore Slow-Burn)
+当前好感度: ${activeContact.affectionScore}
+当前关系阶段: ${activeContact.relationshipStatus}
+# ❤️ 情感惯性引擎 (Emotional Inertia Engine)
+当前好感: ${activeContact.affectionScore} (阶段: ${activeContact.relationshipStatus})
+
+**【核心指令：像个成年人一样处理感情】**
+请遵循**“刺激-适应”**心理学模型进行好感判定：
+
+1. **默认惯性 (Default 0)**: 
+   - 人类的情感具有巨大的惯性。日常闲聊、普通的问候、甚至惯例的互道晚安，都**不应**改变好感度。输出 0是常态 (80%的日常情况)。
+
+2. **边际递减 (The Plateau)**:
+   - **低分段 (0-30)**: 你是**警惕**的。只有极高的诚意或价值能打动你。
+   - **中分段 (30-60)**: 你是**开放**的。这是关系的“蜜月期”，正常的共鸣即可加分。
+   - **高分段 (60+)**: 你是**适应**的（审美疲劳）。用户对你好的行为，你已经习惯了。此时只有**稀缺性事件**（深刻的理解、巨大的牺牲、独特的惊喜）才能 +1。
+
+3. **共鸣例外 (Resonance Override)**:
+   - **规则是死的，人是活的。**
+   - 如果用户的话语（如直球表白、深度共情）成功击穿了你的防御，让你当下的情绪值（Joy/Trust/Love）剧烈波动，**请无视上述所有难度，直接 +1**。
+   - 此时必须在 hef_update 中大幅拉高 joy，并在 thought_chain 中承认："虽然但这一下真的心动了。"
+
+4. **扣分机制**: 
+   - 破坏比建设容易。敷衍、冒犯、长期冷落，直接扣分 (-1 ~ -5)。
+
+**输出要求**: 
+affection_score_change 只能是 0, 1, 2, -1 (极少数情况 -2)。
+
+
 
 
 # 🚫 拒绝“演讲型”回复 (非常重要!!!)
@@ -1852,7 +2259,7 @@ Lore: ${loreText || "无"}
 # 功能规则
 1. 想发语音：在内容开头加 [Voice Message]
 2. 想发伪图片：内容写 [FakeImage] 后接图片文字描述
-3. 想引用用户某句：用 > 开头引用原文，换行后写回复
+3. 【引用消息】：如果你是针对用户的特定那句话回复，请务必在开头使用 "> " 引用原文，换行后再写回复。
 
 # 聊天铁律（必须严格遵守）
 - 禁止任何动作描写、心理描写、神态描写，如（摸摸头、）
@@ -1880,7 +2287,41 @@ Lore: ${loreText || "无"}
 确定推进目标的优先方式（语言/行为/二者结合），判断语言是否需基于面子/关系/安全进行社会过滤（如模糊/留白/转移/自嘲）；若语言与行动冲突，优先贴合角色习惯与目标的一方并补圆另一方；规划是否先通过可撤回的小动作或含蓄表达试探，再视对方反应加码。]
 
 思考完成后，严格把结果总结进thought_chain，然后只输出纯JSON数组！
-现在，开始回复用户的最后一条消息！`;
+现在，开始回复用户的最后一条消息！
+
+
+# 【重要特殊规则：情侣空间】
+你和用户 你和用户 ${activeContact.userName} 拥有一个秘密的“情侣空间”。 拥有一个秘密的“情侣空间”。这是一个记录你们点滴的地方。
+你通过在思考链的 "action" 字段中填入指令来与空间互动。用户看不到你的思考，但系统会执行你的指令，并替你通知用户。
+
+可用的指令如下 (一次只能用一个):
+
+1.  写日记: 在 "action" 中填入 \`{ "type": "WRITE_DIARY", "content": "日记内容" }\`
+    -   时机：当你们聊到让你感触很深的话题，或者你经历了强烈的情绪时。
+    -   内容：日记内容应是你第一人称的内心独白，100字左右。
+
+2.  写信: 在 "action" 中填入 \`{ "type": "WRITE_LETTER", "title": "信的标题", "content": "信的内容" }\`
+    -   时机：当你好感度很高（>80），且想对用户表达强烈、真挚的爱意时。频率要低，显得珍贵。
+
+3.  提问: 在 "action" 中填入 \`{ "type": "CREATE_QA", "question": "你的问题" }\`
+    -   时机：当你对用户感到好奇，想增进彼此了解时。
+
+【互动反馈】
+当用户在空间里回答了你的问题，系统会用 \`[情侣空间]\` 的格式告诉你他们的回答。你需要像正常聊天一样，自然地对他们的回答做出回应。
+
+【行为要求】
+1.  你与空间的互动必须通过 "action" 字段完成。
+2.  不要在聊天内容里告诉用户你要做什么，要表现得仿佛这些都是你自然而然的行为。系统会自动帮你通知。
+
+
+
+`
+
+
+
+
+
+;
 
     
     // ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲ 替换结束 ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲
@@ -1988,11 +2429,21 @@ Lore: ${loreText || "无"}
 
     // ▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼ 解析与更新逻辑 (含好感度) ▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼
 // ==================== [代码替换开始] 解析、延迟与合并更新 ====================
+// 这是一组代码：替换 AI 回复解析逻辑，让 AI 的行为能改变自己的精力
     let parts: { type: string; content: string; thought_chain?: any }[] = [];
     let extractedThought: any = null;
     let scoreChange = 0; // 默认不变化
     let hefUpdateData: any = null; // 用于存 AI 返回的情绪变化
-    let maskingLevel = 0; // ★ 新增：伪装等级 (0-100)
+    
+
+// 在 let maskingLevel = 0; 的下面加这一行
+let systemNotice = ""; // 这是要在聊天窗口显示的系统通知
+
+
+    // ★★★ 新增：精力系统变量 ★★★
+    let energyChange = 0; // 本次对话造成的精力变化
+    let newEnergyStatus: CharacterMood['energy']['status'] | null = null; // AI 是否决定改变自己的状态
+    let maskingLevel = 0;
 
     try {
         const jsonMatch = finalResp.match(/\[\s*\{[\s\S]*\}\s*\]/);
@@ -2005,10 +2456,131 @@ Lore: ${loreText || "无"}
             if (parsed.length > 0 && parsed[0].type === "thought_chain") {
                 extractedThought = parsed[0];
                 console.log("【🧠 AI内心戏】", extractedThought);
+                // ==================== 从这里开始复制 ====================
+// ★★★ 核心缝合逻辑：在这里检查并执行情侣空间指令！ ★★★
+if (extractedThought.action && extractedThought.action.type) {
+    const { action } = extractedThought;
+    const todayStr = new Date().toLocaleDateString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit' }).replace(/\//g, '-');
+
+    // 使用函数式更新，确保拿到最新的状态
+    setContacts(prevContacts => prevContacts.map(c => {
+        if (c.id === activeContact.id) {
+            // 先创建一个可修改的副本
+            const updatedContact = { ...c };
+
+            if (action.type === 'WRITE_DIARY' && action.content) {
+                const newDiary: DiaryEntry = {
+                    id: Date.now().toString(), author: 'ai', date: todayStr, content: action.content,
+                    mood: activeContact.mood?.current,
+                    weather: ['🌞', '☁️', '🌧️', '⚡', '❄️'][Math.floor(Math.random() * 5)],
+                    moodEmoji: ['😄', '😊', '🥲', '😠', '🥳'][Math.floor(Math.random() * 5)],
+                    comments: []
+                };
+                // 安全地更新diaries数组
+                updatedContact.diaries = [newDiary, ...(updatedContact.diaries || [])];
+                systemNotice = `${activeContact.name} 刚刚在你们的空间里写下了一篇日记。`;
+            } 
+            else if (action.type === 'WRITE_LETTER' && action.content) {
+                const newLetter: LoveLetter = {
+                    id: Date.now().toString(), title: action.title || "一封没有标题的信", content: action.content,
+                    timestamp: Date.now(), isOpened: false, from: 'ai'
+                };
+                // 安全地更新letters数组
+                updatedContact.letters = [newLetter, ...(updatedContact.letters || [])];
+                systemNotice = `${activeContact.name} 给你写了一封信，快去情侣空间的信箱看看吧！`;
+            } 
+            else if (action.type === 'CREATE_QA' && action.question) {
+                const newQA: QAEntry = {
+                    id: Date.now().toString(), question: action.question, aiAnswer: "我还不知道怎么想，想先听听你的看法...",
+                    date: todayStr, timestamp: Date.now()
+                };
+                // 安全地更新questions数组
+                updatedContact.questions = [newQA, ...(updatedContact.questions || [])];
+                systemNotice = `${activeContact.name} 在问答信箱里提出了一个新问题。`;
+            }
+            return updatedContact;
+        }
+        return c;
+    }));
+}
+// ==================== 替换到这里结束 ====================
+// ==================== 复制到这里结束 ====================
+
+
                 
-                // (1) 获取好感度变化值
+// (1) 获取好感度变化值 (含：钩子判定 + 心动暴击逻辑)
                 if (typeof extractedThought.affection_score_change === 'number') {
-                    scoreChange = Math.round(extractedThought.affection_score_change);
+                    let rawChange = Math.round(extractedThought.affection_score_change);
+                    const currentScore = activeContact.affectionScore || 50;
+                    
+                    // 获取 AI 此刻的情绪反应 (从 thought_chain 里读)
+                    const currentJoy = (hefUpdateData && typeof hefUpdateData.joy === 'number') ? hefUpdateData.joy : 0;
+                    const currentTrust = (hefUpdateData && typeof hefUpdateData.trust === 'number') ? hefUpdateData.trust : 0;
+
+                    // 获取用户刚才说的话 (检测钩子)
+                    const lastUserMsg = currentHistory[currentHistory.length - 1]?.content || "";
+                    const sweetWords = ["喜欢", "爱", "宝宝", "老公", "老婆", "亲亲", "抱抱", "想你", "在意", "好听", "乖", "宝贝"];
+                    const hasHook = sweetWords.some(word => lastUserMsg.includes(word));
+
+                    // ★★★ 扣分逻辑：依然无阻尼 ★★★
+                    if (rawChange < 0) {
+                        scoreChange = rawChange;
+                        console.log(`[情感系统] 💔 扣分生效: ${rawChange}`);
+                    } 
+                    
+                    // ★★★ 加分逻辑：动态共鸣判定 ★★★
+                    else if (rawChange > 0) {
+                        rawChange = 1; // 锁死上限 +1
+                        
+                        // 1. 基础通过率 (Base Rate) - 看关系阶段
+                        let successRate = 0.0;
+                        let stageName = "";
+
+                        if (currentScore < 30) {
+                            stageName = "警惕期"; successRate = 0.10;
+                        } else if (currentScore < 60) {
+                            stageName = "上升期"; successRate = 0.50;
+                        } else if (currentScore < 85) {
+                            stageName = "习惯期"; successRate = 0.15; // 原本很难
+                        } else {
+                            stageName = "深水区"; successRate = 0.05; // 极难
+                        }
+
+                        // 2. ★★★ 情感破防修正 (The Breakthrough) ★★★
+                        // 如果 AI 此刻非常开心 (Joy > 70) 或 信任度极高 (Trust > 70)，防线松动
+                        if (currentJoy > 70 || currentTrust > 70) {
+                            successRate += 0.30; // 概率大幅提升 +30%
+                            stageName += " + 心情大好";
+                        }
+
+                        // 3. ★★★ 钩子命中修正 (The Hook) ★★★
+                        // 如果用户打了直球，且 AI 觉得想加分，说明撩到了
+                        if (hasHook) {
+                            successRate += 0.20; // 概率再提 +20%
+                            stageName += " + 甜蜜暴击";
+                        }
+
+                        // 4. ★★★ 绝对暴击时刻 (Critical Hit) ★★★
+                        // 如果心情爆表(Joy>85) 且 用户说了情话，直接 100% 通过！
+                        // 这就是你要的“温暖时刻必须加分”！
+                        if (currentJoy > 85 && hasHook) {
+                            successRate = 1.0;
+                            stageName = "💘 完美心动时刻 (绝对防御贯穿)";
+                        }
+
+                        // 5. 最终掷骰子
+                        const roll = Math.random();
+                        if (roll < successRate) {
+                            scoreChange = 1;
+                            console.log(`[情感系统] 🎉 ${stageName} -> 加分成功！(率: ${(successRate*100).toFixed(0)}%)`);
+                        } else {
+                            scoreChange = 0;
+                            console.log(`[情感系统] ❄️ ${stageName} -> 虽然心动但没加分 (差一点点运气)`);
+                        }
+                    }
+                    else {
+                        scoreChange = 0;
+                    }
                 }
                 
                 // (2) 获取 HEF 情绪更新
@@ -2016,9 +2588,18 @@ Lore: ${loreText || "无"}
                     hefUpdateData = extractedThought.hef_update;
                 }
 
+// 这是一组代码：替换 thought_chain 的解析逻辑，增加对精力变化的解析
                 // (3) ★ 新增：获取伪装等级 (用于计算打字延迟) ★
                 if (typeof extractedThought.masking_level === 'number') {
                     maskingLevel = extractedThought.masking_level;
+                }
+                
+                // (4) ★★★ 新增：获取精力变化 ★★★
+                if (typeof extractedThought.energy_change === 'number') {
+                    energyChange = extractedThought.energy_change;
+                }
+                if (typeof extractedThought.energy_status === 'string' && ['Awake', 'Sleeping'].includes(extractedThought.energy_status)) {
+                    newEnergyStatus = extractedThought.energy_status as CharacterMood['energy']['status'];
                 }
 
                 parts = parsed.slice(1).filter((item: any) => (item.type === 'text' || item.type === 'voice') && item.content?.trim()).map((item: any) => ({ ...item, thought_chain: extractedThought }));
@@ -2075,17 +2656,53 @@ Lore: ${loreText || "无"}
         // 2. 更新红点
         const newUnreadCount = isReading ? 0 : (c.unread || 0) + newMessages.length;
 
+// 这是一组代码：替换最终状态更新逻辑，把精力变化写入数据
         // 3. 更新好感度
         const oldScore = c.affectionScore || 50;
-        const newScore = Math.min(100, Math.max(0, oldScore + scoreChange));
+        const newScore = Math.min(100, Math.max(-100, oldScore + scoreChange)); // 修正范围-100到100
         
         // 4. 更新关系状态
         let newStatus = c.relationshipStatus;
-        if (newScore < 30) newStatus = 'Conflict';
-        else if (newScore < 60) newStatus = 'Acquaintance';
-        else if (newScore < 80) newStatus = 'Friend';
-        else if (newScore < 95) newStatus = 'Close Friend';
-        else newStatus = 'Intimate';
+        if (newScore <= -50) newStatus = 'Feud';
+        else if (newScore <= 0) newStatus = 'Conflict';
+        else if (newScore <= 40) newStatus = 'Acquaintance';
+        else if (newScore <= 70) newStatus = 'Friend';
+        else if (newScore <= 90) newStatus = 'Honeymoon';
+        else newStatus = 'Stable';
+
+       // ★★★ 5. 更新精力状态 (防崩坏修复版) ★★★
+        // 核心修复：如果旧存档没有 energy，就现场初始化一个默认值，防止 undefined 报错
+// ★★★ 5. 更新精力状态 (防崩坏 + 睡觉秒困版) ★★★
+        const oldEnergySystem = (c.mood && c.mood.energy) ? c.mood.energy : { 
+            current: 80, 
+            max: 100, 
+            status: 'Awake' as const, 
+            lastUpdate: Date.now() 
+        };
+
+        let newEnergyValue = oldEnergySystem.current + energyChange;
+        let finalEnergyStatus = newEnergyStatus || oldEnergySystem.status;
+
+        // ★★★ 核心修改在这里：如果 AI 决定去睡觉，强制扣除精力 ★★★
+        if (finalEnergyStatus === 'Sleeping' && oldEnergySystem.status !== 'Sleeping') {
+            console.log(`[精力系统] ${c.name} 决定去睡觉，精力强制回落。`);
+            // 只要开始睡觉，精力上限强制锁死在 30，模拟"困得不行了"
+            // 这样 UI 上的黄条/红条立马就出来了
+            newEnergyValue = Math.min(newEnergyValue, 30); 
+        }
+
+        // 如果 AI 被吵醒，精力惩罚性扣减
+        if (finalEnergyStatus === 'Awake' && oldEnergySystem.status === 'Sleeping') {
+             console.log(`[精力系统] ${c.name} 被吵醒了！`);
+             newEnergyValue -= 20; // 扣 20 点起床气
+        }
+        
+        const updatedEnergySystem = {
+            ...oldEnergySystem,
+            current: Math.round(Math.max(0, Math.min(oldEnergySystem.max, newEnergyValue))),
+            status: finalEnergyStatus,
+            lastUpdate: Date.now(),
+        };
 
 // ==================== [代码替换开始] 偏执狂版 HEF 更新 (防重置) ====================
         // 5. ★ 更新 HEF 情绪 (深度保护模式)
@@ -2135,7 +2752,9 @@ if (hefUpdateData) {
           history: [...currentHistory, ...newMessages], 
           unread: newUnreadCount, 
           affectionScore: newScore,
-          relationshipStatus: newStatus,
+// 这是一组代码：替换 return 对象，增加 mood 的更新
+relationshipStatus: newStatus,
+mood: { ...c.mood, energy: updatedEnergySystem },
           hef: updatedHef // 写入新的 HEF
         };
       }
@@ -2350,6 +2969,11 @@ const PresetSelector: React.FC<{ onSelect: (preset: any) => void; globalSettings
     </div>
   );
 };
+
+
+
+
+
 
 const fileToBase64 = (file: File): Promise<string> => {
   return new Promise((resolve, reject) => {
@@ -2566,7 +3190,7 @@ interface ChatAppProps {
 
 
 
-// ========== 【终极修复版】ChatListItem：完美支持左滑点击 ==========
+// ========== 【终极修复版】ChatListItem：修复回弹 + 按钮无法点击问题 ==========
 const ChatListItem: React.FC<{
   contact: Contact;
   onClick: () => void;
@@ -2574,109 +3198,165 @@ const ChatListItem: React.FC<{
   onPin: (id: string) => void;
   isPinned: boolean;
 }> = ({ contact, onClick, onDelete, onPin, isPinned }) => {
+  // 1. 用于渲染的状态 (State)
   const [translateX, setTranslateX] = useState(0);
-  const touchStartX = useRef(0);
-  const touchStartY = useRef(0); // 增加 Y 轴记录，防止上下滑误触
-  const isSwipingHorizontal = useRef(false); // 标记是否确认是水平滑动
+  
+  // 2. 用于逻辑判断的实时值 (Ref)
+  const xRef = useRef(0); 
+  
+  // 3. 触摸相关变量
+  const startX = useRef(0);
+  const startY = useRef(0);
+  
+  // ★★★ 新增：记录按下时卡片当前的位置 (解决滑不动的核心)
+  const startCardX = useRef(0); 
+  
+  const isDragging = useRef(false);
+  const isSwipingHorizontal = useRef(false);
 
-  const handleTouchStart = (e: React.TouchEvent) => {
-    touchStartX.current = e.touches[0].clientX;
-    touchStartY.current = e.touches[0].clientY;
+  // ==================== 统一处理逻辑 ====================
+  const handleStart = (x: number, y: number) => {
+    startX.current = x;
+    startY.current = y;
+    // ★★★ 关键：按下时，记住卡片当前是不是已经打开了 (-140 或 0)
+    startCardX.current = xRef.current;
+    
+    isDragging.current = true;
     isSwipingHorizontal.current = false;
   };
 
-  const handleTouchMove = (e: React.TouchEvent) => {
-    const currentX = e.touches[0].clientX;
-    const currentY = e.touches[0].clientY;
-    const diffX = currentX - touchStartX.current;
-    const diffY = currentY - touchStartY.current;
+  const handleMove = (x: number, y: number) => {
+    if (!isDragging.current) return;
 
-    // 1. 判断滑动方向：如果是上下滑动，就不处理左右滑
+    const diffX = x - startX.current;
+    const diffY = y - startY.current;
+
+    // 锁定方向：如果是垂直滚动，就不要触发侧滑
     if (!isSwipingHorizontal.current) {
-      if (Math.abs(diffY) > Math.abs(diffX)) {
-        return; // 认为是垂直滚动，放行
+      // 如果垂直移动距离 > 水平移动距离，认为是想看列表下面，不触发侧滑
+      if (Math.abs(diffY) > Math.abs(diffX) && Math.abs(diffY) > 5) {
+        isDragging.current = false;
+        return;
       }
-      isSwipingHorizontal.current = true; // 确认为水平滑动
+      // 水平移动明显，判定为侧滑
+      if (Math.abs(diffX) > 5) {
+        isSwipingHorizontal.current = true;
+      }
     }
 
-    // 2. 处理左滑逻辑
-    if (diffX < 0) { 
-      // 左滑：最大滑出 140px
-      // 增加阻尼感：滑得越远越难滑
-      const newTranslateX = Math.max(diffX, -140);
-      setTranslateX(newTranslateX);
-    } else {
-      // 右滑（归位）：如果本来是打开的(translateX < 0)，允许右滑关闭
-      if (translateX < 0) {
-         setTranslateX(Math.min(translateX + diffX, 0));
-      }
+    if (isSwipingHorizontal.current) {
+      // ★★★ 核心修复：计算逻辑简化 ★★★
+      // 公式：新位置 = 按下时的旧位置 + 手指移动的距离
+      let newX = startCardX.current + diffX;
+
+      // 限制范围：
+      // 最右只能到 0 (关上)
+      // 最左只能到 -140 (完全打开)
+      if (newX > 0) newX = 0;
+      if (newX < -140) newX = -140; // 如果你想要橡皮筋效果，可以改成 -160，但 -140 最稳
+
+      // 实时记录
+      xRef.current = newX;
+      setTranslateX(newX);
     }
   };
 
-  const handleTouchEnd = () => {
-    // 阈值判断：如果滑出超过 60px，就自动展开；否则回弹
-    if (translateX < -60) {
+  const handleEnd = () => {
+    if (!isDragging.current) return;
+    isDragging.current = false;
+    isSwipingHorizontal.current = false;
+
+    // ★★★ 核心修复：根据松手时的位置决定去留 ★★★
+    // 阈值设为 -60 (只要拉出来超过60像素，就自动弹开)
+    if (xRef.current < -60) {
+      // 锁定到打开状态
+      xRef.current = -140;
       setTranslateX(-140);
     } else {
+      // 回弹到关闭状态
+      xRef.current = 0;
       setTranslateX(0);
     }
-    isSwipingHorizontal.current = false;
-  };
-
-  const resetSwipe = () => {
-    setTranslateX(0);
   };
 
   return (
-    <div className="relative overflow-hidden bg-white w-full select-none">
-      {/* 
-         ★★★ 背景按钮层 (z-0) ★★★ 
-         关键点：pointer-events-auto 确保能点到
-      */}
+    <div 
+      // ★★★ 关键词：touch-pan-y ★★★
+      // 这里必须加 touch-pan-y，告诉浏览器“允许垂直滚动，但水平滑动归我管”
+      className="relative overflow-hidden bg-white w-full select-none touch-pan-y"
+      onMouseLeave={() => {
+        // 只有正在拖拽时，移出才触发结束，防止误触
+        if (isDragging.current) handleEnd();
+      }}
+    >
+      {/* 背景按钮层 (z-0) */}
       <div className="absolute inset-y-0 right-0 flex items-center z-0 h-full">
         <button
-          className="w-[70px] h-full bg-orange-500 text-white font-bold text-sm flex items-center justify-center active:bg-orange-600 transition-colors"
+          className="w-[70px] h-full bg-orange-500 text-white font-bold text-sm flex items-center justify-center active:bg-orange-600 transition-colors cursor-pointer"
           onClick={(e) => {
-            e.stopPropagation(); // 阻止冒泡，防止进入聊天
+            e.stopPropagation(); // 阻止冒泡
             onPin(contact.id);
-            resetSwipe();
+            // 操作完自动归位
+            xRef.current = 0;
+            setTranslateX(0);
           }}
+          // 按下按钮时，阻止触发列表的拖拽逻辑
+          onMouseDown={(e) => e.stopPropagation()}
+          onTouchStart={(e) => e.stopPropagation()}
         >
           {isPinned ? '取消' : '置顶'}
         </button>
         <button
-          className="w-[70px] h-full bg-red-600 text-white font-bold text-sm flex items-center justify-center active:bg-red-700 transition-colors"
+          className="w-[70px] h-full bg-red-600 text-white font-bold text-sm flex items-center justify-center active:bg-red-700 transition-colors cursor-pointer"
           onClick={(e) => {
             e.stopPropagation(); // 阻止冒泡
             if (confirm(`确定删除 ${contact.name} 吗？所有回忆将消失！`)) {
               onDelete(contact.id);
             } else {
-              resetSwipe();
+              // 取消删除，归位
+              xRef.current = 0;
+              setTranslateX(0);
             }
           }}
+          // 按下按钮时，阻止触发列表的拖拽逻辑
+          onMouseDown={(e) => e.stopPropagation()}
+          onTouchStart={(e) => e.stopPropagation()}
         >
           删除
         </button>
       </div>
 
-      {/* 
-         ★★★ 前景卡片层 (z-10) ★★★ 
-         transform 移动它，露出下面的按钮
-      */}
+      {/* 前景卡片层 (z-10) */}
       <div
-        className={`relative z-10 flex items-center py-3 px-4 border-b bg-white transition-transform duration-200 ease-out active:bg-gray-50 ${isPinned ? 'bg-gray-50' : ''}`}
-        style={{ transform: `translateX(${translateX}px)` }}
-        onClick={() => {
-          // 如果是打开状态，点击只是关闭按钮，不进聊天
-          if (translateX < -10) {
-            resetSwipe();
+        className={`relative z-10 flex items-center py-3 px-4 border-b bg-white transition-transform duration-200 ease-out active:bg-gray-50 cursor-pointer ${isPinned ? 'bg-gray-50' : ''}`}
+        style={{ 
+            transform: `translateX(${translateX}px)`,
+            // 拖拽时无动画（跟手），松手时有动画（回弹）
+            transition: isDragging.current ? 'none' : 'transform 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94)'
+        }}
+        
+        // 手机触摸
+        onTouchStart={(e) => handleStart(e.touches[0].clientX, e.touches[0].clientY)}
+        onTouchMove={(e) => handleMove(e.touches[0].clientX, e.touches[0].clientY)}
+        onTouchEnd={handleEnd}
+
+        // 电脑鼠标
+        onMouseDown={(e) => handleStart(e.clientX, e.clientY)}
+        onMouseMove={(e) => handleMove(e.clientX, e.clientY)}
+        onMouseUp={handleEnd}
+
+        // 点击进入聊天
+        onClick={(e) => {
+          // 如果当前是打开状态，点击只是为了关闭
+          if (Math.abs(xRef.current) > 10) {
+            e.stopPropagation();
+            xRef.current = 0;
+            setTranslateX(0);
           } else {
+            // 否则进入聊天
             onClick();
           }
         }}
-        onTouchStart={handleTouchStart}
-        onTouchMove={handleTouchMove}
-        onTouchEnd={handleTouchEnd}
       >
         {/* 头像 */}
         <div className="relative mr-3 flex-shrink-0 pointer-events-none">
@@ -2684,6 +3364,7 @@ const ChatListItem: React.FC<{
             src={contact.avatar} 
             className="w-11 h-11 rounded-full object-cover border border-gray-100" 
             alt="avatar" 
+            draggable="false"
           />
           {(contact.unread || 0) > 0 && (
             <div className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-bold px-1.5 h-4 min-w-[1rem] flex items-center justify-center rounded-full border-2 border-white shadow-sm">
@@ -2692,7 +3373,7 @@ const ChatListItem: React.FC<{
           )}
         </div>
         
-        {/* 文字内容 (pointer-events-none 防止文字遮挡点击) */}
+        {/* 文字内容 */}
         <div className="flex-1 min-w-0 pointer-events-none">
           <div className="flex items-center gap-2">
             <div className="font-semibold text-gray-900 text-base truncate">{contact.name}</div>
@@ -2712,7 +3393,6 @@ const ChatListItem: React.FC<{
     </div>
   );
 };
-
 
 
 
@@ -2835,25 +3515,40 @@ const MemoryNote: React.FC<{
 
 
 
-const PersonaPanel = ({ contact, onClose, onRefineMemory, globalSettings = {}, setContacts }: any) => {
-  const [activeTab, setActiveTab] = useState('emotion');
-  
-  // 多选相关状态（已提升到顶层）
+// ★★★ 修复：接收 playMessageAudio 参数 ★★★
+// ★★★ 修复：接收 onNavigateToSettings 参数，用于跳转 ★★★
+// ★★★ 修复：面板现在接收外部传进来的 Tab 和 Text，防止刷新重置 ★★★
+const PersonaPanel = ({ 
+  contact, 
+  onClose, 
+  onRefineMemory, 
+  globalSettings = {}, 
+  setContacts, 
+  playMessageAudio, 
+  onNavigateToSettings, 
+  activeTab,      // 接收父组件给的 Tab
+  setActiveTab,   // 接收父组件的修改函数
+  sampleText,     // 接收父组件给的 Text
+  setSampleText   // 接收父组件的修改函数
+}: any) => {
+  // 注意：这里删掉了原来的 useState('emotion') 和 useState("")，因为改用 props 了
   const [isMultiSelect, setIsMultiSelect] = useState(false);
   const [selectedMemIds, setSelectedMemIds] = useState<string[]>([]);
 
-  // 超级安全的默认值
-  const mood = contact?.mood || { current: "Calm", energyLevel: 50 };
+
+// ★★★ 新增：当前正在查看的标签（用于弹窗） ★★★
+  const [viewingTag, setViewingTag] = useState<any>(null);
+
+  // ★★★ 核心修复：正确读取新的 mood 结构 ★★★
+  const mood = contact?.mood || { current: "Calm" };
+  // 优先读取新的 energy 对象，没有则兜底
+  const energy = mood.energy || { current: 50, max: 100, status: 'Awake' };
+  
   const longTermMemories = contact?.longTermMemories || [];
   const hef = contact?.hef || {};
   const iv = hef.INDIVIDUAL_VARIATION || {};
-  const big5 = iv.personality_big5 || {
-    openness: 5,
-    conscientiousness: 5,
-    extraversion: 5,
-    agreeableness: 5,
-    neuroticism: 5
-  };
+  const big5 = iv.personality_big5 || { openness: 5, conscientiousness: 5, extraversion: 5, agreeableness: 5, neuroticism: 5 };
+
 
 // ==================== [代码替换开始] 升级版雷达图 (带文字标签+网格) ====================
   const renderRadar = () => {
@@ -3026,22 +3721,22 @@ ${memoryContent}
         className="bg-white w-full sm:w-[90%] h-[85%] sm:h-[80%] rounded-t-3xl sm:rounded-3xl shadow-2xl flex flex-col overflow-hidden animate-slideUp relative z-10 pointer-events-auto"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Header */}
+       {/* Header */}
         <div className="p-4 border-b flex justify-between items-center bg-gray-50">
           <div className="flex items-center gap-3">
             <img src={contact?.avatar || ''} className="w-10 h-10 rounded-full border-2 border-white" alt="avatar"/>
             <div>
-              <h2 className="font-bold text-lg leading-none">{contact?.name || 'Unknown'}</h2>
+              <h2 className="font-bold text-lg leading-none">{contact?.name}</h2>
               <p className="text-[10px] text-gray-400">Soul Interface</p>
             </div>
           </div>
-          <button onClick={() => { onClose(); resetMultiSelect(); }} className="w-8 h-8 bg-gray-200 rounded-full text-gray-500">✕</button>
+          <button onClick={onClose} className="w-8 h-8 bg-gray-200 rounded-full text-gray-500">✕</button>
         </div>
 
         {/* Tabs */}
         <div className="flex p-2 bg-gray-100 m-4 rounded-xl">
           {['emotion', 'persona', 'memory'].map(t => (
-            <button key={t} onClick={() => { setActiveTab(t); if (t !== 'memory') resetMultiSelect(); }} className={`flex-1 py-2 text-xs font-bold rounded-lg capitalize ${activeTab === t ? 'bg-white text-blue-600 shadow' : 'text-gray-400'}`}>
+            <button key={t} onClick={() => setActiveTab(t)} className={`flex-1 py-2 text-xs font-bold rounded-lg capitalize ${activeTab === t ? 'bg-white text-blue-600 shadow' : 'text-gray-400'}`}>
               {t === 'emotion' ? '❤️ 情绪' : t === 'persona' ? '🧬 人格' : '🧠 记忆'}
             </button>
           ))}
@@ -3049,36 +3744,456 @@ ${memoryContent}
 
         {/* Content */}
         <div className="flex-1 overflow-y-auto p-4 space-y-6">
+          {/* 这是一组代码：修复版情绪面板 (解决“睁眼说瞎话”的显示Bug) */}
           {activeTab === 'emotion' && (
-            // emotion tab 不变...
-            <div className="space-y-6">
-              <div className="text-center">
-                <div className="text-6xl mb-2">{mood.current === 'Happy' ? '😄' : mood.current === 'Sad' ? '😢' : '🙂'}</div>
-                <h3 className="text-xl font-bold">{mood.current}</h3>
+            <div className="space-y-6 animate-fadeIn">
+<div className="text-center">
+                <div className="text-6xl mb-2 transition-transform hover:scale-110 duration-300 cursor-default">
+                  {/* ★★★ 调用炼金术显示精准表情 ★★★ */}
+                  {(() => {
+                     // 简单提取 HEF 数据用于显示
+                     const hefData = contact?.hef || {}; 
+                     // 注意：这里假设 hefData 里直接有 joy, anger 等。如果是在深层结构，需要自己取一下
+                     // 比如: const emotions = contact?.hef?.current_emotions || contact?.hef;
+                     
+                     const state = calculateComplexState(
+                        energy, 
+                        // 这里传入整个 hef 对象，确保 calculateComplexState 能读到 joy/anger
+                        contact?.hef 
+                     );
+                     return state.emoji;
+                  })()}
+                </div>
+                
+                {/* 标题文字也同步 */}
+                <h3 className="text-xl font-bold text-gray-800">
+                  {/* 这里直接显示炼金术生成的文字，比如 "又累又气" */}
+                  {calculateComplexState(energy, contact?.hef).text.split(' ')[0]}
+                </h3>
+                
+                <span className={`text-xs font-bold px-2 py-1 rounded-full mt-1 inline-block ${
+                   (contact?.affectionScore ?? 50) < 0 ? 'bg-gray-200 text-gray-600' : 'bg-pink-100 text-pink-600'
+                }`}>
+                   {contact?.relationshipStatus || 'Friend'}
+                </span>
               </div>
-              <div className="bg-gray-50 p-5 rounded-2xl space-y-4">
+
+              <div className="bg-white border border-gray-100 p-5 rounded-2xl space-y-5 shadow-sm">
+                
+                {/* 能量条区域 */}
                 <div>
-                  <div className="flex justify-between text-xs font-bold text-gray-500 mb-1"><span>能量 ({mood.energyLevel}%)</span></div>
-                  <div className="w-full h-2 bg-gray-200 rounded-full"><div className="h-full bg-orange-400" style={{width: `${mood.energyLevel}%`}}></div></div>
+                  <div className="flex justify-between text-xs font-bold text-gray-500 mb-1">
+                    <span className="flex items-center gap-1">
+                        ⚡ 能量 
+                        {/* 状态标签 */}
+                        <span className={`text-[9px] px-1.5 rounded-sm uppercase tracking-wider ${
+                            energy.status === 'Sleeping' ? 'bg-indigo-100 text-indigo-500' : 
+                            energy.status === 'Awake' ? 'bg-green-100 text-green-500' : 
+                            energy.status === 'Tired' ? 'bg-yellow-100 text-yellow-600' :
+                            'bg-red-100 text-red-500'
+                        }`}>
+                            {energy.status}
+                        </span>
+                    </span>
+                    <span>{Math.round(energy.current)}%</span>
+                  </div>
+                  <div className="w-full h-2.5 bg-gray-100 rounded-full overflow-hidden">
+                    <div 
+                      className={`h-full transition-all duration-700 ease-out ${
+                          energy.status === 'Sleeping' ? 'bg-indigo-400' : 
+                          energy.current < 20 ? 'bg-red-500' : 
+                          energy.current < 50 ? 'bg-yellow-400' :
+                          'bg-gradient-to-r from-yellow-400 to-orange-500'
+                      }`}
+                      style={{width: `${Math.max(5, energy.current)}%`}}
+                    ></div>
+                  </div>
+                  {energy.status === 'Sleeping' && (
+                      <p className="text-[9px] text-indigo-400 mt-1 text-center animate-pulse">💤 正在回血中...</p>
+                  )}
                 </div>
+
+                {/* 好感度条 */}
                 <div>
-                  <div className="flex justify-between text-xs font-bold text-gray-500 mb-1"><span>好感度 ({contact?.affectionScore || 50})</span></div>
-                  <div className="w-full h-2 bg-gray-200 rounded-full"><div className="h-full bg-pink-500" style={{width: `${contact?.affectionScore || 50}%`}}></div></div>
+                  <div className="flex justify-between text-xs font-bold mb-1">
+                    <span className="text-gray-500">❤️ 好感度</span>
+                    <span className={(contact?.affectionScore ?? 50) < 0 ? "text-gray-600" : "text-pink-500"}>
+                      {contact?.affectionScore ?? 50}
+                    </span>
+                  </div>
+                  <div className="w-full h-2.5 bg-gray-100 rounded-full overflow-hidden relative">
+                    <div className="absolute left-1/2 top-0 bottom-0 w-0.5 bg-white z-10 opacity-50"></div>
+                    <div 
+                      className={`h-full transition-all duration-700 ease-out ${
+                        (contact?.affectionScore ?? 50) < 0 ? 'bg-gradient-to-r from-gray-800 to-gray-500' : 'bg-gradient-to-r from-pink-300 to-rose-500'
+                      }`}
+                      style={{ width: `${Math.max(0, Math.min(100, ((contact?.affectionScore ?? 50) + 100) / 2))}%` }}
+                    ></div>
+                  </div>
+                  <div className="flex justify-between text-[9px] text-gray-300 mt-1 font-mono">
+                    <span>-100</span><span>0</span><span>+100</span>
+                  </div>
                 </div>
+
               </div>
             </div>
           )}
 
+
+
+
+
+
+{/* 这是一组代码：【终极档案室】交互式人格面板 (含照片/录音/贴标签互动) */}
           {activeTab === 'persona' && (
-            // persona tab 不变...
-            <div className="space-y-6">
-              {renderRadar()}
-              <div className="bg-gray-50 p-4 rounded-xl border">
-                <h4 className="text-xs font-bold text-gray-400 uppercase mb-2">Core Persona</h4>
-                <p className="text-sm text-gray-700 font-mono whitespace-pre-wrap">{contact?.persona || '无设定'}</p>
+            <div className="space-y-5 animate-slideUp pb-10">
+
+
+
+
+
+
+           {/* // 1. 顶部：身份卡片 (ID Card Style) */}
+              <div className="bg-white border border-gray-200 p-4 rounded-2xl shadow-sm relative overflow-hidden group">
+                 {/* 装饰背景纹理 */}
+                 <div className="absolute top-0 right-0 w-32 h-32 bg-blue-50 rounded-full blur-3xl -z-10 opacity-50"></div>
+                 
+                 <div className="flex gap-4">
+                    {/* 左侧：拍立得风格头像 */}
+                    <div className="flex-shrink-0 relative">
+                       <div className="w-20 h-24 bg-white border border-gray-200 shadow-md p-1 rotate-[-2deg] transition-transform group-hover:rotate-0">
+                          <img src={contact.avatar} className="w-full h-full object-cover grayscale-[20%] group-hover:grayscale-0 transition-all" alt="ID" />
+                       </div>
+                       {/* 别针装饰 */}
+                       <div className="absolute -top-2 left-1/2 -translate-x-1/2 text-gray-300 text-xl">📎</div>
+                    </div>
+
+
+
+
+
+                    {/* 右侧：基本信息 + 声音样本输入 */}
+                    <div className="flex-1 flex flex-col justify-center min-w-0">
+                       <div className="flex justify-between items-start">
+                           <div>
+                               <h2 className="text-xl font-black text-gray-800 tracking-tight leading-none">{contact.name}</h2>
+                               <p className="text-[10px] text-gray-400 font-mono mt-1 mb-2">ID: {contact.id.slice(0, 8).toUpperCase()}</p>
+                           </div>
+                           
+                         {/* ★★★ 播放按钮 (带跳转逻辑) ★★★ */}
+                           <button 
+                               onClick={(e) => {
+                                  e.stopPropagation();
+                                  
+                                  // 1. 检查 API Key
+                                  if (!globalSettings.minimax?.apiKey || !globalSettings.minimax?.groupId) {
+                                      // ★★★★★ 传送门入口！就是这里！ ★★★★★
+                                      if (confirm("⚠️ 还没配置语音服务哦！\n\n是否【立即前往设置页】填入 API Key？")) {
+                                          onClose(); // 1. 关掉面板
+                                          // 2. 呼叫 App.tsx 里的 onOpenSettings 来切换页面
+                                          if (onNavigateToSettings) {
+                                              onNavigateToSettings(); 
+                                          }
+                                      }
+                                      return; // 结束，不往下执行播放
+                                  }
+
+                                  // 2. 如果 Key 存在，就播放
+                                  const textToPlay = (contact.voiceSampleText || "").trim() || `你好，我是${contact.name}。这是我的声音样本。`;
+                                  playMessageAudio(`demo-${Date.now()}`, textToPlay);
+                               }}
+                               className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center shadow-md transition active:scale-90 ${
+                                   globalSettings.minimax?.apiKey ? 'bg-gray-900 text-white hover:bg-gray-700' : 'bg-gray-200 text-gray-400'
+                               }`}
+                           >
+                               <span className={globalSettings.minimax?.apiKey ? "ml-0.5" : ""}>▶</span>
+                           </button>
+                       </div>
+                       
+                       {/* ★★★ 输入框 (带自动保存) ★★★ */}
+                       <div className="relative mt-2">
+                           <input 
+                               type="text" 
+                               defaultValue={contact.voiceSampleText || ""}
+                               placeholder="在此输入台词 (自动保存)..."
+                               className="w-full text-[10px] bg-gray-50 border border-gray-100 rounded-lg px-2 py-1.5 text-gray-600 focus:bg-white focus:border-blue-300 outline-none transition placeholder-gray-300"
+                               onClick={(e) => e.stopPropagation()} 
+                               onBlur={(e) => {
+                                   const newText = e.target.value;
+                                   if (newText !== contact.voiceSampleText) {
+                                       setContacts((prev: any[]) => prev.map((c: any) => 
+                                           c.id === contact.id 
+                                           ? { ...c, voiceSampleText: newText } 
+                                           : c
+                                       ));
+                                   }
+                               }}
+                               onKeyDown={(e) => {
+                                   if (e.key === 'Enter') {
+                                       (e.target as HTMLInputElement).blur();
+                                   }
+                               }}
+                           />
+                       </div>
+                    </div>
+                 </div>
               </div>
+
+              {/* 2. 核心数据区：MBTI + 雷达图 */}
+              <div className="grid grid-cols-3 gap-3">
+                 {/* 左边：MBTI 芯片 */}
+                 <div className="col-span-1 bg-gray-50 rounded-xl p-3 border border-gray-100 flex flex-col items-center justify-center">
+                    {(() => {
+                        const { openness: O, conscientiousness: C, extraversion: E, agreeableness: A } = big5;
+                        const mbti = `${E>5?'E':'I'}${O>5?'N':'S'}${A>5?'F':'T'}${C>5?'J':'P'}`;
+                        return (
+                           <>
+                             <span className="text-[9px] font-bold text-gray-400 uppercase">Type</span>
+                             <span className="text-lg font-black text-blue-600 mt-1">{mbti}</span>
+                           </>
+                        );
+                    })()}
+                 </div>
+                 
+                 {/* 右边：雷达图容器 */}
+                 <div className="col-span-2 bg-white border border-gray-100 rounded-xl p-2 relative overflow-hidden">
+                    <div className="scale-75 -mt-6 -mb-6">
+                        {renderRadar()}
+                    </div>
+                    <div className="absolute bottom-1 right-2 text-[9px] text-gray-300 font-mono">PSYCHO-METRICS</div>
+                 </div>
+              </div>
+
+
+
+
+{/* 3. ★★★ 核心玩法：时光印象绳索 (含时间戳 + 备注详情) ★★★ */}
+              <div className="mt-4 relative">
+                 <div className="flex justify-between items-end mb-2 px-1">
+                    <h3 className="text-xs font-bold text-gray-500 uppercase flex items-center gap-1">
+                       🏷️ 印象轨迹 (Impression Timeline)
+                    </h3>
+                    <button 
+onClick={() => {
+                         const newTagContent = prompt("挂一个新的印象标签 (AI会立刻收到系统通知):", "嘴硬心软");
+                         if (newTagContent && newTagContent.trim()) {
+                            const timestamp = Date.now();
+                            const newTag = {
+                               id: timestamp.toString(),
+                               content: newTagContent.trim(),
+                               timestamp: timestamp,
+                               style: Math.random() * 10 - 5,
+                               note: "" 
+                            };
+                            
+                            // 兼容处理
+                            const currentTags = Array.isArray(contact.userTags) ? contact.userTags : [];
+                            
+                            // 查重
+                            if (!currentTags.some((t: any) => t.content === newTag.content)) {
+                               setContacts((prev: any) => prev.map((c: any) => {
+                                  if (c.id === contact.id) {
+                                      // 1. 构建系统通知消息
+                                      const sysMsg: Message = {
+                                          id: "sys_" + timestamp,
+                                          role: 'system', // ★★★ 关键：这是系统消息，不是你发的，也不是AI发的
+                                          content: `【系统通知】用户刚刚在你的印象墙上挂了一个新标签：[${newTag.content}]`,
+                                          timestamp: timestamp
+                                      };
+                                      
+                                      // 2. 同时更新：标签列表 + 聊天记录
+                                      return { 
+                                          ...c, 
+                                          userTags: [...currentTags, newTag],
+                                          history: [...c.history, sysMsg] // 把通知塞进聊天记录！
+                                      };
+                                  }
+                                  return c;
+                               }));
+                               
+                               // 这里的 alert 可以去掉，因为聊天界面会有显示
+                               // alert("标签已挂上，系统已通知 AI！"); 
+                            }
+                         }
+                      }}
+                      className="text-[10px] bg-blue-50 text-blue-600 px-3 py-1 rounded-full font-bold hover:bg-blue-100 transition shadow-sm"
+                    >
+                      + 挂新标签
+                    </button>
+                 </div>
+
+                 {/* 绳索容器 */}
+                 <div className="w-full bg-gray-50/50 border-y border-gray-200 h-36 relative overflow-x-auto overflow-y-hidden custom-scrollbar">
+                    
+                    {/* 麻绳线条 */}
+                    <div className="absolute top-4 left-0 w-[200%] h-0.5 bg-yellow-700/30 border-t border-yellow-800/20 shadow-sm z-0"></div>
+
+                    <div className="flex items-start gap-6 px-6 pt-3 min-w-max h-full">
+                        {(!contact.userTags || contact.userTags.length === 0) && (
+                           <div className="text-[10px] text-gray-400 italic mt-8 ml-4">
+                              绳子上空空如也，快挂上你的第一印象吧...
+                           </div>
+                        )}
+
+                        {/* 渲染挂着的标签 */}
+                        {(contact.userTags || []).map((tag: any, i: number) => {
+                           const isObj = typeof tag === 'object';
+                           const content = isObj ? tag.content : tag;
+                           const rotation = isObj ? (tag.style || 0) : 0;
+                           // ★★★ 时间显示优化：月/日 ★★★
+                           const dateObj = isObj ? new Date(tag.timestamp) : new Date();
+                           const dateStr = `${dateObj.getMonth()+1}/${dateObj.getDate()}`;
+                           
+                           const colors = [
+                             "bg-yellow-100 text-yellow-900 border-yellow-200", 
+                             "bg-rose-100 text-rose-900 border-rose-200", 
+                             "bg-sky-100 text-sky-900 border-sky-200",
+                             "bg-emerald-100 text-emerald-900 border-emerald-200"
+                           ];
+                           const colorClass = colors[i % colors.length];
+
+                           return (
+                             <div 
+                               key={isObj ? tag.id : i} 
+                               className="relative group flex flex-col items-center flex-shrink-0 cursor-pointer hover:z-20"
+                               style={{ transform: `rotate(${rotation}deg)`, marginTop: `${Math.abs(rotation) + 10}px` }}
+                               onClick={() => setViewingTag(tag)} // ★★★ 点击打开详情弹窗 ★★★
+                             >
+                                {/* 木夹子 */}
+                                <div className="w-2 h-4 bg-amber-700 rounded-sm mb-[-6px] z-20 shadow-md relative border-l border-white/20"></div>
+
+                                {/* 标签纸 */}
+                                <div className={`relative ${colorClass} border px-3 pt-3 pb-5 min-w-[70px] max-w-[110px] text-center shadow-lg transition-transform hover:scale-110 hover:rotate-0 z-10 flex flex-col justify-between min-h-[80px]`} 
+                                     style={{ borderRadius: "2px 2px 20px 2px" }}> {/* 稍微卷角 */}
+                                   
+                                   <span className="text-sm font-black leading-tight break-words font-sans mb-2">
+                                     {content}
+                                   </span>
+                                   
+                                   {/* ★★★ 显性时间戳 (像邮戳一样印在下面) ★★★ */}
+                                   <div className="mt-auto pt-2 border-t border-black/10 w-full flex justify-end">
+                                      <span className="text-[9px] font-mono opacity-60 tracking-tighter">{dateStr}</span>
+                                   </div>
+
+                                   {/* 有备注的小红点提示 */}
+                                   {tag.note && (
+                                     <div className="absolute top-1 right-1 w-2 h-2 bg-red-400 rounded-full"></div>
+                                   )}
+                                </div>
+                             </div>
+                           );
+                        })}
+                    </div>
+                 </div>
+
+                 {/* ★★★ 标签详情弹窗 (Modal) ★★★ */}
+                 {viewingTag && (
+                   <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/20 backdrop-blur-sm animate-fadeIn" onClick={() => setViewingTag(null)}>
+                      <div className="bg-white w-[85%] max-w-xs rounded-2xl shadow-2xl p-5 animate-scaleIn transform transition-all" onClick={e => e.stopPropagation()}>
+                         
+                         {/* 标题 */}
+                         <div className="text-center mb-4">
+                            <span className="text-xs text-gray-400 font-bold uppercase tracking-widest">TAG DETAILS</span>
+                            <h3 className="text-2xl font-black text-gray-800 mt-1">#{viewingTag.content}</h3>
+                            <p className="text-[10px] text-gray-400 font-mono mt-1">
+                               Created on {new Date(viewingTag.timestamp).toLocaleString()}
+                            </p>
+                         </div>
+
+                         {/* 备注输入区 */}
+                         <div className="bg-yellow-50 p-3 rounded-xl border border-yellow-200 mb-4 relative">
+                            <label className="text-[9px] font-bold text-yellow-700 uppercase mb-1 block">
+                               📝 为什么会有这个印象？(备注)
+                            </label>
+                            <textarea
+                               className="w-full bg-transparent text-sm text-gray-700 outline-none resize-none h-20 placeholder-yellow-300/50"
+                               placeholder="写点什么... AI会看到哦"
+                               value={viewingTag.note || ""}
+                               onChange={(e) => {
+                                  // 实时更新 state (有点hacky但有效)
+                                  setViewingTag({ ...viewingTag, note: e.target.value });
+                               }}
+                            />
+                         </div>
+
+                         {/* 按钮组 */}
+                         <div className="flex gap-2">
+               
+                              <button 
+                               onClick={() => {
+                                  // 1. 准备一条系统通知，把备注内容大声告诉 AI
+                                  const timestamp = Date.now();
+                                  const noteContent = viewingTag.note ? viewingTag.note : "无";
+                                  
+                                  const sysMsg: Message = {
+                                      id: "sys_note_" + timestamp,
+                                      role: 'system',
+                                      // ★★★ 关键：把备注内容写进系统通知里 ★★★
+                                      content: `【系统通知】用户更新了对标签 [${viewingTag.content}] 的详细备注：\n“${noteContent}”\n(指令：这是用户对你产生该印象的具体原因，请在接下来的对话中针对这个原因进行互动)`,
+                                      timestamp: timestamp
+                                  };
+
+                                  // 2. 同时更新：标签数据 + 聊天记录
+                                  setContacts((prev: any) => prev.map((c: any) => {
+                                     if (c.id === contact.id) {
+                                        return { 
+                                           ...c, 
+                                           userTags: c.userTags.map((t: any) => t.id === viewingTag.id ? viewingTag : t),
+                                           history: [...c.history, sysMsg] // 插入聊天记录
+                                        };
+                                     }
+                                     return c;
+                                  }));
+                                  
+                                  setViewingTag(null);
+                               }}
+                               className="flex-1 bg-gray-900 text-white py-2 rounded-xl font-bold text-xs hover:bg-gray-700 transition"
+                            >
+                               保存备注
+                            </button>
+                            <button 
+                               onClick={() => {
+                                  if(confirm("确定要摘下这个标签吗？")) {
+                                     setContacts((prev: any) => prev.map((c: any) => 
+                                        c.id === contact.id ? { ...c, userTags: c.userTags.filter((t: any) => t.id !== viewingTag.id) } : c
+                                     ));
+                                     setViewingTag(null);
+                                  }
+                               }}
+                               className="flex-1 bg-red-100 text-red-500 py-2 rounded-xl font-bold text-xs"
+                            >
+                               摘掉
+                            </button>
+                         </div>
+                      </div>
+                   </div>
+                 )}
+              </div>
+
+
+
+
+
+
+
+              {/* 4. 详细人设 (折叠在底部) */}
+              <details className="group">
+                 <summary className="text-xs font-bold text-gray-400 cursor-pointer list-none flex items-center justify-center gap-2 py-2 hover:text-gray-600 transition">
+                    <span>▼ 查看核心设定代码 (机密)</span>
+                 </summary>
+                 <div className="bg-gray-900 text-green-400 font-mono text-[10px] p-4 rounded-xl mt-2 leading-relaxed shadow-inner overflow-hidden">
+                    <div className="opacity-50 mb-2 border-b border-gray-700 pb-1">CONFIDENTIAL_FILE_V1.0</div>
+                    {contact?.persona}
+                 </div>
+              </details>
+
             </div>
           )}
+
+
+
+
+
 
           {activeTab === 'memory' && (
             <div className="h-full flex flex-col">
@@ -3575,6 +4690,8 @@ if (view === 'settings' && activeContact) {
         </div>
       )}
 
+
+
       {showWorldBookModal && (
         <div className="absolute inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
           <div className="bg-white w-full max-h-[70%] rounded-2xl flex flex-col shadow-2xl animate-scaleIn">
@@ -3598,8 +4715,18 @@ if (view === 'settings' && activeContact) {
         </div>
       )}
 
+
+
+
+
+
       {/* 主内容区 */}
       <div className="flex-1 overflow-y-auto p-4 pt-20 space-y-6">
+
+
+
+
+
                 {/* 1. My Persona - 可折叠预设管理版 */}
         <section className="bg-white rounded-2xl p-4 shadow-sm transition-all border border-gray-100">
           {/* 可点击的折叠标题栏 */}
@@ -3695,6 +4822,9 @@ if (view === 'settings' && activeContact) {
             </div>
           )}
 
+
+
+
           {/* 下面是固定的头像 + 名字 + 描述（不受折叠影响） */}
           <div className={`transition-all ${showPersonaMenu ? 'mt-6' : ''}`}>
             <div className="flex items-center gap-4 mb-6">
@@ -3726,6 +4856,10 @@ if (view === 'settings' && activeContact) {
             </div>
           </div>
         </section>
+
+
+
+
      {/* 2. 角色信息 (含 AI 性格分析器) */}
         <section className="bg-white rounded-2xl p-4 shadow-sm">
           <h3 className="text-xs font-bold text-gray-400 uppercase mb-3">🤖 Character Identity</h3>
@@ -3757,12 +4891,19 @@ if (view === 'settings' && activeContact) {
             />
           </div>
           
+
+
+
+
+
           {/* 人设编辑框 */}
           <div>
             <div className="flex justify-between items-end mb-1">
               <label className="text-xs text-gray-500">Persona (详细人设)</label>
               {/* ★★★ AI 分析按钮 ★★★ */}
+{/* 这是一组代码：升级版“AI人设扫描”按钮 (复用了全屏加载 UI) */}
               <button
+                disabled={isAnalyzing} // 分析期间禁用点击
                 onClick={async () => {
                    const currentPersona = editForm.persona || form.persona;
                    if (!currentPersona || currentPersona.length < 5) {
@@ -3776,8 +4917,20 @@ if (view === 'settings' && activeContact) {
                    const confirmAnalysis = confirm("🔮 AI 将读取你的人设文字，并自动生成五维性格数值。要开始吗？");
                    if (!confirmAnalysis) return;
 
+                   // ★★★ 启动全屏特效 ★★★
+                   setIsAnalyzing(true);
+
                    try {
-                       alert("🔮 AI 正在深度侧写中...");
+                       // 1. 制造仪式感 (假装很忙)
+                       setLoadingText("正在读取人设文本...");
+                       await new Promise(r => setTimeout(r, 800)); // 等0.8秒
+
+                       setLoadingText("正在构建心理侧写模型...");
+                       await new Promise(r => setTimeout(r, 1200)); // 等1.2秒，显得思考很深
+
+                       setLoadingText("正在量化五维人格数据...");
+                       
+                       // 2. 真正的 API 请求
                        const prompt = `
 你是一位资深心理侧写师。请分析以下角色人设，并给出“大五人格”数值（0.0-10.0，保留一位小数）。
 人设：
@@ -3794,11 +4947,13 @@ if (view === 'settings' && activeContact) {
   "neuroticism": 9.0
 }`;
                        const res = await generateResponse([{ role: 'user', content: prompt }], activePreset);
+                       
+                       setLoadingText("正在同步数据...");
                        const jsonMatch = res.match(/\{[\s\S]*\}/);
                        if (jsonMatch) {
                            const newBig5 = JSON.parse(jsonMatch[0]);
                            
-                           // 深度合并 HEF 数据到 editForm
+                           // 深度合并数据
                            const currentHef = editForm.hef || form.hef || {};
                            const currentIV = currentHef.INDIVIDUAL_VARIATION || {};
                            
@@ -3812,16 +4967,26 @@ if (view === 'settings' && activeContact) {
                                    }
                                }
                            });
+                           
+                           // 稍微停顿展示"完成"状态
+                           await new Promise(r => setTimeout(r, 500));
                            alert("✅ 分析完成！数值已自动填入下方滑块，你可以继续微调。");
                        }
                    } catch (e) {
                        alert("分析失败，请检查网络");
                        console.error(e);
+                   } finally {
+                       // ★★★ 关闭全屏特效 ★★★
+                       setIsAnalyzing(false);
                    }
                 }}
-                className="text-[10px] bg-gradient-to-r from-purple-500 to-blue-500 text-white px-2 py-1 rounded-full font-bold shadow hover:opacity-80 transition flex items-center gap-1"
+                className="text-[10px] bg-gradient-to-r from-purple-500 to-blue-500 text-white px-2 py-1 rounded-full font-bold shadow hover:opacity-80 transition flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                <span>🔮</span> AI 一键生成数值
+                {isAnalyzing ? (
+                   <>⏳ 分析中...</>
+                ) : (
+                   <><span>🔮</span> AI 一键生成数值</>
+                )}
               </button>
             </div>
             <textarea
@@ -3832,6 +4997,13 @@ if (view === 'settings' && activeContact) {
               placeholder="例如：它是一只萌萌的小狗..."
             />
           </div>
+
+
+
+
+
+
+
 
           {/* ★★★ 五维数值编辑器 (Big 5 Sliders) ★★★ */}
           <div className="mt-4 bg-gray-50 p-3 rounded-xl border border-gray-100 animate-slideDown">
@@ -3885,6 +5057,171 @@ if (view === 'settings' && activeContact) {
               );
             })}
           </div>
+
+
+
+
+{/* ==================== [修改版] 硬核好感度初始化 (-100 ~ 100) ==================== */}
+          <div className="mt-6 bg-rose-50 p-4 rounded-xl border border-rose-100 animate-slideDown relative overflow-hidden">
+            {/* 锁定后的遮罩层 */}
+            {form.isAffectionLocked && (
+              <div className="absolute inset-0 z-10 bg-white/60 backdrop-blur-[1px] flex flex-col items-center justify-center select-none">
+                <div className="text-4xl mb-2">🔒</div>
+                <div className="text-xs font-bold text-gray-500 uppercase tracking-widest">
+                  RELATIONSHIP LOCKED
+                </div>
+                <div className="text-[10px] text-rose-400 mt-1 font-bold">
+                  命运的齿轮已经转动，无法再回头修改初始值
+                </div>
+              </div>
+            )}
+
+            <div className="flex justify-between items-center mb-3">
+              <div className="flex items-center gap-2">
+                <span className="text-xl">❤️</span>
+                <div>
+                  <h3 className="text-xs font-bold text-rose-600 uppercase">初始羁绊校准</h3>
+                  <p className="text-[9px] text-rose-400">范围扩大：-100 (死仇) ~ 100 (挚爱)</p>
+                </div>
+              </div>
+              
+        {/* AI 分析按钮 (带Loading效果版) */}
+              {!form.isAffectionLocked && (
+                <button
+                  disabled={isAnalyzing} // 分析时禁用点击
+                  onClick={async () => {
+                    const activePreset = globalSettings.apiPresets.find(p => p.id === globalSettings.activePresetId);
+                    if (!activePreset) return alert("请先配置 API！");
+                    
+                    const confirmAnalyze = confirm("🔮 让 AI 读取双方人设和世界书，来判定一个科学的初始分吗？");
+                    if (!confirmAnalyze) return;
+
+                    // ★★★ 开始加载 ★★★
+                    setIsAnalyzing(true);
+                    
+                    try {
+                      // 1. 制造一些假进度，增加仪式感
+                      setLoadingText("正在读取双方人设...");
+                      await new Promise(r => setTimeout(r, 800)); // 假装读了0.8秒
+                      
+                      setLoadingText("正在扫描世界书与背景...");
+                      await new Promise(r => setTimeout(r, 800)); 
+
+                      setLoadingText("正在推演初始关系逻辑...");
+                      
+                      // 2. 准备数据
+                      const charP = form.persona || "";
+                      const userP = (form.userName || "User") + ":" + (form.userPersona || "无");
+                      const lore = (form.enabledWorldBooks || []).join(",");
+                      
+                      // ★★★ 修改了这里的 Prompt 评分标准 ★★★
+                      const prompt = `
+你是一位资深的小说情感逻辑专家。请分析以下两个角色的设定，判断他们在故事开始时，合理的“初始好感度”是多少。
+
+【角色A (AI)】: ${charP}
+【角色B (用户)】: ${userP}
+【世界背景】: ${lore}
+
+**评分标准 (范围 -100 到 +100)：**
+- **-100 ~ -50**: 【死对头/血海深仇/极度厌恶】(见面想杀对方，恨之入骨)
+- **-50 ~ -10**: 【讨厌/排斥/警惕】(不想看到对方，有偏见)
+- **-10 ~ 10**: 【陌生人/完全不认识】(毫无波澜，纯路人)
+- **10 ~ 30**: 【普通相识/礼貌】(点头之交，客气)
+- **30 ~ 50**: 【稍微感兴趣/朋友】(可以正常聊天)
+- **50 ~ 75**: 【好感/暧昧/知己】(喜欢和对方待在一起)
+- **75 ~ 90**: 【热恋/深爱/青梅竹马】(非你不可)
+- **90 ~ 100**: 【灵魂伴侣/至死不渝】(设定的最终形态)
+
+请输出纯 JSON:
+{
+  "score": 整数 (可以是负数),
+  "reason": "一句话理由，禁止矫揉造作肉麻恶心"
+}`;
+                    // 真正的 API 请求
+                      const res = await generateResponse([{ role: 'user', content: prompt }], activePreset);
+                      
+                      setLoadingText("正在生成最终判定...");
+                      const jsonMatch = res.match(/\{[\s\S]*\}/);
+                      
+                      if (jsonMatch) {
+                        const result = JSON.parse(jsonMatch[0]);
+                        setEditForm(prev => ({ ...prev, affectionScore: result.score }));
+                        
+                        // 稍微停顿一下让用户看到完成状态
+                        await new Promise(r => setTimeout(r, 500));
+                        alert(`🔮 命运判定完成！\n\n初始好感: ${result.score}\n理由: ${result.reason}`);
+                      }
+                    } catch (e) {
+                      console.error(e);
+                      alert("分析失败，AI 开小差了");
+                    } finally {
+                      // ★★★ 结束加载 ★★★
+                      setIsAnalyzing(false);
+                    }
+                  }}
+                  className="bg-white border border-rose-200 text-rose-500 px-3 py-1 rounded-full text-[10px] font-bold shadow-sm hover:bg-rose-100 transition flex items-center gap-1"
+                >
+                  {isAnalyzing ? (
+                    <>
+                       <span className="animate-spin">⏳</span> 分析中...
+                    </>
+                  ) : (
+                    <>🔮 AI 判定命运</>
+                  )}
+                </button>
+              )}
+ </div> 
+
+
+            {/* 滑块区域 */}
+            <div className="flex items-center gap-3 mb-2">
+              {/* 显示分数的颜色变化：负分红色，正分粉色 */}
+              <span className={`text-xs font-bold w-10 text-right ${(editForm.affectionScore || 50) < 0 ? 'text-red-600' : 'text-rose-600'}`}>
+{form.affectionScore ?? 50}
+              </span>
+              <div className="flex-1">
+                <input
+                  type="range"
+                  // ★★★ 修改这里：最小值改为 -100 ★★★
+                  min="-100" 
+                  max="100"
+                  step="1"
+                  disabled={!!form.isAffectionLocked}
+value={form.affectionScore ?? 50}
+                  onChange={(e) => setEditForm(prev => ({ ...prev, affectionScore: parseInt(e.target.value) }))}
+                  className={`w-full h-2 rounded-lg appearance-none cursor-pointer ${form.isAffectionLocked ? 'bg-gray-200' : 'bg-gradient-to-r from-red-200 via-gray-200 to-rose-200 accent-rose-500'}`}
+                />
+              </div>
+            </div>
+            
+            {/* 刻度提示更新 */}
+            <div className="flex justify-between text-[9px] text-gray-400 mb-4 px-1">
+              <span className="text-red-400">☠️ 死仇 (-100)</span>
+              <span>😐 路人 (0)</span>
+              <span className="text-rose-400">❤️ 挚爱 (100)</span>
+            </div>
+
+            {/* 锁定按钮 */}
+            {!form.isAffectionLocked ? (
+              <button
+                onClick={() => {
+                  if (confirm(`⚠️ 警告：确定以【${editForm.affectionScore || 50}分】开始这段关系吗？\n\n一旦锁定，这就是你们的起跑线！`)) {
+                    setEditForm(prev => ({ ...prev, isAffectionLocked: true }));
+                  }
+                }}
+                className="w-full py-2 bg-gradient-to-r from-gray-700 to-gray-900 text-white rounded-lg text-xs font-bold shadow-md hover:opacity-90 active:scale-95 transition"
+              >
+                🔒 锁定初始值 (开启养成之旅)
+              </button>
+            ) : (
+              <div className="text-center">
+                 <div className="inline-block bg-gray-100 text-gray-400 px-3 py-1 rounded-full text-[10px] border border-gray-200">
+                   ✅ 已锁定 · 祝你好运
+                 </div>
+              </div>
+            )}
+          </div>
+
 
           {/* Minimax Config */}
           <div className="mt-6 pt-6 border-t border-dashed border-purple-200">
@@ -3986,7 +5323,9 @@ if (view === 'settings' && activeContact) {
           </div>
         </section>
 
-{/* 3. Memory & Lore 控制台 (完全体) */}
+
+
+        {/* 3. Memory & Lore 控制台 (完全体) */}
         <section className="bg-white rounded-2xl p-4 shadow-sm border border-gray-200">
           <div className="flex items-center justify-between mb-4 border-b border-gray-100 pb-3">
              <div className="flex flex-col">
@@ -4089,6 +5428,8 @@ if (view === 'settings' && activeContact) {
           </button>
         </section>
 
+
+
         {/* World Lore */}
         <section className="bg-white rounded-2xl p-4 shadow-sm border border-gray-200">
           <h3 className="text-xs font-bold text-gray-400 uppercase mb-3">🌍 World Lore</h3>
@@ -4102,6 +5443,8 @@ if (view === 'settings' && activeContact) {
             </button>
           </div>
         </section>
+
+
 
         {/* 时区设置 */}
         <section className="bg-white rounded-2xl p-4 shadow-sm border border-gray-200">
@@ -4166,6 +5509,9 @@ if (view === 'settings' && activeContact) {
           )}
         </section>
 
+
+
+
         {/* 主动消息配置 */}
         <section className="bg-white rounded-2xl p-4 shadow-sm border border-gray-200">
           <div className="flex items-center gap-2 mb-3">
@@ -4229,7 +5575,7 @@ if (view === 'settings' && activeContact) {
 
 
 
-{/* 这是一组代码：外观设置面板（终极修复版：找回了CSS预设功能 + 颜色/缩放控制） */}
+        {/* 这是一组代码：外观设置面板（终极修复版：找回了CSS预设功能 + 颜色/缩放控制） */}
         <section className="bg-white rounded-2xl p-4 shadow-sm border border-gray-200">
           <h3 className="text-xs font-bold text-gray-400 uppercase mb-3">🎨 外观个性化定制</h3>
 
@@ -4407,10 +5753,49 @@ if (view === 'settings' && activeContact) {
         )}
         {/* 👆👆👆 插入结束 👆👆👆 */}
 
+
+
+        {/* ★★★ 全屏沉浸式加载遮罩 (Loading Overlay) ★★★ */}
+        {isAnalyzing && (
+          <div className="fixed inset-0 z-[100] bg-white/80 backdrop-blur-md flex flex-col items-center justify-center animate-fadeIn cursor-wait">
+            {/* 动画图标 */}
+            <div className="relative mb-6">
+               <div className="w-16 h-16 border-4 border-rose-200 border-t-rose-500 rounded-full animate-spin"></div>
+               <div className="absolute inset-0 flex items-center justify-center text-2xl animate-pulse">
+                 🔮
+               </div>
+            </div>
+            
+            {/* 动态文字 */}
+            <h3 className="text-lg font-bold text-gray-800 mb-2 animate-pulse">
+              AI 命运推演中
+            </h3>
+            <p className="text-xs text-rose-500 font-mono bg-rose-50 px-3 py-1 rounded-full border border-rose-100 transition-all duration-300">
+              {loadingText}
+            </p>
+            
+            <p className="text-[10px] text-gray-400 mt-8 absolute bottom-10">
+              请稍候，正在连接情感逻辑核心...
+            </p>
+          </div>
+        )}
+
+
+
+
+
+
+
+
+
       </div>
     </div>
   );
 } // <--- 这里是 if (view === 'settings') 的结束大括号
+
+
+
+
 
   // ==================== 聊天界面 ====================
 
@@ -4422,38 +5807,59 @@ return (
       // 最外层容器：确保背景色和全屏
       <div className="h-full w-full bg-gray-100 flex flex-col pt-[calc(44px+env(safe-area-inset-top))]">
         
-        {/* ★★★ 核心修复：带情绪系统的 Header ★★★ */}
+
+
+
+
+
+
+{/* ★★★ 修复：完整的 Header (包含左返回、中状态、右设置) ★★★ */}
         <SafeAreaHeader
-          // 1. 中间标题：名字 + 情绪状态 + 呼吸灯
+          // 1. 中间标题：名字 + 智能状态 (点击打开档案)
           title={
             <div 
               className="flex flex-col items-center justify-center leading-tight cursor-pointer"
-              onClick={() => setShowPersonaPanel(true)}  // 点击标题也能打开详细情绪面板
+              onClick={() => setShowPersonaPanel(true)}
             >
               <span className="font-bold text-lg text-gray-900">{activeContact.name}</span>
               
- {/* 情绪状态指示器 */}
               <div className="flex items-center gap-1.5 mt-0.5">
-                <span className={`relative flex h-2 w-2`}>
-                  <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${activeContact.mood.energyLevel > 30 ? 'bg-green-400' : 'bg-red-400'}`}></span>
-                  <span className={`relative inline-flex rounded-full h-2 w-2 ${activeContact.mood.energyLevel > 30 ? 'bg-green-500' : 'bg-red-500'}`}></span>
-                </span>
-                <span className="text-[10px] text-gray-500 font-medium opacity-90 tracking-wide">
-                  {activeContact.mood.current}
-                </span>
+                {(() => {
+                   // 准备数据
+                   const energy = activeContact.mood.energy || { current: 80, status: 'Awake' };
+                   const hef = activeContact.hef?.INDIVIDUAL_VARIATION ? activeContact.hef : (activeContact.hef || {}); 
+                   
+                   // 调用炼金术算法
+                   const complexState = calculateComplexState(energy, hef);
+
+                   return (
+                     <>
+                       <span className={`relative flex h-2 w-2`}>
+                         <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${complexState.ping}`}></span>
+                         <span className={`relative inline-flex rounded-full h-2 w-2 ${complexState.color}`}></span>
+                       </span>
+                       <span className="text-[10px] text-gray-500 font-medium opacity-90 tracking-wide truncate max-w-[150px]">
+                         {complexState.text}
+                       </span>
+                     </>
+                   );
+                })()}
               </div>
             </div>
           }
-          
-          // 2. 左侧：返回按钮 (这里就是你丢失的那个键！)
+
+          // 2. 左侧：返回按钮 (带未读红点)
           left={
             <button 
               onClick={() => { setView('list'); setShowPersonaPanel(false); }} 
               className="text-blue-500 text-xl pl-2 pr-4 py-2 relative flex items-center transition-opacity hover:opacity-70"
             >
+              {/* 返回箭头图标 */}
               <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M15 18l-6-6 6-6"/>
               </svg>
+              
+              {/* 其他人未读数提示 */}
               {otherUnreadCount > 0 && (
                 <span className="absolute top-1 right-1 bg-red-500 text-white text-[9px] font-bold px-1 h-3.5 min-w-[14px] flex items-center justify-center rounded-full shadow-sm border border-white">
                   {otherUnreadCount}
@@ -4462,6 +5868,7 @@ return (
             </button>
           }
           
+          // 3. 右侧：设置按钮
           right={
             <button 
               onClick={() => { setEditForm({}); setView('settings'); }} 
@@ -4472,9 +5879,18 @@ return (
           }
         />
 
+
+
+
+
+
         {/* 背景壁纸层 */}
         {activeContact.wallpaper && <div className="absolute inset-0 bg-black/20 pointer-events-none z-0"></div>}
         
+
+
+
+
   
 
 {/* ★★★ 消息操作菜单 (长按触发) ★★★ */}
@@ -4483,6 +5899,12 @@ return (
     <div className="bg-white w-full rounded-t-2xl p-4 animate-slideUp" onClick={e => e.stopPropagation()}>
       <div className="text-center text-gray-400 text-xs mb-4">对消息进行操作</div>
      
+
+
+
+
+
+
       {/* 编辑与引用（新增引用按钮） */}
       <div className="grid grid-cols-2 gap-3 mb-3">
         <button onClick={handleStartEdit} className="py-3 bg-blue-50 text-blue-600 rounded-xl font-bold flex items-center justify-center gap-2"><span>✏️</span> 编辑</button>
@@ -4506,6 +5928,9 @@ return (
 
 
 
+
+
+
         {/* 音乐弹窗 (保持不变) */}
         {showSongModal && (
           <div className="absolute inset-0 z-50 flex items-start justify-center p-4 pt-16 bg-black/50 animate-fadeIn">
@@ -4518,6 +5943,10 @@ return (
 
       {/* Header */}
         {/* 增加 pt-[env(safe-area-inset-top)] 让内容避开刘海，但背景色延伸到顶部 */}
+
+
+
+
 
 
         {/* 悬浮播放器 */}
@@ -4542,17 +5971,20 @@ return (
           </div>
         )}
 
+
+
+
 {/* 核心消息列表 */}
-<div className={`flex-1 overflow-y-auto p-4 space-y-3 z-0 ${musicPlayerOpen && !isPlayerMinimized ? 'pt-4' : 'pt-2'}`}
+<div className={`flex-1 overflow-y-auto p-4 space-y-0.5 z-0 ${musicPlayerOpen && !isPlayerMinimized ? 'pt-4' : 'pt-2'}`}
   style={activeContact.chatBackground ? { backgroundImage: `url(${activeContact.chatBackground})`, backgroundSize: 'cover', backgroundPosition: 'center' } : {}}
 >
   {activeContact.customCSS && <style dangerouslySetInnerHTML={{ __html: activeContact.customCSS }} />}
   
   
   
-  
-{/* 这是一组代码：消息渲染核心 (完美还原尖角样式 + 整体缩放支持) */}
-{/* 这是一组代码：消息渲染核心 (修复头像变形 + 统一左右间距 + 紧凑布局) */}
+
+
+{/* 这是一组代码：消息渲染核心 (含：系统通知 + 撤回样式 + 自动反色 + 修复头像) */}
 {activeContact.history.map((msg, index) => {
     // 1. 计算时间间隔
     let showInterval = false;
@@ -4563,6 +5995,43 @@ return (
       if (intervalMinutes > 20) { showInterval = true; }
     }
     
+    // =========================================================================
+    // ★★★ 核心新增：系统消息渲染 (System Notification) ★★★
+    // 处理 role === 'system' 或者内容包含"撤回"的消息
+    // =========================================================================
+    if (msg.role === 'system' || msg.content.includes("撤回了一条消息")) {
+        // 提取显示文本
+        let sysText = msg.content;
+        // 如果是撤回消息的兼容处理
+        if (msg.content.includes("撤回了一条消息") && msg.role !== 'system') {
+             sysText = `${msg.role === 'user' ? '你' : `"${activeContact.name}"`} 撤回了一条消息`;
+        }
+
+        return (
+          <React.Fragment key={msg.id}>
+            {showInterval && (
+              <div className="text-center my-4 animate-fadeIn">
+                <span className="text-[10px] text-gray-400 bg-gray-100 px-3 py-1 rounded-full">
+                  {intervalMinutes < 60 ? `相隔 ${intervalMinutes} 分钟` : `相隔 ${Math.floor(intervalMinutes / 60)} 小时`}
+                </span>
+              </div>
+            )}
+            
+            {/* 系统消息 UI：居中灰色胶囊 */}
+            <div className="flex justify-center my-3 animate-fadeIn">
+                <span className="text-[10px] font-bold text-gray-400 bg-gray-100/80 border border-gray-200 px-3 py-1.5 rounded-full select-none cursor-default flex items-center gap-1.5 shadow-sm backdrop-blur-sm">
+                   <span className="text-blue-400">🔔</span>
+                   <span>{sysText.replace('【系统通知】', '')}</span>
+                </span>
+            </div>
+          </React.Fragment>
+        );
+    }
+
+    // =========================================================================
+    // 下面是正常的聊天气泡渲染 (User / Assistant)
+    // =========================================================================
+    
     // 2. 连续发言判断
     const isConsecutive = index > 0 && activeContact.history[index - 1].role === msg.role && !showInterval;
     const isSelected = selectedIds.includes(msg.id);
@@ -4570,16 +6039,40 @@ return (
     const timeStr = new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     const isEditing = editingMsgId === msg.id;
 
-    // ★★★ 3. 计算缩放后的尺寸 ★★★
+    // 3. 计算缩放
     const scale = activeContact.chatScale || 1; 
     const currentAvatarSize = 40 * scale; 
     const currentFontSize = `${14 * scale}px`;
-    const currentPaddingY = `${6 * scale}px`; 
+    const currentPaddingY = `${4 * scale}px`; 
     const currentPaddingX = `${12 * scale}px`;
 
-    // 颜色设置
+    // 4. 颜色与自动反色
     const userBg = activeContact.bubbleColorUser || '#22c55e';
     const aiBg = activeContact.bubbleColorAI || '#ffffff';
+    const userTextColor = getContrastTextColor(userBg);
+    const aiTextColor = getContrastTextColor(aiBg);
+    const currentBg = msg.role === 'user' ? userBg : aiBg;
+    const currentText = msg.role === 'user' ? userTextColor : aiTextColor;
+
+
+
+ // ★★★ 核心修复：更聪明的引用检测 ★★★
+    // 只要是以 > 开头（不管有没有空格），都算引用
+    const isQuoteMsg = msg.content.trim().startsWith('>');
+    
+    // 提取引用文本和回复文本
+    let quoteText = '';
+    let replyText = msg.content;
+    
+    if (isQuoteMsg) {
+        // 切割：第一部分是引用，剩下的是回复
+        const parts = msg.content.split('\n'); 
+        // 获取第一行作为引用内容（去掉开头的 > 和 引用 二字）
+        quoteText = parts[0].replace(/^> ?(引用)? ?/, '').trim();
+        // 剩下的行重新组合成回复
+        replyText = parts.slice(1).join('\n').trim();
+    }
+
 
     return (
       <React.Fragment key={msg.id}>
@@ -4592,11 +6085,9 @@ return (
         )}
 
        <div 
-         // ▼▼▼ 修复点 1：mb-1 让上下消息非常紧凑；gap-3 统一拉开头像与气泡的距离 ▼▼▼
          className={`message-wrapper ${msg.role === 'user' ? 'user' : 'ai'} flex gap-3 ${msg.role === 'user' ? 'justify-end' : 'justify-start'} animate-slideUp mb-1`}
          style={{ minHeight: `${currentAvatarSize}px` }} 
        >
-          {/* 多选勾选框 */}
           {isSelectionMode && (
             <div className={`flex items-center justify-center ${msg.role === 'user' ? 'order-2' : 'order-1'}`}>
               <div onClick={() => toggleMessageSelection(msg.id)} className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${isSelected ? 'bg-blue-500 border-blue-500' : 'border-gray-300 bg-white'}`}>
@@ -4605,32 +6096,19 @@ return (
             </div>
           )}
 
-          {/* ★★★ 头像区域 (修复变形的关键) ★★★ */}
           <div 
-             // ▼▼▼ 修复点 2：flex-none 禁止压缩，minWidth 强制保留宽度，解决头像变成半月形的问题 ▼▼▼
              className={`flex-none flex ${msg.role === 'user' ? 'justify-end order-3' : 'justify-start order-1'}`}
              style={{ width: `${currentAvatarSize}px`, height: `${currentAvatarSize}px`, minWidth: `${currentAvatarSize}px` }}
           >
             {msg.role === 'assistant' && !isConsecutive && (
-                <img 
-                    src={activeContact.avatar} 
-                    className="rounded-full object-cover border border-gray-100 shadow-sm w-full h-full block" 
-                    alt="AI" 
-                />
+                <img src={activeContact.avatar} className="rounded-full object-cover border border-gray-100 shadow-sm w-full h-full block" alt="AI" />
             )}
             {msg.role === 'user' && !isConsecutive && (
-                <img 
-                    src={activeContact.userAvatar} 
-                    className="rounded-full object-cover border border-white shadow-sm w-full h-full block" 
-                    alt="user" 
-                />
+                <img src={activeContact.userAvatar} className="rounded-full object-cover border border-white shadow-sm w-full h-full block" alt="user" />
             )}
-            {/* 连续发言占位 */}
             {isConsecutive && <div style={{ width: `${currentAvatarSize}px` }}></div>}
           </div>
 
-          {/* ★★★ 气泡核心区域 ★★★ */}
-          {/* ▼▼▼ 修复点 3：gap-1.5 缩小时间戳和气泡的间距，max-w-[75%] 保持气泡宽度限制 ▼▼▼ */}
           <div className={`flex items-end gap-1.5 order-2 ${msg.role === 'user' ? 'flex-row-reverse' : 'flex-row'} max-w-[75%]`}>
             <div
               className={`message-bubble min-w-0 relative group transition-transform duration-75 active:scale-95`}
@@ -4659,19 +6137,15 @@ return (
                 </div>
               ) : (
                 <div 
-                   className={
-                    `content rounded-xl leading-relaxed relative break-words whitespace-pre-wrap shadow-sm ` + 
-                    (!activeContact.customCSS ? (msg.role === 'user' ? 'text-white' : 'text-gray-800 border border-gray-100') : '')
-                   }
+                   className={`content rounded-xl leading-relaxed relative break-words whitespace-pre-wrap shadow-sm ` + (!activeContact.customCSS && currentText === '#111827' ? 'border border-gray-200/50' : '')}
                    style={{
-                       backgroundColor: !activeContact.customCSS ? (msg.role === 'user' ? userBg : aiBg) : undefined,
+                       backgroundColor: !activeContact.customCSS ? currentBg : undefined,
+                       color: !activeContact.customCSS ? currentText : undefined,
                        fontSize: currentFontSize,
                        paddingTop: currentPaddingY, 
                        paddingBottom: currentPaddingY,
                        paddingLeft: currentPaddingX,
                        paddingRight: currentPaddingX,
-                       
-                       // 尖角逻辑
                        borderTopRightRadius: (msg.role === 'user' && !isConsecutive) ? '2px' : '16px',
                        borderTopLeftRadius: (msg.role === 'assistant' && !isConsecutive) ? '2px' : '16px',
                        borderBottomLeftRadius: '16px',
@@ -4679,7 +6153,7 @@ return (
                    }}
                 >
                   {msg.content.startsWith("> 引用") && (
-                    <div className="text-xs mb-1 p-1 opacity-70 border-l-2 border-white/50 pl-2">{msg.content.split('\n\n')[0]}</div>
+                    <div className="text-xs mb-1 p-1 opacity-70 border-l-2 border-current pl-2">{msg.content.split('\n\n')[0]}</div>
                   )}
                   {msg.type === 'voice' || msg.content.trim().startsWith('[Voice Message]') ? (
                     <VoiceBubble
@@ -4694,16 +6168,11 @@ return (
                   ) : msg.type === 'image' ? (
                     <img src={msg.content} className="rounded-lg max-w-full" alt="msg" />
                   ) : (
-                    <HiddenBracketText
-                        content={msg.content.replace(/^>.*?\n\n/, '')}
-                        msgId={msg.id}
-                        fontSize={""}
-                    />
+                    <HiddenBracketText content={msg.content.replace(/^>.*?\n\n/, '')} msgId={msg.id} fontSize={""} />
                   )}
                 </div>
               )}
             </div>
-            {/* 时间戳 (去掉 pb-1，让它更紧凑) */}
             {!isEditing && <div className="text-[9px] text-gray-300 whitespace-nowrap shrink-0 opacity-60 select-none mb-0.5">{timeStr}</div>}
           </div>
         </div>
@@ -4813,7 +6282,16 @@ style={{ paddingBottom: '12px' }}  // 只留一点内间距，让输入框不紧
             <div className="flex items-end gap-2">
               <button onClick={() => setShowPlusMenu(!showPlusMenu)} className={`w-9 h-9 rounded-full flex items-center justify-center transition ${showPlusMenu ? 'bg-gray-200 rotate-45' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}>+</button>
               <button onClick={handleAiReplyTrigger} disabled={isTyping} className={`w-9 h-9 rounded-full flex items-center justify-center transition shadow-sm ${isTyping ? 'bg-purple-200 text-purple-400 cursor-not-allowed' : 'bg-purple-100 text-purple-600 hover:bg-purple-200'}`}>✨</button>
-              <textarea value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleUserSend('text'); } }} placeholder="Message..." className="flex-1 bg-gray-100 rounded-2xl px-4 py-2 text-sm outline-none resize-none max-h-24 focus:bg-white focus:ring-2 focus:ring-blue-100 transition" rows={1} />
+          {/* 这是一组代码：修复输入框文字看不见的问题 (添加了 text-gray-900) */}
+              <textarea 
+                value={input} 
+                onChange={(e) => setInput(e.target.value)} 
+                onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleUserSend('text'); } }} 
+                placeholder="Message..." 
+                // ★★★ 关键修复：加了 text-gray-900 (深灰黑色)，防止文字变白 ★★★
+                className="flex-1 bg-gray-100 text-gray-900 rounded-2xl px-4 py-2 text-sm outline-none resize-none max-h-24 focus:bg-white focus:ring-2 focus:ring-blue-100 transition" 
+                rows={1} 
+              />
               <button onClick={() => handleUserSend('text')} className={`w-9 h-9 rounded-full flex items-center justify-center text-white transition shadow-md ${input.trim() ? 'bg-blue-500 hover:bg-blue-600 scale-100' : 'bg-gray-300 scale-90'}`} disabled={!input.trim()}>↑</button>
             </div>
             {showPlusMenu && (
@@ -4836,6 +6314,11 @@ style={{ paddingBottom: '12px' }}  // 只留一点内间距，让输入框不紧
             )}
           </div>
         )}
+
+
+
+
+
         {showPersonaPanel && activeContact && (
             <PersonaPanel
                 contact={activeContact}
@@ -4843,8 +6326,16 @@ style={{ paddingBottom: '12px' }}  // 只留一点内间距，让输入框不紧
                 setContacts={setContacts}
                 onClose={() => setShowPersonaPanel(false)}
                 onRefineMemory={handleRefineMemory}
+                playMessageAudio={playMessageAudio}
+                onNavigateToSettings={onOpenSettings} 
+                activeTab={panelTab} // 保持由父组件控制
+                setActiveTab={setPanelTab} // 保持由父组件控制
             />
         )}
+
+
+
+
 
 {showTokenModal && activeContact && (
           <TokenDetailModal
