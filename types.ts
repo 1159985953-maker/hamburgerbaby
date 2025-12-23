@@ -215,6 +215,16 @@ export interface HEF {
 
 // 核心类型：角色 (合并所有功能)
 export interface Contact {
+  bubbleColorUser?: string;      // 用户气泡颜色（默认 #22c55e 绿色）
+  bubbleColorAI?: string;        // AI 气泡颜色（默认 #ffffff 白色）
+  bubbleFontSize?: string;       // 气泡字体大小（默认 text-sm）
+  bubbleMaxWidth?: string;       // 气泡最大宽度（默认 '70%'）
+  chatScale?: number;  // 聊天元素整体缩放比例（0.8 ~ 1.5，默认 1）
+
+listBubbleColor?: string;     // 列表条目背景色（默认 #ffffff）
+  listFontSize?: string;        // 字体大小（默认 text-sm）
+  listAvatarSize?: number;      // 头像大小 px（默认 44）
+
   id: string;
   created: number;
   name: string;

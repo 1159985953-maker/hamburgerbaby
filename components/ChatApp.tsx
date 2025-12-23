@@ -363,8 +363,8 @@ const handleCardImport = async (e: ChangeEvent<HTMLInputElement>) => {
 
   const handleCreateContact = () => {
     // 1. 从 editForm (状态) 中获取新角色的名字和设定
-    const newName = editForm.name || "New Friend";
-    const newPersona = editForm.persona || "A gentle and caring friend.";
+    const newName = editForm.name || "";
+    const newPersona = editForm.persona || "";
 
     // 2. 创建新角色对象
     const newContact: Contact = {
@@ -374,7 +374,7 @@ const handleCardImport = async (e: ChangeEvent<HTMLInputElement>) => {
       avatar: editForm.avatar || "https://picsum.photos/200",
       persona: newPersona,
       memo: "",
-      userName: editForm.userName || "Darling",
+      userName: editForm.userName || "",
       userAvatar: editForm.userAvatar || "https://api.dicebear.com/7.x/avataaars/svg?seed=User",
       userPersona: editForm.userPersona || "",
       history: [],
@@ -808,16 +808,21 @@ const handleDeleteContact = (contactIdToDelete: string) => {
     // 👇👇👇 核心修复：把 checkAutoSummary 的定义和调用都放在这里 👇👇👇
 
     
-    // 3. 延迟调用检查函数
-    setTimeout(() => {
-        setContacts(currentContacts => {
-            const latestContact = currentContacts.find(c => c.id === activeContact.id);
-            if (latestContact) {
-                checkAutoSummary(latestContact);
+// 这是一组代码：替换 handleUserSend 中的 setTimeout 部分（包括 checkAutoSummary 的小优化）
+setTimeout(() => {
+    setContacts(currentContacts => {
+        const latestContact = currentContacts.find(c => c.id === activeContact.id);
+        if (latestContact) {
+            // 安全检查：如果历史为空，直接返回，防止 undefined 错误
+            if (!latestContact.history || latestContact.history.length === 0) {
+                console.log("[记忆系统] 历史为空，跳过总结");
+                return currentContacts;
             }
-            return currentContacts;
-        });
-    }, 2000);
+            checkAutoSummary(latestContact, latestContact.history);
+        }
+        return currentContacts;
+    });
+}, 2000);
   };
 
 
@@ -2194,27 +2199,23 @@ const readTavernPng = async (file: File): Promise<any | null> => {
 
 
 
-const HiddenBracketText: React.FC<{ content: string; fontSize?: string }> = ({ content, fontSize = 'text-sm' }) => {
+// 这是一组代码：替换整个 HiddenBracketText 组件（添加 useRef 持久化 + 唯一 key）
+const HiddenBracketText: React.FC<{ content: string; fontSize?: string; msgId: string }> = ({ content, fontSize = 'text-sm', msgId }) => {
+  // 用 useRef 存储每个消息的展开状态（不随渲染重置）
+  const showRef = useRef(false);
   const [show, setShow] = useState(false);
-  // 伪图片特殊处理
-  if (content.startsWith("[FakeImage]")) {
-    const desc = content.replace("[FakeImage]", "").trim();
-    return (
-      <div
-        className="bg-gray-100/50 backdrop-blur-sm p-4 rounded-lg border-2 border-dashed border-gray-300 text-center cursor-pointer select-none group transition-all hover:bg-gray-100 min-h-40 flex flex-col justify-center items-center"
-        onClick={(e) => { e.stopPropagation(); setShow(!show); }}
-      >
-        <div className="text-3xl mb-2 opacity-50">🖼️</div>
-        {show && (
-          <div className="text-xs leading-relaxed text-gray-700 animate-slideDown">
-            {desc}
-          </div>
-        )}
-        {!show && <div className="text-xs text-gray-400 mt-2">点击查看图片描述</div>}
-      </div>
-    );
-  }
-  // 提取括号翻译
+
+  // 组件加载时读取 ref 的值
+  useEffect(() => {
+    setShow(showRef.current);
+  }, []);
+
+  const toggleShow = () => {
+    const newShow = !show;
+    setShow(newShow);
+    showRef.current = newShow; // 持久化到 ref
+  };
+
   const regex = /(\([^)]*[\u4e00-\u9fa5]+[^)]*\)|（[^）]*[\u4e00-\u9fa5]+[^）]*）)/g;
   const matches = content.match(regex);
   if (!matches) {
@@ -2222,19 +2223,20 @@ const HiddenBracketText: React.FC<{ content: string; fontSize?: string }> = ({ c
   }
   const mainText = content.replace(regex, '').trim();
   const translationText = matches.map(m => m.replace(/^(\(|（)|(\)|）)$/g, '')).join(' ');
-return (
-  <div className="cursor-pointer group" onClick={(e) => { e.stopPropagation(); setShow(!show); }}> {/* 点击整个区域toggle */}
-    <div className={`flex items-center ${fontSize} leading-relaxed relative`}>
-      <span>{mainText}</span>
-      {!show && <span className="w-1.5 h-1.5 bg-red-400 rounded-full ml-1.5 shrink-0 opacity-50"></span>}
-    </div>
-    {show && (
-      <div className="mt-2 pt-2 border-t border-black/10 animate-slideDown">
-        <div className={`${fontSize} text-gray-500 italic`}>{translationText}</div>
+
+  return (
+    <div className="cursor-pointer group" onClick={toggleShow}>
+      <div className={`flex items-center ${fontSize} leading-relaxed relative`}>
+        <span>{mainText}</span>
+        {!show && <span className="w-1.5 h-1.5 bg-red-400 rounded-full ml-1.5 shrink-0 opacity-50"></span>}
       </div>
-    )}
-  </div>
-);
+      {show && (
+        <div className="mt-2 pt-2 border-t border-black/10 animate-slideDown">
+          <div className={`${fontSize} text-gray-500 italic`}>{translationText}</div>
+        </div>
+      )}
+    </div>
+  );
 };
 
 
@@ -2366,8 +2368,8 @@ const ChatListItem: React.FC<{
 }> = ({ contact, onClick, onDelete, onPin, isPinned }) => {
   const [translateX, setTranslateX] = useState(0);
   const touchStartX = useRef(0);
-  const touchStartY = useRef(0); // 增加 Y 轴记录，防止上下滑误触
-  const isSwipingHorizontal = useRef(false); // 标记是否确认是水平滑动
+  const touchStartY = useRef(0);
+  const isSwipingHorizontal = useRef(false);
 
   const handleTouchStart = (e: React.TouchEvent) => {
     touchStartX.current = e.touches[0].clientX;
@@ -2381,88 +2383,55 @@ const ChatListItem: React.FC<{
     const diffX = currentX - touchStartX.current;
     const diffY = currentY - touchStartY.current;
 
-    // 1. 判断滑动方向：如果是上下滑动，就不处理左右滑
     if (!isSwipingHorizontal.current) {
-      if (Math.abs(diffY) > Math.abs(diffX)) {
-        return; // 认为是垂直滚动，放行
-      }
-      isSwipingHorizontal.current = true; // 确认为水平滑动
+      if (Math.abs(diffY) > Math.abs(diffX)) return;
+      isSwipingHorizontal.current = true;
     }
 
-    // 2. 处理左滑逻辑
-    if (diffX < 0) { 
-      // 左滑：最大滑出 140px
-      // 增加阻尼感：滑得越远越难滑
+    if (diffX < 0) {
       const newTranslateX = Math.max(diffX, -140);
       setTranslateX(newTranslateX);
-    } else {
-      // 右滑（归位）：如果本来是打开的(translateX < 0)，允许右滑关闭
-      if (translateX < 0) {
-         setTranslateX(Math.min(translateX + diffX, 0));
-      }
+    } else if (translateX < 0) {
+      setTranslateX(Math.min(translateX + diffX, 0));
     }
   };
 
   const handleTouchEnd = () => {
-    // 阈值判断：如果滑出超过 60px，就自动展开；否则回弹
-    if (translateX < -60) {
-      setTranslateX(-140);
-    } else {
-      setTranslateX(0);
-    }
+    if (translateX < -60) setTranslateX(-140);
+    else setTranslateX(0);
     isSwipingHorizontal.current = false;
   };
 
-  const resetSwipe = () => {
-    setTranslateX(0);
-  };
+  const resetSwipe = () => setTranslateX(0);
 
   return (
     <div className="relative overflow-hidden bg-white w-full select-none">
-      {/* 
-         ★★★ 背景按钮层 (z-0) ★★★ 
-         关键点：pointer-events-auto 确保能点到
-      */}
+      {/* 背景按钮层 */}
       <div className="absolute inset-y-0 right-0 flex items-center z-0 h-full">
         <button
           className="w-[70px] h-full bg-orange-500 text-white font-bold text-sm flex items-center justify-center active:bg-orange-600 transition-colors"
-          onClick={(e) => {
-            e.stopPropagation(); // 阻止冒泡，防止进入聊天
-            onPin(contact.id);
-            resetSwipe();
-          }}
+          onClick={(e) => { e.stopPropagation(); onPin(contact.id); resetSwipe(); }}
         >
           {isPinned ? '取消' : '置顶'}
         </button>
         <button
           className="w-[70px] h-full bg-red-600 text-white font-bold text-sm flex items-center justify-center active:bg-red-700 transition-colors"
-          onClick={(e) => {
-            e.stopPropagation(); // 阻止冒泡
-            if (confirm(`确定删除 ${contact.name} 吗？所有回忆将消失！`)) {
-              onDelete(contact.id);
-            } else {
-              resetSwipe();
-            }
-          }}
+          onClick={(e) => { e.stopPropagation(); if (confirm(`确定删除 ${contact.name} 吗？`)) onDelete(contact.id); else resetSwipe(); }}
         >
           删除
         </button>
       </div>
 
-      {/* 
-         ★★★ 前景卡片层 (z-10) ★★★ 
-         transform 移动它，露出下面的按钮
-      */}
+      {/* 前景卡片层 */}
       <div
-        className={`relative z-10 flex items-center py-3 px-4 border-b bg-white transition-transform duration-200 ease-out active:bg-gray-50 ${isPinned ? 'bg-gray-50' : ''}`}
-        style={{ transform: `translateX(${translateX}px)` }}
+        className={`relative z-10 flex items-center py-3 px-4 border-b transition-transform duration-200 ease-out active:bg-gray-50 ${isPinned ? 'bg-gray-50' : ''}`}
+        style={{
+          transform: `translateX(${translateX}px)`,
+          backgroundColor: contact.listBubbleColor || '#ffffff', // ← 应用自定义背景色
+        }}
         onClick={() => {
-          // 如果是打开状态，点击只是关闭按钮，不进聊天
-          if (translateX < -10) {
-            resetSwipe();
-          } else {
-            onClick();
-          }
+          if (translateX < -10) resetSwipe();
+          else onClick();
         }}
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
@@ -2470,10 +2439,11 @@ const ChatListItem: React.FC<{
       >
         {/* 头像 */}
         <div className="relative mr-3 flex-shrink-0 pointer-events-none">
-          <img 
-            src={contact.avatar} 
-            className="w-11 h-11 rounded-full object-cover border border-gray-100" 
-            alt="avatar" 
+          <img
+            src={contact.avatar}
+            className="rounded-full object-cover border border-gray-100"
+            alt="avatar"
+            style={{ width: `${contact.listAvatarSize || 44}px`, height: `${contact.listAvatarSize || 44}px` }} // ← 应用自定义头像大小
           />
           {(contact.unread || 0) > 0 && (
             <div className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-bold px-1.5 h-4 min-w-[1rem] flex items-center justify-center rounded-full border-2 border-white shadow-sm">
@@ -2481,18 +2451,24 @@ const ChatListItem: React.FC<{
             </div>
           )}
         </div>
-        
-        {/* 文字内容 (pointer-events-none 防止文字遮挡点击) */}
+
+        {/* 文字内容 */}
         <div className="flex-1 min-w-0 pointer-events-none">
           <div className="flex items-center gap-2">
-            <div className="font-semibold text-gray-900 text-base truncate">{contact.name}</div>
+            <div 
+              className={`font-semibold text-gray-900 ${contact.listFontSize || 'text-base'} truncate`} // ← 应用自定义字体大小
+            >
+              {contact.name}
+            </div>
             {isPinned && <span className="text-orange-500 text-xs font-bold scale-75">📌</span>}
           </div>
-          <div className="text-xs text-gray-500 truncate mt-0.5 opacity-80">
+          <div 
+            className={`${contact.listFontSize ? contact.listFontSize.replace('text-', 'text-') : 'text-xs'} text-gray-500 truncate mt-0.5 opacity-80`}
+          >
             {contact.history[contact.history.length - 1]?.content.replace(/\[.*?\]/g, '').slice(0, 28) || '暂无消息'}
           </div>
         </div>
-        
+
         {/* 时间 */}
         <div className="text-xs text-gray-400 ml-4 flex-shrink-0 pointer-events-none">
           {new Date(contact.history[contact.history.length - 1]?.timestamp || contact.created)
@@ -2502,7 +2478,6 @@ const ChatListItem: React.FC<{
     </div>
   );
 };
-
 
 
 
@@ -3274,12 +3249,12 @@ right={
           </div>
           <div>
             <label className="text-sm font-bold text-gray-700">Character Name</label>
-            <input type="text" className="w-full border-b border-gray-300 py-2 outline-none focus:border-blue-500 transition" placeholder="e.g. Aria"
+            <input type="text" className="w-full border-b border-gray-300 py-2 outline-none focus:border-blue-500 transition" placeholder="角色名"
               value={editForm.name || ""} onChange={e => setEditForm({ ...editForm, name: e.target.value })} />
           </div>
           <div>
             <label className="text-sm font-bold text-gray-700">Your Name</label>
-            <input type="text" className="w-full border-b border-gray-300 py-2 outline-none focus:border-blue-500 transition" placeholder="e.g. Darling"
+            <input type="text" className="w-full border-b border-gray-300 py-2 outline-none focus:border-blue-500 transition" placeholder="用户名"
               value={editForm.userName || ""} onChange={e => setEditForm({ ...editForm, userName: e.target.value })} />
           </div>
           <button onClick={handleCreateContact} className="w-full bg-blue-500 text-white py-3 rounded-xl font-bold shadow-lg mt-8 active:scale-95 transition">
@@ -3493,7 +3468,7 @@ if (view === 'settings' && activeContact) {
                 <input type="file" onChange={(e) => handleImageUpload(e, 'userAvatar')} className="absolute inset-0 opacity-0 cursor-pointer" title="Change Avatar" />
               </div>
               <div className="flex-1">
-                <label className="text-xs text-gray-500 font-bold ml-1">My Name</label>
+                <label className="text-xs text-gray-500 font-bold ml-1">用户名</label>
                 <input
                   type="text"
                   value={editForm.userName !== undefined ? editForm.userName : form.userName}
@@ -3527,7 +3502,7 @@ if (view === 'settings' && activeContact) {
               <input type="file" onChange={(e) => handleImageUpload(e, 'avatar')} className="absolute inset-0 opacity-0 cursor-pointer" />
             </div>
             <div className="flex-1">
-              <label className="text-xs text-gray-500">Name</label>
+              <label className="text-xs text-gray-500">角色名</label>
               <input
                 type="text"
                 value={form.name}
@@ -3538,7 +3513,7 @@ if (view === 'settings' && activeContact) {
           </div>
           
           <div className="mb-2">
-            <label className="text-xs text-gray-500">Private Memo</label>
+            <label className="text-xs text-gray-500">备注</label>
             <input
               type="text"
               value={form.memo}
@@ -3619,7 +3594,7 @@ if (view === 'settings' && activeContact) {
               value={form.persona}
               onChange={e => setEditForm({ ...editForm, persona: e.target.value })}
               className="w-full border p-2 rounded text-sm mt-1 bg-gray-50 text-xs leading-relaxed font-mono focus:bg-white focus:ring-2 focus:ring-blue-100 transition"
-              placeholder="例如：他是一个外表高冷但内心温柔的医生，有洁癖，喜欢听古典乐..."
+              placeholder="例如：它是一只萌萌的小狗..."
             />
           </div>
 
@@ -3763,7 +3738,7 @@ if (view === 'settings' && activeContact) {
                 ))}
               </select>
               <div className="mt-2">
-                <label className="text-xs text-gray-500">Or manually enter a custom Voice ID</label>
+                <label className="text-xs text-gray-500">输入VOICE ID</label>
                 <input
                   type="text"
                   className="w-full border p-2 rounded text-sm mt-1 bg-gray-50"
@@ -3781,7 +3756,7 @@ if (view === 'settings' && activeContact) {
           <h3 className="text-xs font-bold text-gray-400 uppercase mb-3">🧠 Memory Console</h3>
           <div className="grid grid-cols-2 gap-4 mb-4">
             <div>
-              <label className="text-[10px] text-gray-500 font-bold uppercase">Context Depth</label>
+              <label className="text-[10px] text-gray-500 font-bold uppercase">Context Depth（上下文）</label>
               <input
                 type="number"
                 value={form.contextDepth || 20}
@@ -3790,7 +3765,7 @@ if (view === 'settings' && activeContact) {
               />
             </div>
             <div>
-              <label className="text-[10px] text-gray-500 font-bold uppercase">Auto-Sum Trigger</label>
+              <label className="text-[10px] text-gray-500 font-bold uppercase">Auto-Sum Trigger（自动总结）</label>
               <input
                 type="number"
                 value={form.summaryTrigger || 50}
@@ -3948,6 +3923,75 @@ if (view === 'settings' && activeContact) {
         {/* 外观定制 */}
         <section className="bg-white rounded-2xl p-4 shadow-sm border border-gray-200">
           <h3 className="text-xs font-bold text-gray-400 uppercase mb-3">🎨 Appearance Customization</h3>
+
+{/* 聊天窗口整体大小调节 */}
+<section className="bg-white rounded-2xl p-4 shadow-sm border border-gray-200">
+  <h3 className="text-xs font-bold text-gray-400 uppercase mb-3">💬 聊天元素整体缩放</h3>
+  <div className="space-y-4">
+    <div>
+      <label className="text-xs font-bold text-gray-500 block mb-1">整体大小比例（头像 + 气泡同步）</label>
+      <div className="flex items-center gap-3">
+        <input
+          type="range"
+          min="0.8"
+          max="1.5"
+          step="0.1"
+          value={form.chatScale || 1}
+          onChange={e => setEditForm({ ...editForm, chatScale: parseFloat(e.target.value) || 1 })}
+          className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-500"
+        />
+        <span className="text-sm font-bold text-blue-600 w-12 text-right">
+          {(form.chatScale || 1).toFixed(1)}x
+        </span>
+      </div>
+      <p className="text-[10px] text-gray-500 mt-1">滑块越大，头像和气泡都同步变大，间距也会自动保持协调</p>
+    </div>
+  </div>
+</section>
+
+
+
+{/* 列表页自定义 */}
+<section className="bg-white rounded-2xl p-4 shadow-sm border border-gray-200">
+  <h3 className="text-xs font-bold text-gray-400 uppercase mb-3">📋 消息列表自定义</h3>
+  <div className="space-y-4">
+    {/* 条目背景色 */}
+    <div>
+      <label className="text-xs font-bold text-gray-500 block mb-1">列表条目背景色</label>
+      <input
+        type="color"
+        value={form.listBubbleColor || '#ffffff'}
+        onChange={e => setEditForm({ ...editForm, listBubbleColor: e.target.value })}
+        className="w-20 h-10 rounded border border-gray-300"
+      />
+    </div>
+    {/* 字体大小 */}
+    {/* <div>
+      <label className="text-xs font-bold text-gray-500 block mb-1">列表字体大小</label>
+      <select
+        value={form.listFontSize || 'text-sm'}
+        onChange={e => setEditForm({ ...editForm, listFontSize: e.target.value })}
+        className="w-full border p-2 rounded text-sm bg-white"
+      >
+        <option value="text-xs">小</option>
+        <option value="text-sm">正常</option>
+        <option value="text-base">大</option>
+      </select>
+    </div>*/}
+    {/* 头像大小 */}
+     {/* <div>
+      <label className="text-xs font-bold text-gray-500 block mb-1">列表头像大小 (px)</label>
+      <input
+        type="number"
+        min="32" max="80" step="4"
+        value={form.listAvatarSize || 44}
+        onChange={e => setEditForm({ ...editForm, listAvatarSize: parseInt(e.target.value) || 44 })}
+        className="w-full border p-2 rounded text-sm bg-white"
+      />
+    </div>*/}
+  </div>
+</section>
+
           <div className="bg-gray-50 p-3 rounded-xl border border-gray-200 mb-4">
             <label className="text-[10px] text-gray-500 font-bold uppercase block mb-2">Theme Presets</label>
             <div className="flex gap-2 mb-2">
@@ -4198,37 +4242,31 @@ const isConsecutive = index > 0 && activeContact.history[index - 1].role === msg
           </div>
         )}
 
-        <div className={`message-wrapper ${msg.role === 'user' ? 'user' : 'ai'} flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'} animate-slideUp`}>
-          {/* 多选勾选框 (保持不变) */}
-          {isSelectionMode && (
-            <div className={`mr-2 flex items-center justify-center ${msg.role === 'user' ? 'order-2' : 'order-1'}`}>
-              <div onClick={() => toggleMessageSelection(msg.id)} className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${isSelected ? 'bg-blue-500 border-blue-500' : 'border-gray-300 bg-white'}`}>
-                {isSelected && <span className="text-white text-xs font-bold">✓</span>}
-              </div>
-            </div>
-          )}
-
-          {/* 头像 (保持不变) */}
-          <div className={`w-10 shrink-0 self-end flex ${msg.role === 'user' ? 'justify-end order-3' : 'justify-start order-1'}`}>
-            {msg.role === 'assistant' && !isConsecutive && <img src={activeContact.avatar} className="w-8 h-8 rounded-full object-cover" alt="AI" />}
-            {msg.role === 'user' && !isConsecutive && <img src={activeContact.userAvatar} className="w-8 h-8 rounded-full ml-2 object-cover border border-white" alt="user" />}
-          </div>
-
-          {/* 👇👇👇 核心修改区域：消息气泡 👇👇👇 */}
-          <div className={`flex items-end gap-2 order-2 ${msg.role === 'user' ? 'flex-row-reverse' : 'flex-row'} max-w-[85%]`}>
-            
-            {/* 这里的 div 加上了长按事件 */}
-            <div
-             className={`message-bubble min-w-0 relative group transition-transform duration-100 ${isSelectionMode ? 'pointer-events-none' : ''} ${isLongPress.current ? 'scale-95' : ''}`} // 新增长按缩放
-  // 其余事件不变
-              onTouchStart={() => handleTouchStart(msg)}
-              onTouchEnd={handleTouchEnd}
-              onMouseDown={() => handleTouchStart(msg)} // 兼容电脑鼠标
-              onMouseUp={handleTouchEnd}
-              onMouseLeave={handleTouchEnd}
-              // ★★★ 阻止默认右键菜单 ★★★
-              onContextMenu={(e) => e.preventDefault()}
-            >
+       <div className={`message-wrapper ${msg.role === 'user' ? 'user' : 'ai'} flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'} animate-slideUp`}>
+  {/* 多选勾选框 */}
+  {isSelectionMode && (
+    <div className={`mr-2 flex items-center justify-center ${msg.role === 'user' ? 'order-2' : 'order-1'}`}>
+      <div onClick={() => toggleMessageSelection(msg.id)} className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${isSelected ? 'bg-blue-500 border-blue-500' : 'border-gray-300 bg-white'}`}>
+        {isSelected && <span className="text-white text-xs font-bold">✓</span>}
+      </div>
+    </div>
+  )}
+  {/* 头像 */}
+  <div className={`w-10 shrink-0 self-end flex ${msg.role === 'user' ? 'justify-end order-3' : 'justify-start order-1'}`}>
+    {msg.role === 'assistant' && !isConsecutive && <img src={activeContact.avatar} className="w-8 h-8 rounded-full object-cover" alt="AI" />}
+    {msg.role === 'user' && !isConsecutive && <img src={activeContact.userAvatar} className="w-8 h-8 rounded-full ml-2 object-cover border border-white" alt="user" />}
+  </div>
+  {/* 气泡统一宽度 */}
+  <div className={`flex items-end gap-2 order-2 ${msg.role === 'user' ? 'flex-row-reverse' : 'flex-row'} max-w-[70%]`}>
+    <div
+      className={`message-bubble min-w-0 relative group transition-transform duration-100 ${isSelectionMode ? 'pointer-events-none' : ''} ${isLongPress.current ? 'scale-95' : ''}`}
+      onTouchStart={() => handleTouchStart(msg)}
+      onTouchEnd={handleTouchEnd}
+      onMouseDown={() => handleTouchStart(msg)}
+      onMouseUp={handleTouchEnd}
+      onMouseLeave={handleTouchEnd}
+      onContextMenu={(e) => e.preventDefault()}
+    >
               {isEditing ? (
                 // === 编辑模式 UI ===
                 <div className="bg-white border-2 border-blue-400 rounded-xl p-2 shadow-lg min-w-[200px] animate-scaleIn">
@@ -4250,10 +4288,17 @@ const isConsecutive = index > 0 && activeContact.history[index - 1].role === msg
                 </div>
               ) : (
                 // === 正常显示模式 UI ===
-                <div className={
-  `content px-3 py-[6px] rounded-xl text-sm leading-relaxed relative break-words whitespace-pre-wrap ` + // <--- 必须有 whitespace-pre-wrap
-  (!activeContact.customCSS ? (msg.role === 'user' ? 'bg-green-500 text-white' : 'bg-white text-gray-800 border border-gray-100') : '')
-}>
+<div 
+  className={`content px-3 py-[6px] rounded-xl text-sm leading-relaxed relative break-words whitespace-pre-wrap ${
+    msg.role === 'user' 
+      ? (activeContact.bubbleUserColor ? '' : 'bg-green-500 text-white') 
+      : (activeContact.bubbleAIColor ? '' : 'bg-white text-gray-800 border border-gray-100')
+  }`}
+  style={{
+    backgroundColor: msg.role === 'user' ? activeContact.bubbleUserColor : activeContact.bubbleAIColor,
+    fontSize: activeContact.bubbleFontSize || 'text-sm',
+  }}
+>
                   {/* 这里保留你原来的渲染逻辑 (引用、语音、图片等) */}
                   {msg.content.startsWith("> 引用") && (
                     <div className="quote-block text-xs mb-2 p-2 rounded opacity-80 bg-black/10">{msg.content.split('\n\n')[0]}</div>
@@ -4272,7 +4317,10 @@ const isConsecutive = index > 0 && activeContact.history[index - 1].role === msg
                     <img src={msg.content} className="rounded-lg max-w-full" alt="msg" />
                   ) : (
                     // 只有简单的文本才显示 HiddenBracketText
-                    <HiddenBracketText content={msg.content.replace(/^>.*?\n\n/, '')} />
+                  <HiddenBracketText 
+  content={msg.content.replace(/^>.*?\n\n/, '')} 
+  msgId={msg.id}  // ← 加这一行，防止不同消息共用状态
+/>
                   )}
                 </div>
               )}
