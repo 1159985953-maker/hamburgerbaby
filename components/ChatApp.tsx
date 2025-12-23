@@ -4430,23 +4430,67 @@ return (
 
 
                     {/* ★★★ 对方正在输入提醒气泡 ★★★ */}
-          {isAiTyping && (
-            <div className="flex justify-start animate-slideUp mb-3">
-              <div className="w-10 shrink-0 flex justify-start">
-                <img src={activeContact.avatar} className="w-8 h-8 rounded-full object-cover" alt="AI" />
-              </div>
-              <div className="flex items-end gap-4">
-                <div className="bg-white px-4 py-3 rounded-xl text-sm shadow-sm max-w-[80px]">
-                  <div className="flex gap-1 items-center">
-                    <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></span>
-                    <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></span>
-                    <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></span>
+{/* ★★★ 对方正在输入提醒气泡 (已修复：同步缩放 + 布局对齐 + 颜色) ★★★ */}
+          {isAiTyping && (() => {
+            // 在这里重新计算一下缩放，确保和上面保持一致
+            const scale = activeContact.chatScale || 1;
+            const currentAvatarSize = 40 * scale;
+            const currentPaddingY = `${6 * scale}px`; 
+            const currentPaddingX = `${12 * scale}px`;
+            const aiBg = activeContact.bubbleColorAI || '#ffffff'; // 同步 AI 气泡颜色
+
+            return (
+              <div 
+                // 1. 布局同步：mb-1 紧凑，gap-3 对齐头像
+                className="flex gap-3 justify-start animate-slideUp mb-1"
+                style={{ minHeight: `${currentAvatarSize}px` }}
+              >
+                {/* 2. 头像同步：强制大小，禁止变形 */}
+                <div 
+                  className="flex-none flex justify-start"
+                  style={{ width: `${currentAvatarSize}px`, height: `${currentAvatarSize}px`, minWidth: `${currentAvatarSize}px` }}
+                >
+                  <img 
+                    src={activeContact.avatar} 
+                    className="rounded-full object-cover border border-gray-100 shadow-sm w-full h-full block" 
+                    alt="AI" 
+                  />
+                </div>
+
+                <div className="flex items-end gap-1.5 max-w-[75%]">
+                  {/* 3. 气泡同步：应用缩放后的 Padding 和 圆角 */}
+                  <div 
+                    className="rounded-xl shadow-sm border border-gray-100 flex items-center"
+                    style={{
+                      backgroundColor: aiBg,
+                      paddingTop: currentPaddingY,
+                      paddingBottom: currentPaddingY,
+                      paddingLeft: currentPaddingX,
+                      paddingRight: currentPaddingX,
+                      // 尖角逻辑：因为是正在输入，肯定算“最新一条”，所以左上角给尖角
+                      borderTopLeftRadius: '2px', 
+                      borderTopRightRadius: '16px',
+                      borderBottomLeftRadius: '16px',
+                      borderBottomRightRadius: '16px',
+                      height: 'auto'
+                    }}
+                  >
+                    {/* 跳动的点点 */}
+                    <div className="flex gap-1 items-center" style={{ height: `${14 * scale}px` }}>
+                      <span className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></span>
+                      <span className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></span>
+                      <span className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></span>
+                    </div>
+                  </div>
+                  
+                  {/* 时间戳 */}
+                  <div className="text-[9px] text-gray-300 whitespace-nowrap shrink-0 opacity-60 select-none mb-0.5">
+                    现在
                   </div>
                 </div>
-                <div className="text-[10px] text-gray-400 pb-1">现在</div>
               </div>
-            </div>
-          )}
+            );
+          })()}
 
           <div ref={messagesEndRef} />
         </div>
