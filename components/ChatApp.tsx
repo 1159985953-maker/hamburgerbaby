@@ -2368,8 +2368,8 @@ const ChatListItem: React.FC<{
 }> = ({ contact, onClick, onDelete, onPin, isPinned }) => {
   const [translateX, setTranslateX] = useState(0);
   const touchStartX = useRef(0);
-  const touchStartY = useRef(0);
-  const isSwipingHorizontal = useRef(false);
+  const touchStartY = useRef(0); // 增加 Y 轴记录，防止上下滑误触
+  const isSwipingHorizontal = useRef(false); // 标记是否确认是水平滑动
 
   const handleTouchStart = (e: React.TouchEvent) => {
     touchStartX.current = e.touches[0].clientX;
@@ -2383,55 +2383,88 @@ const ChatListItem: React.FC<{
     const diffX = currentX - touchStartX.current;
     const diffY = currentY - touchStartY.current;
 
+    // 1. 判断滑动方向：如果是上下滑动，就不处理左右滑
     if (!isSwipingHorizontal.current) {
-      if (Math.abs(diffY) > Math.abs(diffX)) return;
-      isSwipingHorizontal.current = true;
+      if (Math.abs(diffY) > Math.abs(diffX)) {
+        return; // 认为是垂直滚动，放行
+      }
+      isSwipingHorizontal.current = true; // 确认为水平滑动
     }
 
-    if (diffX < 0) {
+    // 2. 处理左滑逻辑
+    if (diffX < 0) { 
+      // 左滑：最大滑出 140px
+      // 增加阻尼感：滑得越远越难滑
       const newTranslateX = Math.max(diffX, -140);
       setTranslateX(newTranslateX);
-    } else if (translateX < 0) {
-      setTranslateX(Math.min(translateX + diffX, 0));
+    } else {
+      // 右滑（归位）：如果本来是打开的(translateX < 0)，允许右滑关闭
+      if (translateX < 0) {
+         setTranslateX(Math.min(translateX + diffX, 0));
+      }
     }
   };
 
   const handleTouchEnd = () => {
-    if (translateX < -60) setTranslateX(-140);
-    else setTranslateX(0);
+    // 阈值判断：如果滑出超过 60px，就自动展开；否则回弹
+    if (translateX < -60) {
+      setTranslateX(-140);
+    } else {
+      setTranslateX(0);
+    }
     isSwipingHorizontal.current = false;
   };
 
-  const resetSwipe = () => setTranslateX(0);
+  const resetSwipe = () => {
+    setTranslateX(0);
+  };
 
   return (
     <div className="relative overflow-hidden bg-white w-full select-none">
-      {/* 背景按钮层 */}
+      {/* 
+         ★★★ 背景按钮层 (z-0) ★★★ 
+         关键点：pointer-events-auto 确保能点到
+      */}
       <div className="absolute inset-y-0 right-0 flex items-center z-0 h-full">
         <button
           className="w-[70px] h-full bg-orange-500 text-white font-bold text-sm flex items-center justify-center active:bg-orange-600 transition-colors"
-          onClick={(e) => { e.stopPropagation(); onPin(contact.id); resetSwipe(); }}
+          onClick={(e) => {
+            e.stopPropagation(); // 阻止冒泡，防止进入聊天
+            onPin(contact.id);
+            resetSwipe();
+          }}
         >
           {isPinned ? '取消' : '置顶'}
         </button>
         <button
           className="w-[70px] h-full bg-red-600 text-white font-bold text-sm flex items-center justify-center active:bg-red-700 transition-colors"
-          onClick={(e) => { e.stopPropagation(); if (confirm(`确定删除 ${contact.name} 吗？`)) onDelete(contact.id); else resetSwipe(); }}
+          onClick={(e) => {
+            e.stopPropagation(); // 阻止冒泡
+            if (confirm(`确定删除 ${contact.name} 吗？所有回忆将消失！`)) {
+              onDelete(contact.id);
+            } else {
+              resetSwipe();
+            }
+          }}
         >
           删除
         </button>
       </div>
 
-      {/* 前景卡片层 */}
+      {/* 
+         ★★★ 前景卡片层 (z-10) ★★★ 
+         transform 移动它，露出下面的按钮
+      */}
       <div
-        className={`relative z-10 flex items-center py-3 px-4 border-b transition-transform duration-200 ease-out active:bg-gray-50 ${isPinned ? 'bg-gray-50' : ''}`}
-        style={{
-          transform: `translateX(${translateX}px)`,
-          backgroundColor: contact.listBubbleColor || '#ffffff', // ← 应用自定义背景色
-        }}
+        className={`relative z-10 flex items-center py-3 px-4 border-b bg-white transition-transform duration-200 ease-out active:bg-gray-50 ${isPinned ? 'bg-gray-50' : ''}`}
+        style={{ transform: `translateX(${translateX}px)` }}
         onClick={() => {
-          if (translateX < -10) resetSwipe();
-          else onClick();
+          // 如果是打开状态，点击只是关闭按钮，不进聊天
+          if (translateX < -10) {
+            resetSwipe();
+          } else {
+            onClick();
+          }
         }}
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
@@ -2439,11 +2472,10 @@ const ChatListItem: React.FC<{
       >
         {/* 头像 */}
         <div className="relative mr-3 flex-shrink-0 pointer-events-none">
-          <img
-            src={contact.avatar}
-            className="rounded-full object-cover border border-gray-100"
-            alt="avatar"
-            style={{ width: `${contact.listAvatarSize || 44}px`, height: `${contact.listAvatarSize || 44}px` }} // ← 应用自定义头像大小
+          <img 
+            src={contact.avatar} 
+            className="w-11 h-11 rounded-full object-cover border border-gray-100" 
+            alt="avatar" 
           />
           {(contact.unread || 0) > 0 && (
             <div className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-bold px-1.5 h-4 min-w-[1rem] flex items-center justify-center rounded-full border-2 border-white shadow-sm">
@@ -2451,24 +2483,18 @@ const ChatListItem: React.FC<{
             </div>
           )}
         </div>
-
-        {/* 文字内容 */}
+        
+        {/* 文字内容 (pointer-events-none 防止文字遮挡点击) */}
         <div className="flex-1 min-w-0 pointer-events-none">
           <div className="flex items-center gap-2">
-            <div 
-              className={`font-semibold text-gray-900 ${contact.listFontSize || 'text-base'} truncate`} // ← 应用自定义字体大小
-            >
-              {contact.name}
-            </div>
+            <div className="font-semibold text-gray-900 text-base truncate">{contact.name}</div>
             {isPinned && <span className="text-orange-500 text-xs font-bold scale-75">📌</span>}
           </div>
-          <div 
-            className={`${contact.listFontSize ? contact.listFontSize.replace('text-', 'text-') : 'text-xs'} text-gray-500 truncate mt-0.5 opacity-80`}
-          >
+          <div className="text-xs text-gray-500 truncate mt-0.5 opacity-80">
             {contact.history[contact.history.length - 1]?.content.replace(/\[.*?\]/g, '').slice(0, 28) || '暂无消息'}
           </div>
         </div>
-
+        
         {/* 时间 */}
         <div className="text-xs text-gray-400 ml-4 flex-shrink-0 pointer-events-none">
           {new Date(contact.history[contact.history.length - 1]?.timestamp || contact.created)
@@ -2478,6 +2504,7 @@ const ChatListItem: React.FC<{
     </div>
   );
 };
+
 
 
 
@@ -3924,69 +3951,8 @@ if (view === 'settings' && activeContact) {
         <section className="bg-white rounded-2xl p-4 shadow-sm border border-gray-200">
           <h3 className="text-xs font-bold text-gray-400 uppercase mb-3">🎨 Appearance Customization</h3>
 
-{/* 聊天窗口整体大小调节 */}
-{/* 聊天气泡整体缩放 */}
-<section className="bg-white rounded-2xl p-4 shadow-sm border border-gray-200">
-  <h3 className="text-xs font-bold text-gray-400 uppercase mb-3">💬 气泡+头像整体缩放</h3>
-  <div className="flex items-center gap-3">
-    <input
-      type="range"
-      min="0.8"
-      max="1.4"
-      step="0.05"
-      value={form.chatScale || 1}
-      onChange={e => setEditForm({ ...editForm, chatScale: parseFloat(e.target.value) || 1 })}
-      className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-500"
-    />
-    <span className="text-sm font-bold text-blue-600 w-12 text-right">
-      {(form.chatScale || 1).toFixed(2)}x
-    </span>
-  </div>
-  <p className="text-[10px] text-gray-500 mt-2">调整头像和气泡大小，保持完美协调</p>
-</section>
 
-
-{/* 列表页自定义 */}
-<section className="bg-white rounded-2xl p-4 shadow-sm border border-gray-200">
-  <h3 className="text-xs font-bold text-gray-400 uppercase mb-3">📋 消息列表自定义</h3>
-  <div className="space-y-4">
-    {/* 条目背景色 */}
-    <div>
-      <label className="text-xs font-bold text-gray-500 block mb-1">列表条目背景色</label>
-      <input
-        type="color"
-        value={form.listBubbleColor || '#ffffff'}
-        onChange={e => setEditForm({ ...editForm, listBubbleColor: e.target.value })}
-        className="w-20 h-10 rounded border border-gray-300"
-      />
-    </div>
-    {/* 字体大小 */}
-    {/* <div>
-      <label className="text-xs font-bold text-gray-500 block mb-1">列表字体大小</label>
-      <select
-        value={form.listFontSize || 'text-sm'}
-        onChange={e => setEditForm({ ...editForm, listFontSize: e.target.value })}
-        className="w-full border p-2 rounded text-sm bg-white"
-      >
-        <option value="text-xs">小</option>
-        <option value="text-sm">正常</option>
-        <option value="text-base">大</option>
-      </select>
-    </div>*/}
-    {/* 头像大小 */}
-     {/* <div>
-      <label className="text-xs font-bold text-gray-500 block mb-1">列表头像大小 (px)</label>
-      <input
-        type="number"
-        min="32" max="80" step="4"
-        value={form.listAvatarSize || 44}
-        onChange={e => setEditForm({ ...editForm, listAvatarSize: parseInt(e.target.value) || 44 })}
-        className="w-full border p-2 rounded text-sm bg-white"
-      />
-    </div>*/}
-  </div>
-</section>
-
+          
           <div className="bg-gray-50 p-3 rounded-xl border border-gray-200 mb-4">
             <label className="text-[10px] text-gray-500 font-bold uppercase block mb-2">Theme Presets</label>
             <div className="flex gap-2 mb-2">
@@ -4283,17 +4249,10 @@ const isConsecutive = index > 0 && activeContact.history[index - 1].role === msg
                 </div>
               ) : (
                 // === 正常显示模式 UI ===
-<div 
-  className={`content px-3 py-[6px] rounded-xl text-sm leading-relaxed relative break-words whitespace-pre-wrap ${
-    msg.role === 'user' 
-      ? (activeContact.bubbleUserColor ? '' : 'bg-green-500 text-white') 
-      : (activeContact.bubbleAIColor ? '' : 'bg-white text-gray-800 border border-gray-100')
-  }`}
-  style={{
-    backgroundColor: msg.role === 'user' ? activeContact.bubbleUserColor : activeContact.bubbleAIColor,
-    fontSize: activeContact.bubbleFontSize || 'text-sm',
-  }}
->
+                <div className={
+  `content px-3 py-[6px] rounded-xl text-sm leading-relaxed relative break-words whitespace-pre-wrap ` + // <--- 必须有 whitespace-pre-wrap
+  (!activeContact.customCSS ? (msg.role === 'user' ? 'bg-green-500 text-white' : 'bg-white text-gray-800 border border-gray-100') : '')
+}>
                   {/* 这里保留你原来的渲染逻辑 (引用、语音、图片等) */}
                   {msg.content.startsWith("> 引用") && (
                     <div className="quote-block text-xs mb-2 p-2 rounded opacity-80 bg-black/10">{msg.content.split('\n\n')[0]}</div>
