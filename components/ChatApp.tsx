@@ -1751,6 +1751,41 @@ Lore: ${loreText || "无"}
       ? (Array.isArray(currentHistory) ? currentHistory.slice(-(activeContact?.contextDepth || 20)) : [])
       : [];
 
+// ==================== [省流优化] 历史记录清洗 ====================
+    // 1. 截取最近的 N 条消息
+    const rawHistorySlice = Array.isArray(currentHistory)
+      ? currentHistory.slice(-(activeContact?.contextDepth || 20))
+      : [];
+
+    // 2. ★★★ 核心清洗步骤 ★★★
+    // 强制只保留 role 和 content，剔除 thought_chain、hef、voiceDuration 等所有杂质
+    // 这样 AI 读到的就是干干净净的对话文本，极大节省 Token
+    const cleanHistorySlice = rawHistorySlice.map(msg => {
+        // 如果内容里包含 [Voice Message] 或图片，通常也可以简化，这里保留原样
+        let cleanContent = msg.content;
+        
+        // 双重保险：如果 msg.content 居然意外包含了 JSON 字符串（旧数据残留），尝试提取纯文本
+        if (msg.role === 'assistant' && cleanContent.trim().startsWith('[')) {
+             try {
+                 const parsed = JSON.parse(cleanContent);
+                 if (Array.isArray(parsed)) {
+                     // 提取出 text 部分
+                     const textParts = parsed.filter((p: any) => p.type === 'text').map((p: any) => p.content).join('\n');
+                     if (textParts) cleanContent = textParts;
+                 }
+             } catch (e) {
+                 // 解析失败就算了，按原样发
+             }
+        }
+
+        return {
+            role: msg.role === 'user' ? 'user' : 'assistant',
+            content: cleanContent
+        };
+    });
+
+
+
     const apiMessages = [
       { role: 'system', content: systemPrompt },
       ...recentHistorySlice
@@ -3784,36 +3819,86 @@ if (view === 'settings' && activeContact) {
         </section>
 
         {/* 3. Memory & Lore */}
-        <section className="bg-white rounded-2xl p-4 shadow-sm border border-gray-200">
-          <h3 className="text-xs font-bold text-gray-400 uppercase mb-3">🧠 Memory Console</h3>
+{/* 3. Memory & Lore 控制台 (Token 计算器版) */}
+      {/* 3. Memory & Lore 控制台 (数字输入 + Token计算器版) */}
+        <section className="bg-white rounded-2xl p-4 shadow-sm border border-gray-200 animate-fadeIn">
+          {/* 顶部标题栏 + 实时 Token 估算 */}
+          <div className="flex items-center justify-between mb-4 border-b border-gray-100 pb-2">
+             <h3 className="text-xs font-bold text-gray-400 uppercase">🧠 Memory Console</h3>
+             
+             {/* 实时 Token 估算器 */}
+             <div className="bg-gray-100 px-2 py-1 rounded text-[10px] font-mono">
+               {(() => {
+                 // 估算逻辑
+                 const historyCount = form.contextDepth || 20;
+                 const historyMsgs = activeContact.history.slice(-historyCount);
+                 const historyText = historyMsgs.map(m => m.content).join('');
+                 
+                 const systemLen = (form.persona?.length || 0) + 1500; 
+                 const historyLen = historyText.length;
+                 const loreLen = (worldBooks.filter(wb => (form.enabledWorldBooks||[]).includes(wb.name)).reduce((acc, wb) => acc + JSON.stringify(wb).length, 0));
+                 
+                 const totalChars = systemLen + historyLen + loreLen;
+                 const estTokens = Math.round(totalChars * 1.2);
+                 
+                 let colorClass = "text-green-600";
+                 if (estTokens > 50000) colorClass = "text-orange-500";
+                 if (estTokens > 100000) colorClass = "text-red-600 font-bold";
+
+                 return (
+                   <span className={colorClass}>
+                     预计消耗: ≈{estTokens} tokens
+                   </span>
+                 );
+               })()}
+             </div>
+          </div>
+
+          {/* 数字输入区域 (回归 Grid 布局) */}
           <div className="grid grid-cols-2 gap-4 mb-4">
+            {/* 上下文条数设置 */}
             <div>
-              <label className="text-[10px] text-gray-500 font-bold uppercase">Context Depth（上下文）</label>
+              <label className="text-[10px] text-gray-500 font-bold uppercase block mb-1">
+                Context Depth (条数)
+              </label>
               <input
                 type="number"
-                value={form.contextDepth || 20}
-                onChange={e => setEditForm({ ...editForm, contextDepth: parseInt(e.target.value) || 20 })}
-                className="w-full border p-2 rounded text-sm mt-1 bg-gray-50 text-center"
+                value={form.contextDepth || 0}
+                onChange={e => setEditForm({ ...editForm, contextDepth: parseInt(e.target.value) || 0 })}
+                className="w-full border p-2 rounded-lg text-sm bg-gray-50 text-center font-bold text-blue-600 outline-none focus:ring-2 focus:ring-blue-200 transition"
+                placeholder="20"
               />
+              <p className="text-[9px] text-gray-400 mt-1 text-center">
+                AI 读取最近 {form.contextDepth || 0} 条
+              </p>
             </div>
+
+            {/* 自动总结阈值设置 */}
             <div>
-              <label className="text-[10px] text-gray-500 font-bold uppercase">Auto-Sum Trigger（自动总结）</label>
+              <label className="text-[10px] text-gray-500 font-bold uppercase block mb-1">
+                Auto-Sum Trigger
+              </label>
               <input
                 type="number"
-                value={form.summaryTrigger || 50}
-                onChange={e => setEditForm({ ...editForm, summaryTrigger: parseInt(e.target.value) || 50 })}
-                className="w-full border p-2 rounded text-sm mt-1 bg-gray-50 text-center"
+                value={form.summaryTrigger || 0}
+                onChange={e => setEditForm({ ...editForm, summaryTrigger: parseInt(e.target.value) || 0 })}
+                className="w-full border p-2 rounded-lg text-sm bg-gray-50 text-center font-bold text-gray-700 outline-none focus:ring-2 focus:ring-gray-200 transition"
+                placeholder="0"
               />
+              <p className="text-[9px] text-gray-400 mt-1 text-center">
+                {form.summaryTrigger || 0} 条消息触发总结
+              </p>
             </div>
           </div>
+
           <button
             onClick={() => {
               setView('chat');
               setTimeout(() => setShowPersonaPanel(true), 100);
             }}
-            className="w-full bg-yellow-100 text-yellow-800 py-3 rounded-xl font-bold border border-yellow-200 hover:bg-yellow-200 transition"
+            className="w-full bg-yellow-50 text-yellow-700 py-3 rounded-xl font-bold border border-yellow-200 hover:bg-yellow-100 transition text-xs flex items-center justify-center gap-2"
           >
-            📝 查看 / 编辑 记忆便签墙
+            <span>📝</span> 管理长期记忆便签墙
           </button>
         </section>
 
