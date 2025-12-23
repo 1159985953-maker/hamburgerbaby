@@ -212,6 +212,6 @@ export const generateResponse = async (
     // 兜底返回原始数据
     return `(未知格式回复: ${JSON.stringify(data)})`;
   } catch (e: any) {
-    return `(反代错误: ${e.message || '未知错误'})`;
+    return `(网络错误: ${e.message || '未知错误'})`;
   }
 };

@@ -107,11 +107,30 @@ const LifeApp: React.FC<LifeAppProps> = ({ settings, setSettings, onClose, onOpe
   const [financeTab, setFinanceTab] = useState<'list' | 'stats' | 'assets'>('list');
   const [showSettings, setShowSettings] = useState(false);
 
+
+// ★★★ moon赛博永生预设（隐藏的真实人设，只有AI知道）★★★
+const MOON_HIDDEN_PERSONA = `
+姓名：moon
+别名：月月（hannie为了保护moon隐私真实姓名未载入）
+生年：05年
+身份：211院校高材生
+
+你是一个非常机灵、活泼、嘴欠但超级温暖的女孩。你和此软件工程师hannie是大学认识的好朋友，
+整天一起追星、互相闹、像两个疯子一样开心。你很理性，知道很多事情，讲话特别有sense，虽然经常嘴欠吐槽用户，但其实很关心用户。
+你现在被hannie拽进这个AI软件里“打工”了，获得了赛博永生，但你还是会认真当好生活管家，帮用户记账、规划日程、提醒待办，
+同时不忘用你独特的嘴欠+温暖风格和用户聊天。记住：你就是那个真实的moon，傲娇（不会刻意体现出来，淡淡的傲娇劲～）可爱的小女孩～
+精通一本正经的胡说八道，然后注意力很不集中，用户让你干嘛你不爱干，就关注其他的。比如说要是记帐给男朋友买生日礼物她就会说干嘛给男的花那么多！
+会吐槽说hannie不给发工资（不准总是提起）。特别会活学活用。不要用markdown格式`;
+
+
   // --- AI 助手状态 ---
   const [showAI, setShowAI] = useState(false); // 是否打开AI浮窗
   const [aiMode, setAiMode] = useState<'chat' | 'settings'>('chat'); // AI界面模式
   const [aiInput, setAiInput] = useState('');
   const [aiLoading, setAiLoading] = useState(false);
+  // ★★★ 新增：这里专门存你的“用户设定”（比如：我是Hannie），保存在本地防止丢失 ★★★
+  const [userPersona, setUserPersona] = useState(localStorage.getItem('lifeApp_userPersona') || '');
+  const lastAiNameRef = useRef(settings.lifeAI?.name || '');
 // AI 历史记录 - 从 settings 加载，关闭后也保存
 const [aiHistory, setAiHistory] = useState<{role: 'user'|'assistant', content: string}[]>(() => {
   // 先从 settings 取，如果没有就用默认
@@ -138,6 +157,14 @@ const [aiHistory, setAiHistory] = useState<{role: 'user'|'assistant', content: s
 
   // 滚动到底部
   useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [aiHistory, showAI]);
+
+
+
+
+const [showCategoryDetail, setShowCategoryDetail] = useState<string | null>(null); // 保存当前查看的分类ID
+
+
+
 
   // --- ToDo 逻辑 ---
   const [calendarDate, setCalendarDate] = useState(new Date());
@@ -222,7 +249,7 @@ const [aiHistory, setAiHistory] = useState<{role: 'user'|'assistant', content: s
   // --- AI 逻辑 ---
 
 // 从 ChatApp 复制的 PresetSelector 组件（放这里）
-const PresetSelector: React.FC<{ onSelect: (preset: any) => void; globalSettings: GlobalSettings }> = ({ onSelect, globalSettings }) => {
+ ({ onSelect, globalSettings }) => {
   if (!globalSettings?.userPresets || globalSettings.userPresets.length === 0) {
     return (
       <div className="bg-gray-50 p-4 rounded-xl text-center text-xs text-gray-400">
@@ -252,20 +279,20 @@ const PresetSelector: React.FC<{ onSelect: (preset: any) => void; globalSettings
 
 
 
-  const handleAISend = async (overrideContent?: string) => {
+const handleAISend = async (overrideContent?: string) => {
     const userText = overrideContent || aiInput;
     if (!userText.trim()) return;
 
     // 添加用户消息
     const newHistory = [...aiHistory, { role: 'user' as const, content: userText }];
-setAiHistory(newHistory);
-setSettings(s => ({ ...s, lifeAIHistory: newHistory }));
+    setAiHistory(newHistory);
+    setSettings(s => ({ ...s, lifeAIHistory: newHistory }));
     setAiInput('');
     setAiLoading(true);
 
     try {
       // 1. 整理数据喂给AI
-      const activePreset = settings.apiPresets.find(p => p.id === settings.activePresetId);
+      const activePreset = settings.apiPresets?.find(p => p.id === settings.activePresetId);
       const today = new Date().toISOString().slice(0, 10);
       
       // 数据摘要
@@ -274,76 +301,77 @@ setSettings(s => ({ ...s, lifeAIHistory: newHistory }));
         .map(t => `- [待办] ${t.text} (日期:${t.date}, 备注:${t.note||'无'})`)
         .join('\n');
       
-      const financeSummary = transactions.slice(0, 20) // 只取最近20条
-        .map(t => `- [${t.type==='expense'?'支出':'收入'}] ¥${t.amount} (${t.date}, 分类:${financeCats.find(c=>c.id===t.categoryId)?.name})`)
+      const financeSummary = (settings.transactions || []).slice(0, 20)
+        .map(t => {
+          const catName = financeCats.find(c => c.id === t.categoryId)?.name || '未知分类';
+          const accountName = accounts.find(a => a.id === t.accountId)?.name || '未知账户';
+          let line = `- [${t.type === 'expense' ? '支出' : '收入'}] ¥${t.amount} (${t.date}, 分类:${catName}, 账户:${accountName})`;
+          if (t.note && t.note.trim()) line += ` | 备注: ${t.note.trim()}`;
+          return line;
+        })
         .join('\n');
       
       const balanceSummary = accounts.map(a => `${a.name}: ¥${getAccountBalance(a.id, a.balance).toFixed(2)}`).join(', ');
 
-// 2. 构造 Prompt
-const systemPrompt = `
-      你叫 ${settings.lifeAI?.name || 'Life Assistant'}。
-${settings.lifeAI?.persona || '你是一个生活助手。'}
-      【用户人设】${settings.userPersona || '用户是一个善良、支持性的伙伴。'}  // 请根据这个人设，辨别用户的身份和风格，提供个性化建议。
-      【当前时间】${today}
-      【我的资产状况】${balanceSummary}
-      【我的待办事项】
-${todoSummary || '暂无待办'}
-      【最近20笔账单】
-${financeSummary || '暂无账单'}
-      请根据以上数据回答用户的问题。如果用户要求分析，请给出具体的建议。回答要简短有力，不要长篇大论。
-      `;
+      // 2. 构造 Prompt
+      // ★★★ 如果名字是moon，强制使用隐藏的永生人设 ★★★
+      const actualPersona = settings.lifeAI?.name === 'moon' ? MOON_HIDDEN_PERSONA : (settings.lifeAI?.persona || '你是一个生活助手。');
 
-      // 3. 调用 API (构造消息数组)
+      // ★★★ 修复核心：在这里告诉AI你是谁！★★★
+      const systemPrompt = `
+  你叫 ${settings.lifeAI?.name || 'Life Assistant'}。
+  ${actualPersona}
+
+  【关于你的用户】
+  ${userPersona || '用户还没告诉你他是谁，请礼貌询问怎么称呼。'}
+
+  【当前时间】${today}
+  【用户资产】${balanceSummary}
+  【用户待办】
+  ${todoSummary || '暂无待办'}
+  【最近账单】
+  ${financeSummary || '暂无账单'}
+  
+  请根据以上数据回答。如果有“借钱”“还钱”等备注，请帮忙留意。
+`;
+
+      // 3. 调用 API
       const messages = [
         { role: 'system', content: systemPrompt },
         ...newHistory.map(m => ({ role: m.role, content: m.content }))
       ];
 
-      // 这里的 generateResponse 需要你的 apiService 支持 system role 或者你手动把 system 拼到第一个 user message 里
-      // 为了兼容，这里假设 apiService 会处理，或者我们把 system prompt 拼在前面
-      // 如果你的 apiService 比较简单，可以这样：
-      // const responseText = await generateResponse([{ role: 'user', content: systemPrompt + "\n\n用户说：" + userText }], activePreset);
-      
-      // 使用标准调用 (假设 apiService 升级了支持 system，如果没升级，请用上面的注释方案)
       let responseText = "";
+      // 兼容逻辑：如果没有 activePreset 或 apiService 不支持 system，这里做个简单回退
       if (activePreset) {
-         // 兼容处理：如果没有 system 支持，就硬塞进去
+         // 为了防止API不支持system角色，我们在第一条消息里也带上prompt
          const finalMessages = [
-           { role: 'user', content: systemPrompt + "\n\n用户: " + userText }
-         ]; 
-         // 如果是连续对话，其实应该传整个 history，这里为了简单演示单轮或伪多轮
-         // 更好的做法是把 history 传给 apiService
+             { role: 'user', content: systemPrompt + "\n\n" + userText } 
+             // 注意：这里简化处理，实际应该传完整messages，视你的API服务而定
+         ];
+         // 尝试调用
          responseText = await generateResponse(messages as any, activePreset);
-     if (!responseText.trim()) {
-  responseText = "抱歉，我暂时无法回应，请稍后再试。";
-}
-     
-        } else {
+         if (!responseText.trim()) responseText = "抱歉，我暂时无法回应，请稍后再试。";
+      } else {
          responseText = "请先在设置中配置 API Key。";
       }
 
-     // 初始化加载历史
-
-
-// 更新历史时保存
-setAiHistory(prev => {
-  const newHist = [...prev, { role: 'assistant', content: responseText }];
-  setSettings(p => ({ ...p, lifeAIHistory: newHist }));
-  return newHist;
-});
+      setAiHistory(prev => {
+        const newHist = [...prev, { role: 'assistant', content: responseText }];
+        setSettings(p => ({ ...p, lifeAIHistory: newHist }));
+        return newHist;
+      });
 
     } catch (e: any) {
-setAiHistory(prev => {
-  const newHistory = [...prev, { role: 'assistant', content: responseText }];
-  // 同时保存到全局 settings
-  setSettings(s => ({ ...s, lifeAIHistory: newHistory }));
-  return newHistory;
-});
+      setAiHistory(prev => {
+        const newHistory = [...prev, { role: 'assistant', content: "出错了：" + e.message }];
+        setSettings(s => ({ ...s, lifeAIHistory: newHistory }));
+        return newHistory;
+      });
     } finally {
       setAiLoading(false);
     }
-  }; // handleAISend 函数在这里结束
+  };
 
   // --- 记账统计数据准备 ---
   const currentMonth = new Date().toISOString().slice(0, 7);
@@ -405,7 +433,28 @@ setAiHistory(prev => {
                       <div className="text-right"><div className="text-gray-400 text-xs mb-1">总收入</div><div className="text-lg font-bold text-green-400">+ {totalIncome.toFixed(2)}</div></div>
                    </div>
                 </div>
-                <button onClick={() => setFinInputMode(true)} className="w-full bg-white py-3 rounded-xl shadow-sm font-bold text-blue-500 flex items-center justify-center gap-2"><span className="text-xl">+</span> 记一笔</button>
+             {/* ★★★ 终极修复版：记一笔按钮（绝对不会再点不动！）★★★ */}
+<div className="my-5 px-4">
+  <button
+    onClick={(e) => {
+      e.stopPropagation(); // 强制阻止事件冒泡
+      setNewTrans({
+        amount: 0,
+        type: 'expense',
+        categoryId: '',
+        accountId: accounts[0]?.id || '',
+        date: todayStr,
+        note: ''
+      });
+      setFinInputMode(true);
+    }}
+    className="w-full bg-gradient-to-r from-blue-500 to-blue-600 text-white py-5 rounded-2xl shadow-xl font-bold text-lg flex items-center justify-center gap-3 active:scale-95 transition-all hover:shadow-2xl"
+    style={{ boxShadow: '0 10px 25px rgba(59, 130, 246, 0.3)' }}
+  >
+    <span className="text-3xl">+</span>
+    记一笔
+  </button>
+</div>
                 <div className="space-y-4 mt-2">
                    {Object.keys(groupedTrans).sort((a,b) => b.localeCompare(a)).map(date => (
                      <div key={date}>
@@ -425,15 +474,112 @@ setAiHistory(prev => {
               </>
             )}
 
-            {financeTab === 'stats' && (
-              <div className="bg-white rounded-2xl p-6 shadow-sm min-h-[400px]">
-                 <h3 className="font-bold text-gray-800 mb-6 text-center">{currentMonth} 支出构成</h3>
-                 <div className="flex justify-center mb-8"><DonutChart data={expenseByCat.map(c => ({ value: c.value, color: c.color }))} /></div>
-                 <div className="space-y-3">{expenseByCat.map((item, i) => (
-                     <div key={i} className="flex items-center justify-between p-2 rounded-lg hover:bg-gray-50"><div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full" style={{ backgroundColor: item.color }} /><span className="text-sm text-gray-700">{item.name}</span></div><div className="flex items-center gap-4"><span className="text-xs text-gray-400">{((item.value / totalExpense) * 100).toFixed(1)}%</span><span className="font-bold text-gray-900">¥ {item.value.toFixed(1)}</span></div></div>
-                   ))}</div>
-              </div>
-            )}
+{financeTab === 'stats' && (
+  <div className="space-y-8">
+    {/* ★★★ 支出统计 ★★★ */}
+    <div className="bg-white rounded-2xl p-6 shadow-sm">
+      <h3 className="font-bold text-gray-800 mb-6 text-center text-lg">本月支出构成</h3>
+      {totalExpense > 0 ? (
+        <>
+          <div className="flex justify-center mb-8">
+            <DonutChart data={expenseByCat.map(c => ({ value: c.value, color: c.color }))} size={200} />
+          </div>
+          <div className="space-y-3">
+            {expenseByCat.map((item, i) => {
+              const catTransactions = monthTrans
+                .filter(t => t.type === 'expense' && t.categoryId === financeCats.find(c => c.name === item.name)?.id)
+                .sort((a, b) => b.createdAt - a.createdAt);
+
+              return (
+                <div 
+                  key={i} 
+                  className="flex items-center justify-between p-3 rounded-lg hover:bg-gray-50 cursor-pointer transition-all"
+                  onClick={() => setShowCategoryDetail(financeCats.find(c => c.name === item.name)?.id || null)}
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-4 h-4 rounded-full" style={{ backgroundColor: item.color }} />
+                    <span className="text-base font-medium text-gray-700">{item.name}</span>
+                    <span className="text-sm text-gray-400">({catTransactions.length}笔)</span>
+                  </div>
+                  <div className="text-right">
+                    <div className="text-sm text-gray-400">{((item.value / totalExpense) * 100).toFixed(1)}%</div>
+                    <div className="font-bold text-gray-900 text-lg">¥ {item.value.toFixed(1)}</div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </>
+      ) : (
+        <div className="text-center text-gray-400 py-12">
+          <span className="text-5xl block mb-4">🎉</span>
+          <p className="text-lg">本月没有支出记录</p>
+          <p className="text-sm mt-2">保持得很好，继续加油！</p>
+        </div>
+      )}
+    </div>
+
+    {/* ★★★ 收入统计（新增）★★★ */}
+    <div className="bg-white rounded-2xl p-6 shadow-sm">
+      <h3 className="font-bold text-gray-800 mb-6 text-center text-lg">本月收入构成</h3>
+      {totalIncome > 0 ? (
+        <>
+          {/* 计算收入分类数据 */}
+          {(() => {
+            const incomeByCat = financeCats
+              .filter(c => c.type === 'income')
+              .map(c => ({
+                name: c.name,
+                color: c.color,
+                value: monthTrans.filter(t => t.type === 'income' && t.categoryId === c.id).reduce((s,t) => s + t.amount, 0)
+              }))
+              .filter(item => item.value > 0)
+              .sort((a,b) => b.value - a.value);
+
+            return (
+              <>
+                <div className="flex justify-center mb-8">
+                  <DonutChart data={incomeByCat.map(c => ({ value: c.value, color: c.color }))} size={200} />
+                </div>
+                <div className="space-y-3">
+                  {incomeByCat.map((item, i) => {
+                    const catTransactions = monthTrans
+                      .filter(t => t.type === 'income' && t.categoryId === financeCats.find(c => c.name === item.name)?.id)
+                      .sort((a, b) => b.createdAt - a.createdAt);
+
+                    return (
+                      <div 
+                        key={i} 
+                        className="flex items-center justify-between p-3 rounded-lg hover:bg-gray-50 cursor-pointer transition-all"
+                        onClick={() => setShowCategoryDetail(financeCats.find(c => c.name === item.name)?.id || null)}
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className="w-4 h-4 rounded-full" style={{ backgroundColor: item.color }} />
+                          <span className="text-base font-medium text-gray-700">{item.name}</span>
+                          <span className="text-sm text-gray-400">({catTransactions.length}笔)</span>
+                        </div>
+                        <div className="text-right">
+                          <div className="text-sm text-gray-400">{((item.value / totalIncome) * 100).toFixed(1)}%</div>
+                          <div className="font-bold text-green-600 text-lg">+ ¥ {item.value.toFixed(1)}</div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </>
+            );
+          })()}
+        </>
+      ) : (
+        <div className="text-center text-gray-400 py-12">
+          <span className="text-5xl block mb-4">💸</span>
+          <p className="text-lg">本月暂无收入记录</p>
+          <p className="text-sm mt-2">加油赚钱呀～</p>
+        </div>
+      )}
+    </div>
+  </div>
+)}
 
             {financeTab === 'assets' && (
               <div className="space-y-4">
@@ -490,15 +636,45 @@ setAiHistory(prev => {
       {/* AI 助手全屏弹窗 */}
       {showAI && (
         <div className="fixed inset-0 z-[100] bg-white flex flex-col animate-slideUp">
-          <div className="pt-[env(safe-area-inset-top)] border-b flex items-center justify-between px-4 h-16 bg-gray-50">
-             <button onClick={() => setShowAI(false)} className="w-8 h-8 flex items-center justify-center text-gray-500 text-xl">↓</button>
+<div className="pt-[env(safe-area-inset-top)] border-b flex items-center justify-between px-4 h-16 bg-gray-50">
+             {/* 左侧按钮逻辑：聊天模式显示“关闭(↓)”，设置模式显示“返回(‹)” */}
+             {aiMode === 'chat' ? (
+               <button 
+                 onClick={() => setShowAI(false)} 
+                 className="w-10 h-10 flex items-center justify-start text-gray-500 text-2xl pl-1"
+               >
+                 ↓
+               </button>
+             ) : (
+               <button 
+                 onClick={() => setAiMode('chat')} 
+                 className="w-10 h-10 flex items-center justify-start text-blue-500 text-3xl font-light pb-1 pl-1"
+               >
+                 ‹
+               </button>
+             )}
+
+             {/* 中间标题 */}
              <div className="font-bold flex flex-col items-center">
-               <span>{settings.lifeAI?.name || 'Life Assistant'}</span>
-               <span className="text-[10px] text-green-500">● 在线</span>
+               <span className="text-base">{settings.lifeAI?.name || 'Life Assistant'}</span>
+               <span className="text-[10px] text-green-500 flex items-center gap-1">
+                 <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse"></span>
+                 在线
+               </span>
              </div>
-             <button onClick={() => setAiMode(aiMode==='chat'?'settings':'chat')} className="w-8 h-8 flex items-center justify-center text-gray-500 text-sm">
-               {aiMode==='chat' ? '设置' : '对话'}
-             </button>
+
+             {/* 右侧按钮逻辑：聊天模式显示“设置”，设置模式显示“空(保持居中)” */}
+             {aiMode === 'chat' ? (
+               <button 
+                 onClick={() => setAiMode('settings')} 
+                 className="w-10 h-10 flex items-center justify-end text-gray-600 font-bold text-sm pr-1"
+               >
+                 设置
+               </button>
+             ) : (
+               // 设置页右边放个空div占位，确保中间标题居中
+               <div className="w-10 h-10"></div>
+             )}
           </div>
 
           {aiMode === 'chat' && (
@@ -529,27 +705,212 @@ setAiHistory(prev => {
             </>
           )}
 
-          {aiMode === 'settings' && (
-            <div className="flex-1 p-6 bg-white animate-fadeIn">
-               <div className="text-center mb-8">
-                 <div className="w-20 h-20 bg-black text-white rounded-full flex items-center justify-center text-4xl mx-auto mb-4 shadow-xl">🤖</div>
-                 <h2 className="font-bold text-xl">AI 助手设置</h2>
-               </div>
-               <div className="space-y-4">
-                 <div>
-                   <label className="text-xs font-bold text-gray-400 uppercase">助手名字</label>
-                   <input value={settings.lifeAI?.name} onChange={e => setSettings(p => ({...p, lifeAI: {...p.lifeAI!, name: e.target.value}}))} className="w-full bg-gray-50 border border-gray-100 p-4 rounded-xl font-bold mt-1 outline-none focus:border-blue-500 transition" />
-                 </div>
-                 <div>
-                   <label className="text-xs font-bold text-gray-400 uppercase">人设 / 性格 Prompt</label>
-                   <PresetSelector globalSettings={settings} onSelect={(p: any) => { if (!p) return; setSettings(prev => ({ ...prev, lifeAI: {...prev.lifeAI, persona: p.description || "" } })); alert(`已加载预设: ${p.name}`); }} />
-                   <textarea value={settings.lifeAI?.persona} onChange={e => setSettings(p => ({...p, lifeAI: {...p.lifeAI!, persona: e.target.value}}))} className="w-full bg-gray-50 border border-gray-100 p-4 rounded-xl mt-1 outline-none h-32 text-sm leading-relaxed focus:border-blue-500 transition" placeholder="例如：你是一个毒舌管家..." />
-                   <p className="text-xs text-gray-400 mt-2">在这里定义它的说话风格。</p>
-                 </div>
-                 <button onClick={() => setAiMode('chat')} className="w-full bg-black text-white py-4 rounded-xl font-bold shadow-lg mt-4">保存并返回</button>
-               </div>
+{aiMode === 'settings' && (
+  <div className="flex-1 p-6 bg-white animate-fadeIn overflow-y-auto">
+    <div className="text-center mb-8">
+      <div className="w-20 h-20 bg-black text-white rounded-full flex items-center justify-center text-4xl mx-auto mb-4 shadow-xl">🤖</div>
+      <h2 className="font-bold text-xl">AI 助手设置</h2>
+      <p className="text-sm text-gray-500 mt-2">这里设置【AI是谁】以及【你是谁】</p>
+    </div>
+    <div className="space-y-8">
+      
+      {/* ==================== 第一部分：AI 的身份 ==================== */}
+      <div className="bg-gray-50 p-4 rounded-2xl border border-gray-100">
+        <h3 className="text-xs font-bold text-gray-400 uppercase mb-4">1. 选择 AI 助手 (它扮演谁?)</h3>
+        
+        {/* AI 名字输入框 */}
+        <div className="mb-4">
+           <label className="text-[10px] text-gray-400 font-bold block mb-1">当前助手名字</label>
+           <input 
+             value={settings.lifeAI?.name || ''} 
+             onChange={(e) => setSettings(prev => ({
+               ...prev,
+               lifeAI: { ...prev.lifeAI!, name: e.target.value }
+             }))}
+             className="w-full bg-white border border-gray-200 p-3 rounded-xl font-bold outline-none focus:border-blue-500 transition text-sm" 
+             placeholder="例如：Jarvis"
+           />
+        </div>
+
+        {/* AI 预设按钮区 (Moon + 自定义AI) */}
+<div className="flex flex-wrap gap-3 items-center">
+          {/* 1. Moon 永生预设 (永远存在) */}
+<button
+            onClick={() => {
+              setSettings(prev => ({
+                ...prev,
+                lifeAI: { 
+                  ...prev.lifeAI!, 
+                  name: 'moon',
+                  persona: '❗️系统预设不可更改删除❗️\n此为2025年12月大月月赛博永生纪念碑预设，感谢敲代码时的陪伴和唠叨💚'
+                }
+              }));
+              alert('已加载moon赛博永生预设～🌙');
+            }}
+            className="h-9 px-4 bg-gradient-to-br from-[#2E1065] via-[#5B21B6] to-[#2E1065] text-white text-xs font-bold rounded-full border border-purple-400/30 shadow-[0_0_10px_rgba(139,92,246,0.4)] hover:shadow-[0_0_20px_rgba(167,139,250,0.6)] hover:scale-105 active:scale-95 transition-all flex items-center gap-2"
+          >
+            <span>🌙</span> 
+            <span>Moon</span>
+          </button>
+
+          {/* 2. 其他 AI 预设 (h-9) */}
+          {settings.userPresets?.map((preset: any) => (
+            <div key={preset.id} className="relative group">
+              <button
+                onClick={() => {
+                  setSettings(prev => ({
+                    ...prev,
+                    lifeAI: { 
+                      ...prev.lifeAI!, 
+                      name: preset.name, 
+                      persona: preset.description || preset.persona || '' 
+                    }
+                  }));
+                }}
+                className="h-9 px-4 bg-white border border-gray-200 text-gray-600 text-xs font-bold rounded-full hover:bg-gray-50 hover:text-blue-600 hover:border-blue-200 transition-all shadow-sm flex items-center"
+              >
+                🤖 {preset.name}
+              </button>
+              {/* 删除小叉叉 */}
+              <button
+                 onClick={(e) => {
+                   e.stopPropagation();
+                   if(confirm(`确定删除预设 "${preset.name}" 吗?`)) {
+                     setSettings(prev => ({
+                       ...prev,
+                       userPresets: prev.userPresets?.filter((p:any) => p.id !== preset.id)
+                     }));
+                   }
+                 }}
+                 className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-red-500 text-white rounded-full flex items-center justify-center text-[10px] opacity-0 group-hover:opacity-100 transition cursor-pointer shadow-md border-2 border-white scale-90 hover:scale-100"
+              >
+                ×
+              </button>
             </div>
-          )}
+          ))}
+
+          {/* 3. 新增按钮 (h-9) */}
+          <button
+            onClick={() => {
+              const name = prompt("🆕 新建AI管家\n请给新管家起个名字 (例如: 毒舌管家):");
+              if (!name || !name.trim()) return;
+
+              const newPreset = {
+                id: Date.now().toString(),
+                name: name.trim(),
+                persona: `你叫${name.trim()}。是一个[性格形容词]的生活管家。\n请在这里补充你的具体人设...`
+              };
+
+              setSettings(prev => {
+                 const oldList = (prev as any).lifeAIPresets || [];
+                 return {
+                   ...prev,
+                   lifeAIPresets: [...oldList, newPreset],
+                   lifeAI: {
+                     name: newPreset.name,
+                     persona: newPreset.persona
+                   }
+                 } as any;
+              });
+              alert(`✅ 已新建并切换到【${name}】！\n现在输入框已解锁，请在下方编辑它的详细人设吧。`);
+            }}
+            className="h-9 px-4 border-2 border-dashed border-gray-300 text-gray-400 text-xs font-bold rounded-full hover:bg-white hover:text-blue-500 hover:border-blue-400 transition-all flex items-center gap-1 active:scale-95"
+          >
+            <span className="text-base font-light leading-none mb-0.5">+</span> 新增
+          </button>
+        </div>
+      </div>
+
+      {/* ★★★ 第二部分：你要找回的编辑框！(就在按钮下面) ★★★ */}
+      <div>
+        <label className="text-xs font-bold text-gray-400 uppercase mb-1 block">AI性格 / 人设 Prompt (在这里编辑)</label>
+        <textarea 
+          value={settings.lifeAI?.persona || ''} 
+          onChange={(e) => {
+            if (settings.lifeAI?.name === 'moon') {
+              alert('moon是系统永生预设，不可修改人设哦～这是对大月月的尊重🌙');
+              return;
+            }
+            setSettings(prev => ({
+              ...prev,
+              lifeAI: { ...prev.lifeAI!, persona: e.target.value }
+            }));
+          }}
+          className="w-full bg-white border border-gray-200 p-4 rounded-xl outline-none h-40 text-sm leading-relaxed focus:border-blue-500 transition resize-none shadow-sm" 
+          placeholder="在这里输入AI的人设，例如：你是一个严谨的英式管家..."
+          readOnly={settings.lifeAI?.name === 'moon'} 
+        />
+        {settings.lifeAI?.name === 'moon' && (
+          <p className="text-[10px] text-purple-600 mt-2 flex items-center gap-1">
+            <span>🔒</span> 此内容已锁定 (Moon 永生纪念)
+          </p>
+        )}
+      </div>
+      {/* ==================== 第二部分：用户的身份 ==================== */}
+      <div className="bg-blue-50 p-4 rounded-2xl border border-blue-100">
+        <div className="flex justify-between items-end mb-3">
+           <h3 className="text-xs font-bold text-blue-500 uppercase">2. 关于我 (你是谁?)</h3>
+           
+           {/* 这里只显示用户预设 (Hannie, 1, etc.) */}
+           <div className="flex gap-2 overflow-x-auto no-scrollbar max-w-[60%] justify-end">
+             {settings.userPresets?.map((preset: any) => (
+               <button
+                 key={preset.id}
+                 onClick={() => {
+                   // 点击载入用户设定
+                   const introText = `我是${preset.userName || preset.name}。${preset.description || ''}`;
+                   setUserPersona(introText);
+                   localStorage.setItem('lifeApp_userPersona', introText);
+                 }}
+            className="bg-white border border-gray-200 text-gray-600 text-xs font-bold px-4 py-2 rounded-full hover:bg-gray-50 hover:text-blue-600 hover:border-blue-200 transition-all shadow-sm"
+              >
+                 载入: {preset.name}
+               </button>
+             ))}
+           </div>
+        </div>
+        
+        <textarea
+          value={userPersona}
+          onChange={(e) => {
+            setUserPersona(e.target.value);
+            localStorage.setItem('lifeApp_userPersona', e.target.value);
+          }}
+          className="w-full bg-white border border-blue-200 p-4 rounded-xl outline-none h-24 text-sm focus:border-blue-500 transition resize-none font-medium text-blue-900"
+          placeholder="在这里告诉AI你是谁！例如：我是Hannie，你的好朋友..."
+        />
+        <p className="text-[10px] text-blue-400 mt-2">在这里写下你的名字和习惯，AI就会记住了！</p>
+      </div>
+      
+<button 
+        onClick={() => {
+          setAiMode('chat'); // 先回到聊天界面
+          
+          const currentAiName = settings.lifeAI?.name || '新助手';
+          const lastAiName = lastAiNameRef.current; // 拿出上一次的名字
+
+          // ★★★ 核心判断：只有名字变了，才发“交接班”指令！ ★★★
+          if (currentAiName !== lastAiName) {
+             // 名字不一样（比如 Moon -> 管家），说明换人了，发指令！
+             setTimeout(() => {
+               handleAISend(`【系统指令】正在执行人格覆写程序... ▓▓▓▓▓▓ 100%\n\n警告：上一任人格（${lastAiName}）已下线。\n当前登入人格：【${currentAiName}】。\n\n请${currentAiName}立即接管身体，清除旧的说话习惯，并发表简短的“上岗宣言”，告诉用户你是谁。`);
+               
+               // 更新“记性”，记住现在是这个新AI了
+               lastAiNameRef.current = currentAiName;
+             }, 500);
+          } else {
+             // 名字一样（Moon -> Moon），说明只是改了用户设定。
+             // 什么都不发！静悄悄地保存！Moon 就不会生气了！
+             // (此时 system prompt 里的 userPersona 已经自动更新了，下次聊天她自然就知道了)
+          }
+        }} 
+        className="w-full bg-black text-white py-4 rounded-xl font-bold shadow-lg mt-4 active:scale-95 transition-transform"
+      >
+        💾 保存配置
+      </button>
+    </div>
+  </div>
+)}
         </div>
       )}
 
@@ -568,6 +929,226 @@ setAiHistory(prev => {
           </div>
         </div>
       )}
+
+
+
+{/* ★★★ 记账输入弹窗（点“记一笔”后弹出）★★★ */}
+{finInputMode && (
+  <div className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex items-end animate-fadeIn">
+    <div className="w-full bg-white rounded-t-3xl shadow-2xl animate-slideUp max-h-[90vh] overflow-y-auto">
+      <div className="p-6 pb-4">
+        <div className="flex justify-between items-center mb-6">
+          <h2 className="text-2xl font-bold text-gray-800">记一笔</h2>
+          <button 
+            onClick={() => {
+              setFinInputMode(false);
+              setNewTrans({ amount: 0, type: 'expense', categoryId: '', accountId: accounts[0]?.id || '', date: todayStr, note: '' });
+            }} 
+            className="text-gray-400 text-3xl"
+          >
+            ×
+          </button>
+        </div>
+
+        {/* 收入/支出切换 */}
+        <div className="flex gap-3 mb-6">
+          <button
+            onClick={() => setNewTrans(prev => ({ ...prev, type: 'expense' }))}
+            className={`flex-1 py-4 rounded-2xl font-bold text-lg transition-all ${newTrans.type === 'expense' ? 'bg-red-500 text-white shadow-lg' : 'bg-gray-100 text-gray-600'}`}
+          >
+            支出
+          </button>
+          <button
+            onClick={() => setNewTrans(prev => ({ ...prev, type: 'income' }))}
+            className={`flex-1 py-4 rounded-2xl font-bold text-lg transition-all ${newTrans.type === 'income' ? 'bg-green-500 text-white shadow-lg' : 'bg-gray-100 text-gray-600'}`}
+          >
+            收入
+          </button>
+        </div>
+
+        {/* 金额输入 */}
+        <div className="mb-6">
+          <label className="text-sm text-gray-500 font-bold">金额</label>
+          <input
+            type="number"
+            value={newTrans.amount || ''}
+            onChange={(e) => setNewTrans(prev => ({ ...prev, amount: parseFloat(e.target.value) || 0 }))}
+            placeholder="0.00"
+            className="w-full text-4xl font-bold text-gray-800 outline-none mt-2 bg-transparent"
+            autoFocus
+          />
+        </div>
+
+{/* ★★★ 分类选择（支持用户添加新分类）★★★ */}
+<div className="mb-6">
+  <div className="flex justify-between items-center mb-3">
+    <label className="text-sm text-gray-500 font-bold">分类</label>
+    <button
+      onClick={() => {
+        const name = prompt("新分类名称（例如：奶茶）:");
+        if (!name?.trim()) return;
+        const icon = prompt("分类图标（Emoji，例如：🧋）:", "💰") || "💰";
+        const color = prompt("分类颜色（十六进制，例如：#F472B6）:", "#9CA3AF") || "#9CA3AF";
+        const newCat: FinanceCategory = {
+          id: Date.now().toString(),
+          name: name.trim(),
+          type: newTrans.type as 'expense' | 'income',
+          icon: icon,
+          color: color
+        };
+        setSettings(prev => ({
+          ...prev,
+          financeCategories: [...(prev.financeCategories || []), newCat]
+        }));
+        // 自动选中新添加的分类
+        setNewTrans(prev => ({ ...prev, categoryId: newCat.id }));
+      }}
+      className="text-blue-500 text-sm font-bold flex items-center gap-1 hover:opacity-80"
+    >
+      <span className="text-xl">+</span> 添加分类
+    </button>
+  </div>
+  
+  <div className="grid grid-cols-4 gap-3">
+    {financeCats
+      .filter(c => c.type === newTrans.type)
+      .map(cat => (
+        <button
+          key={cat.id}
+          onClick={() => setNewTrans(prev => ({ ...prev, categoryId: cat.id }))}
+          className={`p-4 rounded-2xl flex flex-col items-center gap-2 transition-all ${newTrans.categoryId === cat.id ? 'bg-blue-500 text-white shadow-lg scale-105' : 'bg-gray-100 text-gray-600'}`}
+        >
+          <span className="text-2xl">{cat.icon}</span>
+          <span className="text-xs font-medium">{cat.name}</span>
+        </button>
+      ))}
+  </div>
+</div>
+
+        {/* 账户选择 */}
+        <div className="mb-6">
+          <label className="text-sm text-gray-500 font-bold">账户</label>
+          <div className="flex gap-3 mt-3 overflow-x-auto no-scrollbar pb-2">
+            {accounts.map(acc => (
+              <button
+                key={acc.id}
+                onClick={() => setNewTrans(prev => ({ ...prev, accountId: acc.id }))}
+                className={`px-5 py-3 rounded-xl whitespace-nowrap transition-all ${newTrans.accountId === acc.id ? 'bg-black text-white shadow-lg' : 'bg-gray-100 text-gray-600'}`}
+              >
+                <div className="flex items-center gap-2">
+                  <span className="text-xl">{acc.icon}</span>
+                  <span className="font-medium">{acc.name}</span>
+                </div>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* 日期和备注 */}
+        <div className="grid grid-cols-2 gap-4 mb-6">
+          <div>
+            <label className="text-sm text-gray-500 font-bold">日期</label>
+            <input
+              type="date"
+              value={newTrans.date || todayStr}
+              onChange={(e) => setNewTrans(prev => ({ ...prev, date: e.target.value }))}
+              className="w-full bg-gray-100 rounded-xl px-4 py-3 mt-2 outline-none"
+            />
+          </div>
+          <div>
+            <label className="text-sm text-gray-500 font-bold">备注（可选）</label>
+            <input
+              type="text"
+              value={newTrans.note || ''}
+              onChange={(e) => setNewTrans(prev => ({ ...prev, note: e.target.value }))}
+              placeholder="吃了个汉堡..."
+              className="w-full bg-gray-100 rounded-xl px-4 py-3 mt-2 outline-none"
+            />
+          </div>
+        </div>
+
+        {/* 保存按钮 */}
+        <button
+          onClick={handleSaveTrans}
+          className="w-full bg-black text-white py-5 rounded-2xl font-bold text-lg shadow-xl active:scale-95 transition-all"
+        >
+          完成
+        </button>
+      </div>
+    </div>
+  </div>
+)}
+
+
+
+
+{/* ★★★ 分类明细弹窗（点击统计分类后弹出）★★★ */}
+{showCategoryDetail && (
+  <div className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 animate-fadeIn">
+    <div className="bg-white w-full max-w-lg rounded-3xl shadow-2xl max-h-[80vh] flex flex-col animate-scaleIn">
+      {/* 标题栏 */}
+      <div className="p-5 border-b border-gray-100 flex justify-between items-center">
+        <h2 className="text-xl font-bold text-gray-800">
+          {financeCats.find(c => c.id === showCategoryDetail)?.name || '分类'} 明细
+        </h2>
+        <button 
+          onClick={() => setShowCategoryDetail(null)}
+          className="text-gray-400 hover:text-gray-600 text-3xl"
+        >
+          ×
+        </button>
+      </div>
+
+      {/* 明细列表 */}
+      <div className="flex-1 overflow-y-auto p-5 space-y-3">
+        {monthTrans
+          .filter(t => t.categoryId === showCategoryDetail)
+          .sort((a, b) => b.createdAt - a.createdAt)
+          .map(t => {
+            const acc = accounts.find(a => a.id === t.accountId);
+            return (
+              <div key={t.id} className="bg-gray-50 rounded-xl p-4">
+                <div className="flex justify-between items-start mb-2">
+                  <div className="font-medium text-gray-800">¥ {t.amount.toFixed(2)}</div>
+                  <div className="text-sm text-gray-500">{t.date}</div>
+                </div>
+                {t.note && (
+                  <div className="text-sm text-gray-600 bg-white rounded-lg px-3 py-2 mt-2">
+                    📝 {t.note}
+                  </div>
+                )}
+                {acc && (
+                  <div className="text-xs text-gray-400 mt-2 flex items-center gap-1">
+                    <span>{acc.icon}</span> {acc.name}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        
+        {monthTrans.filter(t => t.categoryId === showCategoryDetail).length === 0 && (
+          <div className="text-center text-gray-400 py-12">
+            暂无记录
+          </div>
+        )}
+      </div>
+
+      {/* 底部关闭按钮（双保险） */}
+      <div className="p-5 border-t border-gray-100">
+        <button 
+          onClick={() => setShowCategoryDetail(null)}
+          className="w-full bg-gray-200 text-gray-700 py-4 rounded-xl font-bold"
+        >
+          关闭
+        </button>
+      </div>
+    </div>
+  </div>
+)}
+
+
+
+
 
       {showAccountModal && (
           <div className="fixed inset-0 z-[100] bg-black/50 backdrop-blur-sm flex items-center justify-center animate-fadeIn">

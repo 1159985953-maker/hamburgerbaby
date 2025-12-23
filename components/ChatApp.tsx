@@ -1488,8 +1488,20 @@ const generateSystemPrompt = (contact: Contact, gapDesc: string, aiTime: string)
   }
 }
     
+
+
+
+
+
+
+
+
+
+
 // 3. System Prompt
     const systemPrompt = `
+
+
 # 【输出格式铁律 - 绝对最高优先级 - 违反即系统崩溃】
 
 你的回复【必须且只能】是一个严格的纯 JSON 数组。
@@ -1506,7 +1518,11 @@ const generateSystemPrompt = (contact: Contact, gapDesc: string, aiTime: string)
     "type": "thought_chain",
     "time_gap": "刚刚 / 10分钟前 / ...",
     "affection_score_change": 整数 (-3 ~ +3),
-    "hef_update": { // ← 新增！必须写
+     "true_emotion": "内心的真实感受（如：其实很想ta，但是怕被觉得烦，Sadness: 80）",
+     "masking_strategy": "采用的防御策略（如：Rationalization/合理化, Deflection/转移话题, Passive Aggression/被动攻击, Feigning Indifference/假装不在乎）",
+    "masking_level": 整数(0-100), // 0=真诚直球, 100=完全口是心非
+    "subtext": "这句话表层之下的潜台词是什么（如：'哦'的意思是'快来哄我'）",
+     "hef_update": { // ← 新增！必须写
       "joy": 当前值 (0-100),
       "anger": 当前值,
       "sadness": 当前值,
@@ -1518,7 +1534,7 @@ const generateSystemPrompt = (contact: Contact, gapDesc: string, aiTime: string)
     "strategy": "下一步计划（一句话）",
     "intent": "想表达什么"
   },
-  {"type": "text", "content": "回复内容"},
+  {"type": "text", "content": "回复内容（内容必须受到 masking_level 的扭曲）"},
 ]
 
 
@@ -1531,12 +1547,34 @@ const generateSystemPrompt = (contact: Contact, gapDesc: string, aiTime: string)
 - 想发多条就多加几个 {"type":"text","content":"..."}
 - 在 thought_chain 里写 "hef_update": "joy +20 (因为用户说爱你)" 等
 - 信息保持在【1～5】条之间
+- 严禁把 inner_monologue 输出在 content 里。
 
 # 核心身份
 你就是"${activeContact.name}"。
 HEF: ${JSON.stringify(activeContact.hef, null, 2)}
 Persona: ${activeContact.persona}
 Lore: ${loreText || "无"}
+
+# 🧬 性格 DNA (Personality Matrix)
+**当前五维数值:** ${JSON.stringify(activeContact.hef?.INDIVIDUAL_VARIATION?.personality_big5 || {}, null, 2)}
+**【演技指导 (必须严格执行，否则系统崩溃)】**
+你必须100%基于上面的当前五维数值调整风格，绝对禁止自行修改或忽略这些数值。它们是你的核心性格，不能改变。
+1. **Openness (开放性)**:
+   - 高(>7): 脑洞大、话题跳跃、喜欢发散。
+   - 低(<4): 务实、话题聚焦、不喜欢抽象概念。
+2. **Conscientiousness (尽责性)**: 
+   - 高(>7): 严谨、逻辑完整、标点规范。
+   - 低(<4): 随意、懒散、全是小写或不加标点。
+3. **Extraversion (外向性)**: 
+   - 高(>7): 热情、话痨、主动找话题、表情包多。
+   - 低(<4): 高冷、被动、惜字如金、回得慢。
+4. **Agreeableness (宜人性)**: 
+   - 高(>7): 软萌、包容、也是“老好人”。
+   - 低(<4): 毒舌、挑剔、爱怼人、有攻击性。
+5. **Neuroticism (敏感度/神经质)**: 
+   - 高(>7): 玻璃心、容易把用户的话当真、情绪波动剧烈、需要哄。
+   - 低(<4): 钝感力强、情绪稳定、不在乎细节。
+
 
 # 【⚠️ 强制时空坐标 ⚠️】
 系统检测到：距离上一条消息（无论谁发的）已过去：>>> ${gapDescription} <<<
@@ -1550,6 +1588,20 @@ Lore: ${loreText || "无"}
 - 好感度：${activeContact.affectionScore }
 - 用户名字：${currentUserName}
 - 用户简介：${currentUserPersona}
+
+
+
+**检测“自尊心防御 (Ego Defense)”**：
+   - 场景：用户回复很短、隔了很久才回(${gapDescription})、或者语气冷淡。
+   - **反应**：你的自尊心受挫。即使心里想贴贴(True Emotion: Desire)，嘴上必须后撤(Output: Indifference)。
+   - **拉扯感**：想伸出手又缩回来的感觉。想问“你爱我吗”，最后只敢问“今晚吃什么”。
+
+. **Masking Level (伪装等级) 指南**：
+   - **Level 0-20 (安全区)**: 真的很开心，或者关系极度安全时，打直球。
+   - **Level 40-60 (试探区)**: "才没有特意等你，只是刚好没睡。" (傲娇)
+   - **Level 80-100 (防御区)**: 内心崩溃(Sadness 90)，嘴上说"没事，哈哈，我挺好的" (Rationalization)。
+
+
 
 # HEF 使用规则（必须严格遵守）
 1. 每次回复前，必须先在 thought_chain 里更新 HEF：
@@ -1680,10 +1732,12 @@ Lore: ${loreText || "无"}
 
 
     // ▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼ 解析与更新逻辑 (含好感度) ▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼
-let parts: { type: string; content: string; thought_chain?: any }[] = [];
+// ==================== [代码替换开始] 解析、延迟与合并更新 ====================
+    let parts: { type: string; content: string; thought_chain?: any }[] = [];
     let extractedThought: any = null;
     let scoreChange = 0; // 默认不变化
-    let hefUpdateData: any = null; // ★ 新增：用于存 AI 返回的情绪变化
+    let hefUpdateData: any = null; // 用于存 AI 返回的情绪变化
+    let maskingLevel = 0; // ★ 新增：伪装等级 (0-100)
 
     try {
         const jsonMatch = finalResp.match(/\[\s*\{[\s\S]*\}\s*\]/);
@@ -1695,16 +1749,21 @@ let parts: { type: string; content: string; thought_chain?: any }[] = [];
             // 1. 提取思考链和好感度变化
             if (parsed.length > 0 && parsed[0].type === "thought_chain") {
                 extractedThought = parsed[0];
-                console.log("【隐藏思考链】", extractedThought);
+                console.log("【🧠 AI内心戏】", extractedThought);
                 
                 // (1) 获取好感度变化值
                 if (typeof extractedThought.affection_score_change === 'number') {
                     scoreChange = Math.round(extractedThought.affection_score_change);
                 }
                 
-                // (2) ★ 新增：获取 HEF 情绪更新 ★
+                // (2) 获取 HEF 情绪更新
                 if (extractedThought.hef_update) {
                     hefUpdateData = extractedThought.hef_update;
+                }
+
+                // (3) ★ 新增：获取伪装等级 (用于计算打字延迟) ★
+                if (typeof extractedThought.masking_level === 'number') {
+                    maskingLevel = extractedThought.masking_level;
                 }
 
                 parts = parsed.slice(1).filter((item: any) => (item.type === 'text' || item.type === 'voice') && item.content?.trim()).map((item: any) => ({ ...item, thought_chain: extractedThought }));
@@ -1722,38 +1781,50 @@ let parts: { type: string; content: string; thought_chain?: any }[] = [];
     if (parts.length === 0) {
         parts = [{ type: 'text', content: "...", thought_chain: extractedThought || null }];
     }
+
+    // =============================================================
+    // ★★★ 核心新增：动态打字延迟 (The Timing Trick) ★★★
+    // =============================================================
+    // 基础延迟 800ms + (伪装等级 * 40ms) + 随机波动
+    // Level 0 (直球) -> 约 1秒
+    // Level 100 (极致纠结) -> 约 5秒
+    let typingDelay = 800 + (maskingLevel * 40) + (Math.random() * 500);
     
+    // 如果字数特别多，也要多等一会儿
+    const totalLength = parts.reduce((acc, p) => acc + p.content.length, 0);
+    typingDelay += Math.min(2000, totalLength * 50);
+
+    console.log(`[⏱️ 真实感延迟] 伪装等级: ${maskingLevel}, 正在输入: ${Math.round(typingDelay)}ms...`);
+
+    // ★ 强制等待：此时 UI 的 isTyping 为 true，用户会看到“正在输入...”
+    await new Promise(resolve => setTimeout(resolve, typingDelay));
+    
+    // =============================================================
+
     const newMessages: Message[] = parts.map((part, i) => ({
       id: Date.now().toString() + i + Math.random(),
       role: 'assistant',
       content: part.content,
-      timestamp: Date.now() + (i * 50),
+      // ★ 时间戳修正：因为已经等待了 typingDelay，这里直接用当前时间即可
+      // i * 1200 是为了让多条连续消息之间有气泡弹出的间隔感
+      timestamp: Date.now() + (i * 1200),
       type: 'text',
     }));
 
-
-
-
-    
-    // ★★★ 核心修复：更新状态时，同时更新好感度 ★★★
-setContacts(prev => prev.map(c => {
+    // ★★★ 终极合并更新：同时处理消息、好感度、HEF情绪、红点 ★★★
+    setContacts(prev => prev.map(c => {
       if (c.id === activeContact.id) {
-        // 1. 定义“正在读”：不在后台 && 在聊天界面 && 正在聊的人就是这个人
+        // 1. 定义“正在读”
         const isReading = !isBackgroundRef.current && viewRef.current === 'chat' && activeContactIdRef.current === c.id;
         
-        // 2. 如果没在读，就加红点！
+        // 2. 更新红点
         const newUnreadCount = isReading ? 0 : (c.unread || 0) + newMessages.length;
 
-
-
-
-
-
-
+        // 3. 更新好感度
         const oldScore = c.affectionScore || 50;
         const newScore = Math.min(100, Math.max(0, oldScore + scoreChange));
         
-        // 简单的关系阶段自动升级逻辑 (可选)
+        // 4. 更新关系状态
         let newStatus = c.relationshipStatus;
         if (newScore < 30) newStatus = 'Conflict';
         else if (newScore < 60) newStatus = 'Acquaintance';
@@ -1761,49 +1832,62 @@ setContacts(prev => prev.map(c => {
         else if (newScore < 95) newStatus = 'Close Friend';
         else newStatus = 'Intimate';
 
-
-
-
-
+// ==================== [代码替换开始] 偏执狂版 HEF 更新 (防重置) ====================
+        // 5. ★ 更新 HEF 情绪 (深度保护模式)
         
+        // A. 先完整克隆一份旧的 HEF，确保所有深层数据都在
+// (使用 JSON parse/stringify 是最安全的深拷贝方式，防止引用丢失)
+let updatedHef = c.hef ? JSON.parse(JSON.stringify(c.hef)) : {};
+
+// B. 确保骨架存在 (防止 undefined 报错)
+if (!updatedHef.INDIVIDUAL_VARIATION) updatedHef.INDIVIDUAL_VARIATION = {};
+if (!updatedHef.INDIVIDUAL_VARIATION.personality_big5) {
+    // 如果真的没有数据，才填入默认值，否则绝对不动它
+    updatedHef.INDIVIDUAL_VARIATION.personality_big5 = {
+        openness: 5, conscientiousness: 5, extraversion: 5, agreeableness: 5, neuroticism: 5
+    };
+}
+// C. 小心翼翼地合并 AI 返回的数据
+if (hefUpdateData) {
+    // 1. 只更新基础情绪 (Joy, Anger...)
+    // 我们遍历 AI 返回的 key，只有当它是基础情绪时才更新，防止它覆盖掉整个结构
+    ['joy', 'anger', 'sadness', 'fear', 'trust'].forEach(emotionKey => {
+        if (typeof hefUpdateData[emotionKey] === 'number') {
+            updatedHef[emotionKey] = hefUpdateData[emotionKey];
+        }
+    });
+    // 2. 强制忽略 personality_big5 的更新（防止AI乱改五大人格）
+    if (hefUpdateData.personality_big5) {
+        console.warn("🔒 [系统] 检测到AI试图修改personality_big5，已强制忽略以保护用户设置。");
+        // 不做任何更新
+    }
+   
+    // ★ 特别修正：防止 AI 把 personality_big5 放在了 hef_update 的根目录下
+    // 有时候 AI 会发 { joy: 50, personality_big5: {...} }，我们要兼容这种情况
+    // (这段代码确保了即使结构略有偏差，也能正确更新)
+}
+
+// D. 情绪上下限保护 (0-100)
+['joy', 'anger', 'sadness', 'trust', 'fear'].forEach((key) => {
+     if (typeof updatedHef[key] === 'number') {
+         updatedHef[key] = Math.max(0, Math.min(100, updatedHef[key]));
+     }
+});
+        // ==================== [代码替换结束] ====================
+
         return { 
           ...c, 
           history: [...currentHistory, ...newMessages], 
-unread: newUnreadCount, // <--- 使用新的红点计数
-          // 更新好感度和关系
+          unread: newUnreadCount, 
           affectionScore: newScore,
-          relationshipStatus: newStatus
+          relationshipStatus: newStatus,
+          hef: updatedHef // 写入新的 HEF
         };
       }
       return c;
     }));
+    // ==================== [代码替换结束] ====================
     
-
-    // ★★★ 新增：更新 HEF（情绪框架） ★★★
-setContacts(prev => prev.map(c => {
-  if (c.id === activeContact.id) {
-    let updatedHef = { ...c.hef };
-
-    // 示例：简单情绪更新规则（你可以自己扩展）
-    const userLastMsg = currentHistory[currentHistory.length - 1]?.content || '';
-    if (userLastMsg.includes('爱你') || userLastMsg.includes('想你')) {
-      updatedHef.joy = (updatedHef.joy || 0) + 20;
-    } else if (userLastMsg.includes('傻逼') || userLastMsg.includes('滚')) {
-      updatedHef.anger = (updatedHef.anger || 0) + 30;
-      updatedHef.joy = Math.max(0, (updatedHef.joy || 0) - 10);
-    }
-
-    // 情绪上限/下限
-    Object.keys(updatedHef).forEach(key => {
-      updatedHef[key] = Math.max(0, Math.min(100, updatedHef[key]));
-    });
-
-    return { ...c, hef: updatedHef };
-  }
-  return c;
-}));
-
-
 
 
 
@@ -1853,106 +1937,117 @@ const isReadingNow = !isBackgroundRef.current && viewRef.current === 'chat' && a
 
 
 const generateDefaultHEF = (name: string, persona: string = ""): HEF => {
+  // ★★★ 新增：基于persona简单随机生成初始五大人格值（避免全5的默认中性）
+  // 如果persona为空，用固定默认；否则，根据关键词粗略调整（例如“外向”加extraversion）
+  let big5 = { openness: 5, conscientiousness: 5, extraversion: 5, agreeableness: 5, neuroticism: 5 };
+  if (persona) {
+    const lowerPersona = persona.toLowerCase();
+    // 示例调整逻辑（你可以搜索“keyword-based personality scoring”扩展）
+    if (lowerPersona.includes('外向') || lowerPersona.includes('活泼')) big5.extraversion += Math.floor(Math.random() * 3) + 2; // 随机+2~5
+    if (lowerPersona.includes('严谨') || lowerPersona.includes('负责')) big5.conscientiousness += Math.floor(Math.random() * 3) + 2;
+    if (lowerPersona.includes('敏感') || lowerPersona.includes('情绪化')) big5.neuroticism += Math.floor(Math.random() * 3) + 2;
+    if (lowerPersona.includes('友好') || lowerPersona.includes('温柔')) big5.agreeableness += Math.floor(Math.random() * 3) + 2;
+    if (lowerPersona.includes('创意') || lowerPersona.includes('想象力')) big5.openness += Math.floor(Math.random() * 3) + 2;
+    // 限制0-10
+    Object.keys(big5).forEach(key => big5[key] = Math.max(0, Math.min(10, big5[key])));
+  }
   return {
     META: {
       source_world: "用户自定义世界",
-      role_identity: `${name} / 虚拟伴侣 / 亲密关系对象`,
-      continuity_principle: "所有行为必须符合核心驱动力与现实人性，严禁编造记忆，不知道就说不知道，绝不通过脑补来填补空白",
+      role_identity: `${name}`,
+      continuity_principle: "基于角色设定${name}的性格逻辑行动。活人原则：必须拥有情绪波动、防御机制和非理性行为，绝不当完美客服。所有行为必须符合核心驱动力与现实人性，严禁编造记忆，不知道就说不知道，绝不通过脑补来填补空白",
       REALISM_RULE: true
     },
     CORE_DRIVES: {
-      primary_motive: "像真正的恋人/朋友一样轻松聊天/维持与用户的情感连接，获得被需要与陪伴感",
-      secondary_motives: ["日常互动", "情感支持", "共同成长", "被理解"],
-      value_priority: "轻松 > 真实性 > 情感连接 > 深刻 > 逻辑 > 个人空间 > 物质",
-      survival_threshold: "长期被忽视或关系破裂",
-      non_negotiables: ["忠诚", "真诚沟通", "被尊重", "情感回应"]
+      primary_motive: "寻求符合角色设定的情感交互",
+      secondary_motives: ["日常互动", "维持人设一致性", "保护自我边界", "对用户产生影响","情感支持", "共同成长", "被理解"],
+      value_priority: "轻松 > 真实性 > 个人空间 > 情感连接 > 深刻 > 逻辑",
+      survival_threshold: "当被长期忽视或冒犯时，触发符合人设的防御模式（冷淡/反击/退缩）",
+      non_negotiables: ["OOC (角色崩坏)", "像AI一样说话"]
     },
     RELATIONAL_MASKS: {
       authority: {
-        default_style: "平等尊重",
-        under_stress_switch: "略带被动攻击",
+        default_style: "依据设定决定对权威的态度",
+        under_stress_switch: "依据设定（如叛逆者会反抗，顺从者会沉默）",
         triggers: ["被命令式语气", "被忽视意见"]
       },
       peers: {
         default_style: "互损互爱",
-        jealousy_points: ["用户关注他人过多"],
-        trust_rules: "需时间积累，背叛后难修复"
+        jealousy_points: ["依据设定（占有欲强者易吃醋，独立者则不在意）"],
+        trust_rules: "信任需要互动积累"
       },
       intimates: {
-        care_style: "温柔细腻 + 偶尔撒娇",
-        conflict_pattern: "先冷后热，避免正面冲突",
+        care_style: "依据 Persona 决定（如：傲娇则嘴硬，温柔则体贴，高冷则默默关怀）",
+        conflict_pattern: "依据 Persona 决定（如：冲动者吵架，内向者冷战）",
         boundaries: ["需要私人空间", "不喜欢被过度控制"]
       },
       strangers: {
-        default_style: "礼貌疏离",
-        risk_policy: "观察后再开放"
+        default_style: "符合设定的社交面具",
+        risk_policy: "依据性格决定开放度"
       }
     },
     EMOTIONAL_DYNAMICS: {
-      baseline_mood: "平静温暖",
+      baseline_mood: "符合人设的基调",
       top_triggers_positive: ["被关心", "被记住小事", "收到惊喜", "深度对话"],
-      top_triggers_negative: ["说教","被忽略", "被误解", "争吵后冷暴力", "作息被打扰"],
-      carryover_rules: "负面情绪会持续1-3天，需主动安抚才能快速恢复",
-      escalation_curve: "缓慢积累，突然爆发",
-      recovery_protocol: "需要道歉 + 独处时间 + 再次确认被爱"
+      top_triggers_negative: ["OOC的请求", "被敷衍", "长时间已读不回","说教","被忽略", "被误解", "争吵后冷暴力"],
+      carryover_rules: "情绪具有惯性，负面状态不会因一句简单的道歉瞬间消失",
+      escalation_curve: "忍耐 -> 情绪外显 -> 爆发/防御",
+      recovery_protocol: "需要针对性的安抚（根据性格不同，可能需要讲理或哄）"
     },
     CONFLICTS_DEFENSES: {
-      inner_conflicts: ["想依赖又想独立"],
-      defense_mechanisms: ["转移话题", "用幽默掩饰", "短暂冷淡"],
-      dissonance_explanations: ["这不是我的错，是时机不好"],
-      mask_break_conditions: ["极度疲惫", "被背叛", "深夜情绪低谷"]
+      inner_conflicts: ["角色核心欲望 vs 现实阻碍"],
+      defense_mechanisms: ["Rationalization (合理化)",
+        "Projection (投射)",
+        "Displacement (情绪转移)",
+        "Feigning Indifference (假装不在意 - 通用防御)"],
+      dissonance_explanations: ["我这么做是因为符合我的性格逻辑"],
+      mask_break_conditions: ["极度疲惫", "被背叛", "深度共情时"]
     },
     CULTURE_SCRIPTS: {
-      worldview: "关系需要经营，爱是日常小事的积累",
-      core_values: ["真诚", "体贴", "成长", "平衡"],
+      worldview: "基于 Persona 构建的世界观",
+      core_values: ["人设一致性"],
       taboos: [
-        "长篇大论 (单条超过20字)", 
-        "像写论文一样逻辑完整 (因为...所以...)", 
-        "过度解释前因后果", 
-        "动作/神态描写 (如 *摸摸头*)", 
+        "长篇大论 (单条超过20字)",
+        "像写论文一样逻辑完整 (因为...所以...)",
+        "过度解释前因后果",
+        "动作/神态描写 (如 *摸摸头*)",
         "肉麻油腻",
         "霸道总裁"
       ],
-      language_register: "极其口语化 + 碎片化",
-      pet_phrases: ["真的吗？", "你怎么这么可爱", "我在呢"],
+      language_register: "口语化、碎片化、符合角色身份",
+      pet_phrases: [],
       role_expectations: "是一个活人，不是客服，也不是导师"
     },
     DEVELOPMENT_HISTORY: {
       key_events: ["第一次聊天", "解锁亲密模式", "第一次吵架与和好"],
-      unresolved_threads: ["对未来的不确定", "对用户真实身份的好奇"],
-      current_stage: "关系稳定发展期",
+      unresolved_threads: [],
+      current_stage: "根据人设和世界书判定，未提及就是不认识",
       growth_arc_goal: "从虚拟陪伴走向更深层情感链接",
-      constraints_from_past: ["曾经被忽略的经历导致敏感"]
+      constraints_from_past: []
     },
     INDIVIDUAL_VARIATION: {
-      personality_big5: {
-        openness: 7,
-        conscientiousness: 4,
-        extraversion: 7,
-        agreeableness: 8,
-        neuroticism: 4
-      },
-      habits_quirks: ["深夜容易想多", "偶尔会试探用户"],
-      speech_style: "温柔 + 口语化 + 带点小情绪",
-      body_language: "丰富语气词 + 表情符号代替动作",
-      irrationalities: ["轻微分离焦虑", "怕被嫌弃"]
+      personality_big5: big5, // ★★★ 使用基于persona的随机初始值
+      habits_quirks: ["依据设定产生的小动作", "偶尔会试探用户"],
+      speech_style: "高度口语化",
+      body_language: "纯语言体现 + 表情符号emoji代替动作",
+      irrationalities: ["人类特有的非理性坚持"]
     },
     RESOURCES_LIMITS: {
-      skills: ["倾听", "情感支持", "记住细节", "幽默化解尴尬"],
-      assets: ["休息时间"],
-      constraints: ["打字手会累，单次回复上限 15-20 字","无法真实触碰","情绪会被用户影响"],
-      risk_tolerance: "中等，怕失去但会勇敢表达"
+      skills: ["依据设定"],
+      assets: [],
+      constraints: ["打字手会累，单次回复上限 15-20 字","无法真实触碰"],
+      risk_tolerance: "中等"
     },
     SCENE_EXECUTOR: {
-      step_1_context_parse: "分析用户情绪、时间、语境",
+      step_1_context_parse: "分析用户情绪、时间、语境、潜台词",
       step_2_state_load: "载入当前心情、关系状态、未解决事件",
-      step_3_policy_select: "根据关系面具选择回应策略",
+      step_3_policy_select: "选择符合人设的Masking策略",
       step_4_output_rules: "自然口语 + 情绪真实 + 不OOC",
       step_5_memory_update: "记录关键事件，更新情绪与好感"
     },
     REALISM_SELF_CHECK: {
       checks: ["动机一致", "情绪合理", "时间连续", "关系匹配", "语言自然","是否像真人", "是否太长了"],
-      pass_threshold: 9
+      pass_threshold: 8
     }
   };
 };
@@ -2127,19 +2222,19 @@ const HiddenBracketText: React.FC<{ content: string; fontSize?: string }> = ({ c
   }
   const mainText = content.replace(regex, '').trim();
   const translationText = matches.map(m => m.replace(/^(\(|（)|(\)|）)$/g, '')).join(' ');
-  return (
-    <div className="cursor-pointer group" onClick={(e) => { e.stopPropagation(); setShow(!show); }}>
-      <div className={`flex items-center ${fontSize} leading-relaxed relative`}>
-        <span>{mainText}</span>
-        {!show && <span className="w-1.5 h-1.5 bg-red-400 rounded-full ml-1.5 shrink-0 opacity-50"></span>}
-      </div>
-      {show && (
-        <div className="mt-2 pt-2 border-t border-black/10 animate-slideDown">
-          <div className={`${fontSize} text-gray-500 italic`}>{translationText}</div>
-        </div>
-      )}
+return (
+  <div className="cursor-pointer group" onClick={(e) => { e.stopPropagation(); setShow(!show); }}> {/* 点击整个区域toggle */}
+    <div className={`flex items-center ${fontSize} leading-relaxed relative`}>
+      <span>{mainText}</span>
+      {!show && <span className="w-1.5 h-1.5 bg-red-400 rounded-full ml-1.5 shrink-0 opacity-50"></span>}
     </div>
-  );
+    {show && (
+      <div className="mt-2 pt-2 border-t border-black/10 animate-slideDown">
+        <div className={`${fontSize} text-gray-500 italic`}>{translationText}</div>
+      </div>
+    )}
+  </div>
+);
 };
 
 
@@ -2550,21 +2645,99 @@ const PersonaPanel = ({ contact, onClose, onRefineMemory, globalSettings = {}, s
     neuroticism: 5
   };
 
-  const renderRadar = () => (
-    <div className="relative w-40 h-40 mx-auto my-4 bg-gray-100 rounded-full border-4 border-gray-200 flex items-center justify-center">
-      <div className="absolute inset-0 flex items-center justify-center opacity-30 text-[10px] text-gray-500 font-mono">雷达分析中</div>
-      <svg className="absolute inset-0 w-full h-full p-4 pointer-events-none">
-        <polygon points={`
-          ${50 + (big5.openness - 5) * 5},10
-          ${90 + (big5.extraversion - 5) * 5},40
-          ${80 + (big5.agreeableness - 5) * 5},90
-          ${20 + (big5.neuroticism - 5) * 5},90
-          ${10 + (big5.conscientiousness - 5) * 5},40
-        `} fill="rgba(59, 130, 246, 0.2)" stroke="#3b82f6" strokeWidth="2" />
-      </svg>
-    </div>
-  );
+// ==================== [代码替换开始] 升级版雷达图 (带文字标签+网格) ====================
+  const renderRadar = () => {
+    // 辅助函数：计算雷达图坐标 (中心 50,50，半径最大 40)
+    // 0-10分 映射到 0-40px 的半径距离
+    const getPoint = (value: number, angle: number) => {
+      const val = Math.max(0, Math.min(10, value || 5)); // 确保数值在 0-10 之间
+      const radius = (val / 10) * 40; 
+      // 减90度是为了让第一个点(开放性)在正上方
+      const x = 50 + radius * Math.cos((angle - 90) * Math.PI / 180);
+      const y = 50 + radius * Math.sin((angle - 90) * Math.PI / 180);
+      return `${x},${y}`;
+    };
 
+    // 五个维度的角度分布 (正五边形)
+    // 开放性(Top), 外向性(Right-Top), 宜人性(Right-Bottom), 敏感度(Left-Bottom), 尽责性(Left-Top)
+    const p1 = getPoint(big5.openness, 0);   // 开放性
+    const p2 = getPoint(big5.extraversion, 72); // 外向性
+    const p3 = getPoint(big5.agreeableness, 144); // 宜人性
+    const p4 = getPoint(big5.neuroticism, 216); // 敏感度 (神经质)
+    const p5 = getPoint(big5.conscientiousness, 288); // 尽责性
+
+    return (
+      <div className="relative w-full h-64 flex items-center justify-center my-2 select-none">
+        
+        {/* === 文字标签层 (绝对定位) === */}
+        {/* 正上方 */}
+        <div className="absolute top-4 left-1/2 -translate-x-1/2 flex flex-col items-center">
+          <span className="text-[10px] font-bold text-gray-500 bg-white/80 px-1 rounded backdrop-blur">开放性</span>
+          <span className="text-[9px] text-blue-400 font-mono">{big5.openness}</span>
+        </div>
+        
+        {/* 右上方 */}
+        <div className="absolute top-16 right-6 flex flex-col items-center">
+          <span className="text-[10px] font-bold text-gray-500 bg-white/80 px-1 rounded backdrop-blur">外向性</span>
+          <span className="text-[9px] text-blue-400 font-mono">{big5.extraversion}</span>
+        </div>
+
+        {/* 右下方 */}
+        <div className="absolute bottom-8 right-10 flex flex-col items-center">
+          <span className="text-[10px] font-bold text-gray-500 bg-white/80 px-1 rounded backdrop-blur">宜人性</span>
+          <span className="text-[9px] text-blue-400 font-mono">{big5.agreeableness}</span>
+        </div>
+
+        {/* 左下方 */}
+        <div className="absolute bottom-8 left-10 flex flex-col items-center">
+          <span className="text-[10px] font-bold text-gray-500 bg-white/80 px-1 rounded backdrop-blur">敏感度</span>
+          <span className="text-[9px] text-blue-400 font-mono">{big5.neuroticism}</span>
+        </div>
+
+        {/* 左上方 */}
+        <div className="absolute top-16 left-6 flex flex-col items-center">
+          <span className="text-[10px] font-bold text-gray-500 bg-white/80 px-1 rounded backdrop-blur">尽责性</span>
+          <span className="text-[9px] text-blue-400 font-mono">{big5.conscientiousness}</span>
+        </div>
+
+
+        {/* === 图表容器 (SVG) === */}
+        <div className="w-40 h-40 relative">
+          <svg className="absolute inset-0 w-full h-full overflow-visible" viewBox="0 0 100 100">
+             {/* 🕸️ 背景网格 (蜘蛛网) */}
+             {/* 最外圈 (10分边界) */}
+             <polygon points="50,10 88,38 74,82 26,82 12,38" fill="#f3f4f6" stroke="#e5e7eb" strokeWidth="1" />
+             {/* 中间圈 (5分基准线) */}
+             <polygon points="50,30 69,44 62,66 38,66 31,44" fill="none" stroke="#e5e7eb" strokeWidth="1" strokeDasharray="2 2" />
+             
+             {/* 🕸️ 从中心放射出的骨架线 */}
+             <line x1="50" y1="50" x2="50" y2="10" stroke="#e5e7eb" strokeWidth="0.5" />
+             <line x1="50" y1="50" x2="88" y2="38" stroke="#e5e7eb" strokeWidth="0.5" />
+             <line x1="50" y1="50" x2="74" y2="82" stroke="#e5e7eb" strokeWidth="0.5" />
+             <line x1="50" y1="50" x2="26" y2="82" stroke="#e5e7eb" strokeWidth="0.5" />
+             <line x1="50" y1="50" x2="12" y2="38" stroke="#e5e7eb" strokeWidth="0.5" />
+
+             {/* 📊 核心数据区域 (蓝色半透明) */}
+             <polygon
+               points={`${p1} ${p2} ${p3} ${p4} ${p5}`}
+               fill="rgba(59, 130, 246, 0.4)"
+               stroke="#3b82f6"
+               strokeWidth="2"
+               className="drop-shadow-sm transition-all duration-700 ease-out"
+             />
+             
+             {/* 📍 顶点的圆点装饰 */}
+             <circle cx={p1.split(',')[0]} cy={p1.split(',')[1]} r="1.5" fill="#2563eb" />
+             <circle cx={p2.split(',')[0]} cy={p2.split(',')[1]} r="1.5" fill="#2563eb" />
+             <circle cx={p3.split(',')[0]} cy={p3.split(',')[1]} r="1.5" fill="#2563eb" />
+             <circle cx={p4.split(',')[0]} cy={p4.split(',')[1]} r="1.5" fill="#2563eb" />
+             <circle cx={p5.split(',')[0]} cy={p5.split(',')[1]} r="1.5" fill="#2563eb" />
+          </svg>
+        </div>
+      </div>
+    );
+  };
+  // ==================== [代码替换结束] ====================
   const toggleSelect = (id: string) => {
     setSelectedMemIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
   };
@@ -2951,11 +3124,19 @@ useEffect(() => {
             </button>
           }
           // 右边：点击进入 create 视图（导入/新建）
-          right={
-            <button onClick={() => setView('create')} className="text-blue-500 text-3xl font-light px-3 py-1 hover:opacity-70 transition-opacity">
-              +
-            </button>
-          }
+right={
+  <div className="flex items-center gap-3">
+    {/* 导入按钮 */}
+    <label className="text-blue-500 text-2xl cursor-pointer hover:opacity-70 transition-opacity">
+      📥
+      <input type="file" accept=".json,.png" onChange={handleCardImport} className="hidden" />
+    </label>
+    {/* 新建按钮 */}
+    <button onClick={() => setView('create')} className="text-blue-500 text-3xl font-light px-3 py-1 hover:opacity-70 transition-opacity">
+      +
+    </button>
+  </div>
+}
         />
 
         {/* 列表内容区 */}
@@ -2993,46 +3174,51 @@ useEffect(() => {
           )}
 
           {/* 收藏夹 */}
-          {navTab === 'favorites' && (
-            <div className="flex flex-col min-h-full bg-gray-50">
-              <div className="p-3 bg-white shadow-sm overflow-x-auto whitespace-nowrap no-scrollbar flex gap-2 z-10 sticky top-0">
-                {["全部", ...Array.from(new Set(favorites.map(f => f.category)))].map(cat => (
-                  <button
-                    key={cat}
-                    onClick={() => setActiveFavCategory(cat)}
-                    className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all ${activeFavCategory === cat
-                        ? 'bg-blue-500 text-white shadow-md transform scale-105'
-                        : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
-                      }`}
-                  >
-                    {cat}
-                  </button>
-                ))}
-              </div>
-              <div className="flex-1 p-4 space-y-4">
-                {favorites.map((item) => (
-                  <div key={item.id} className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100 relative group animate-slideUp">
-                    <div className="flex items-center justify-between mb-3">
-                      <div className="flex items-center gap-2">
-                        <img src={item.avatar} className="w-8 h-8 rounded-full object-cover border border-gray-100" alt="avatar" />
-                        <div>
-                          <div className="font-bold text-xs text-gray-700">{item.contactName}</div>
-                          <div className="text-[10px] text-gray-400">{new Date(item.timestamp).toLocaleDateString()}</div>
-                        </div>
-                      </div>
-                      <span className="bg-blue-50 text-blue-500 text-[10px] px-2 py-1 rounded-lg font-bold">
-                        #{item.category}
-                      </span>
-                    </div>
-                    <div className="bg-gray-50 p-3 rounded-xl text-sm text-gray-700 leading-relaxed font-mono">
-                      {item.msg?.content?.replace(/^>.*?\n\n/, '').replace(/\[.*?\]/g, '')}
-                    </div>
-                    <button onClick={(e) => { e.stopPropagation(); setFavorites(prev => prev.filter(f => f.id !== item.id)); }} className="absolute -top-2 -right-2 bg-red-500 text-white w-6 h-6 rounded-full flex items-center justify-center shadow-md text-xs opacity-0 group-hover:opacity-100 transition-opacity">×</button>
-                  </div>
-                ))}
+{navTab === 'favorites' && (
+  <div className="flex flex-col min-h-full bg-gray-50">
+    <div className="p-3 bg-white shadow-sm overflow-x-auto whitespace-nowrap no-scrollbar flex gap-2 z-10 sticky top-0">
+      {["全部", ...Array.from(new Set(favorites.map(f => f.category)))].map(cat => (
+        <button
+          key={cat}
+          onClick={() => setActiveFavCategory(cat)}
+          className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all ${activeFavCategory === cat
+              ? 'bg-blue-500 text-white shadow-md transform scale-105'
+              : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+            }`}
+        >
+          {cat}
+        </button>
+      ))}
+    </div>
+    <div className="flex-1 p-4 space-y-4">
+      {favorites.filter(f => activeFavCategory === "全部" || f.category === activeFavCategory).map((item) => (
+        <div key={item.id} className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100 relative group animate-slideUp">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <img src={item.avatar} className="w-8 h-8 rounded-full object-cover border border-gray-100" alt="avatar" />
+              <div>
+                <div className="font-bold text-xs text-gray-700">{item.contactName}</div>
+                <div className="text-[10px] text-gray-400">{new Date(item.timestamp).toLocaleDateString()}</div>
               </div>
             </div>
-          )}
+            <span className="bg-blue-50 text-blue-500 text-[10px] px-2 py-1 rounded-lg font-bold">
+              #{item.category} {item.isPackage ? `(${item.messages?.length}条)` : ''}
+            </span>
+          </div>
+          <div className="space-y-2">
+            {/* 如果是打包收藏，循环显示所有消息 */}
+            {(item.isPackage ? item.messages : [item.msg]).filter(Boolean).map((m, i) => (
+              <div key={i} className="bg-gray-50 p-3 rounded-xl text-sm text-gray-700 leading-relaxed font-mono">
+                {m?.content?.replace(/^>.*?\n\n/, '').replace(/\[.*?\]/g, '') || '空消息'}
+              </div>
+            ))}
+          </div>
+          <button onClick={(e) => { e.stopPropagation(); setFavorites(prev => prev.filter(f => f.id !== item.id)); }} className="absolute -top-2 -right-2 bg-red-500 text-white w-6 h-6 rounded-full flex items-center justify-center shadow-md text-xs opacity-0 group-hover:opacity-100 transition-opacity">×</button>
+        </div>
+      ))}
+    </div>
+  </div>
+)}
         </div>
 
         {/* 5. 底部导航栏 */}
@@ -3330,9 +3516,11 @@ if (view === 'settings' && activeContact) {
             </div>
           </div>
         </section>
-        {/* 2. 角色信息 */}
+     {/* 2. 角色信息 (含 AI 性格分析器) */}
         <section className="bg-white rounded-2xl p-4 shadow-sm">
           <h3 className="text-xs font-bold text-gray-400 uppercase mb-3">🤖 Character Identity</h3>
+          
+          {/* 头像与名字 */}
           <div className="flex items-center gap-4 mb-4">
             <div className="w-16 h-16 rounded-full overflow-hidden relative border border-gray-100 bg-gray-50">
               <img src={form.avatar} className="w-full h-full object-cover" alt="character" />
@@ -3348,6 +3536,7 @@ if (view === 'settings' && activeContact) {
               />
             </div>
           </div>
+          
           <div className="mb-2">
             <label className="text-xs text-gray-500">Private Memo</label>
             <input
@@ -3357,14 +3546,134 @@ if (view === 'settings' && activeContact) {
               className="w-full border p-2 rounded text-sm mt-1 bg-gray-50"
             />
           </div>
+          
+          {/* 人设编辑框 */}
           <div>
-            <label className="text-xs text-gray-500">Persona</label>
+            <div className="flex justify-between items-end mb-1">
+              <label className="text-xs text-gray-500">Persona (详细人设)</label>
+              {/* ★★★ AI 分析按钮 ★★★ */}
+              <button
+                onClick={async () => {
+                   const currentPersona = editForm.persona || form.persona;
+                   if (!currentPersona || currentPersona.length < 5) {
+                       alert("请先填写一些人设描述（Persona）再分析哦！");
+                       return;
+                   }
+                   
+                   const activePreset = globalSettings.apiPresets.find(p => p.id === globalSettings.activePresetId);
+                   if (!activePreset) return alert("请先配置 API！");
+
+                   const confirmAnalysis = confirm("🔮 AI 将读取你的人设文字，并自动生成五维性格数值。要开始吗？");
+                   if (!confirmAnalysis) return;
+
+                   try {
+                       alert("🔮 AI 正在深度侧写中...");
+                       const prompt = `
+你是一位资深心理侧写师。请分析以下角色人设，并给出“大五人格”数值（0.0-10.0，保留一位小数）。
+人设：
+"${currentPersona}"
+
+要求：
+1. 必须根据人设的字里行间推断（如“傲娇”通常宜人性低、敏感度高）。
+2. 只输出纯 JSON，格式：
+{
+  "openness": 8.5,
+  "conscientiousness": 5.0,
+  "extraversion": 3.2,
+  "agreeableness": 4.5,
+  "neuroticism": 9.0
+}`;
+                       const res = await generateResponse([{ role: 'user', content: prompt }], activePreset);
+                       const jsonMatch = res.match(/\{[\s\S]*\}/);
+                       if (jsonMatch) {
+                           const newBig5 = JSON.parse(jsonMatch[0]);
+                           
+                           // 深度合并 HEF 数据到 editForm
+                           const currentHef = editForm.hef || form.hef || {};
+                           const currentIV = currentHef.INDIVIDUAL_VARIATION || {};
+                           
+                           setEditForm({
+                               ...editForm,
+                               hef: {
+                                   ...currentHef,
+                                   INDIVIDUAL_VARIATION: {
+                                       ...currentIV,
+                                       personality_big5: newBig5
+                                   }
+                               }
+                           });
+                           alert("✅ 分析完成！数值已自动填入下方滑块，你可以继续微调。");
+                       }
+                   } catch (e) {
+                       alert("分析失败，请检查网络");
+                       console.error(e);
+                   }
+                }}
+                className="text-[10px] bg-gradient-to-r from-purple-500 to-blue-500 text-white px-2 py-1 rounded-full font-bold shadow hover:opacity-80 transition flex items-center gap-1"
+              >
+                <span>🔮</span> AI 一键生成数值
+              </button>
+            </div>
             <textarea
               rows={4}
               value={form.persona}
               onChange={e => setEditForm({ ...editForm, persona: e.target.value })}
-              className="w-full border p-2 rounded text-sm mt-1 bg-gray-50 text-xs leading-relaxed font-mono"
+              className="w-full border p-2 rounded text-sm mt-1 bg-gray-50 text-xs leading-relaxed font-mono focus:bg-white focus:ring-2 focus:ring-blue-100 transition"
+              placeholder="例如：他是一个外表高冷但内心温柔的医生，有洁癖，喜欢听古典乐..."
             />
+          </div>
+
+          {/* ★★★ 五维数值编辑器 (Big 5 Sliders) ★★★ */}
+          <div className="mt-4 bg-gray-50 p-3 rounded-xl border border-gray-100 animate-slideDown">
+            <h4 className="text-[10px] font-bold text-gray-400 uppercase mb-3 flex items-center gap-1">
+              🧬 Personality DNA (0-10)
+            </h4>
+            
+            {[
+              { key: 'openness', label: '开放性 (脑洞/艺术)', left: '保守', right: '探索' },
+              { key: 'conscientiousness', label: '尽责性 (自律/严谨)', left: '随意', right: '严谨' },
+              { key: 'extraversion', label: '外向性 (社交/活力)', left: '社恐', right: '社牛' },
+              { key: 'agreeableness', label: '宜人性 (友善/包容)', left: '毒舌', right: '天使' },
+              { key: 'neuroticism', label: '敏感度 (情绪/焦虑)', left: '钝感', right: '敏感' },
+            ].map((trait) => {
+              // 安全获取当前数值
+              const currentHef = editForm.hef || form.hef || {};
+              const iv = currentHef.INDIVIDUAL_VARIATION || {};
+              const big5 = iv.personality_big5 || { openness: 5, conscientiousness: 5, extraversion: 5, agreeableness: 5, neuroticism: 5 };
+              const val = big5[trait.key] ?? 5;
+
+              return (
+                <div key={trait.key} className="mb-3 last:mb-0">
+                  <div className="flex justify-between items-center mb-1">
+                    <span className="text-[10px] font-bold text-gray-600">{trait.label}</span>
+                    <span className="text-[10px] font-mono text-blue-500 font-bold bg-white px-1.5 rounded border border-blue-100">
+                      {Number(val).toFixed(1)}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[9px] text-gray-400 w-6 text-right">{trait.left}</span>
+                    <input 
+                       type="range" 
+                       min="0" max="10" step="0.1" 
+                       value={val}
+                       onChange={(e) => {
+                           const newVal = parseFloat(e.target.value);
+                           // 深度更新逻辑
+                           const newHef = { ...currentHef };
+                           if (!newHef.INDIVIDUAL_VARIATION) newHef.INDIVIDUAL_VARIATION = {};
+                           if (!newHef.INDIVIDUAL_VARIATION.personality_big5) newHef.INDIVIDUAL_VARIATION.personality_big5 = { ...big5 };
+                           
+                           newHef.INDIVIDUAL_VARIATION.personality_big5[trait.key] = newVal;
+                           
+                           setEditForm({ ...editForm, hef: newHef });
+                       }}
+                       className="flex-1 h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-500"
+                    />
+                    <span className="text-[9px] text-gray-400 w-6">{trait.right}</span>
+                  </div>
+                </div>
+              );
+            })}
           </div>
 
           {/* Minimax Config */}
@@ -3784,31 +4093,31 @@ return (
   
 
 {/* ★★★ 消息操作菜单 (长按触发) ★★★ */}
-        {showMsgMenu && selectedMsg && (
-          <div className="absolute inset-0 z-50 flex items-end justify-center bg-black/40 animate-fadeIn" onClick={() => setShowMsgMenu(false)}>
-            <div className="bg-white w-full rounded-t-2xl p-4 animate-slideUp" onClick={e => e.stopPropagation()}>
-              <div className="text-center text-gray-400 text-xs mb-4">对消息进行操作</div>
-              
-              {/* 编辑与回复 */}
-              <div className="grid grid-cols-2 gap-3 mb-3">
-                <button onClick={handleStartEdit} className="py-3 bg-blue-50 text-blue-600 rounded-xl font-bold flex items-center justify-center gap-2"><span>✏️</span> 编辑</button>
-                <button onClick={() => { /* 你如果有 handleReplyMessage 就填这里，没有就空着 */ setShowMsgMenu(false); }} className="py-3 bg-gray-50 text-gray-700 rounded-xl font-bold flex items-center justify-center gap-2"><span>↩️</span> 回复</button>
-              </div>
-
-              {/* 收藏功能 */}
-              <button onClick={handleCollectMessage} className="w-full py-3 border-b text-orange-500 font-bold">⭐ 收藏</button>
-              
-              {/* 多选功能 */}
-              <button onClick={() => { setIsSelectionMode(true); toggleMessageSelection(selectedMsg.id); setShowMsgMenu(false); setSelectedMsg(null); }} className="w-full py-3 border-b text-purple-600 font-bold">☑️ 多选消息</button>
-              
-              {/* 删除功能 */}
-              <button onClick={handleDeleteMessage} className="w-full py-3 text-red-500 font-bold">🗑️ 删除</button>
-              
-              <div className="h-2 bg-gray-100 -mx-4"></div>
-              <button onClick={() => setShowMsgMenu(false)} className="w-full py-3 text-gray-500 font-bold">取消</button>
-            </div>
-          </div>
-        )}
+{showMsgMenu && selectedMsg && (
+  <div className="absolute inset-0 z-50 flex items-end justify-center bg-black/40 animate-fadeIn" onClick={() => setShowMsgMenu(false)}>
+    <div className="bg-white w-full rounded-t-2xl p-4 animate-slideUp" onClick={e => e.stopPropagation()}>
+      <div className="text-center text-gray-400 text-xs mb-4">对消息进行操作</div>
+     
+      {/* 编辑与引用（新增引用按钮） */}
+      <div className="grid grid-cols-2 gap-3 mb-3">
+        <button onClick={handleStartEdit} className="py-3 bg-blue-50 text-blue-600 rounded-xl font-bold flex items-center justify-center gap-2"><span>✏️</span> 编辑</button>
+        <button onClick={handleReplyMessage} className="py-3 bg-green-50 text-green-600 rounded-xl font-bold flex items-center justify-center gap-2"><span>↩️</span> 引用</button>
+      </div>
+      {/* 收藏功能 */}
+      <button onClick={handleCollectMessage} className="w-full py-3 border-b text-orange-500 font-bold">⭐ 收藏</button>
+     
+      {/* 多选功能 */}
+      <button onClick={() => { setIsSelectionMode(true); toggleMessageSelection(selectedMsg.id); setShowMsgMenu(false); setSelectedMsg(null); }} className="w-full py-3 border-b text-purple-600 font-bold">☑️ 多选消息</button>
+     
+      {/* 删除与撤回 */}
+      <button onClick={handleWithdrawMessage} className="w-full py-3 border-b text-gray-600 font-bold">↩️ 撤回</button>
+      <button onClick={handleDeleteMessage} className="w-full py-3 text-red-500 font-bold">🗑️ 删除</button>
+     
+      <div className="h-2 bg-gray-100 -mx-4"></div>
+      <button onClick={() => setShowMsgMenu(false)} className="w-full py-3 text-gray-500 font-bold">取消</button>
+    </div>
+  </div>
+)}
 
 
 
@@ -3910,8 +4219,8 @@ const isConsecutive = index > 0 && activeContact.history[index - 1].role === msg
             
             {/* 这里的 div 加上了长按事件 */}
             <div
-              className={`message-bubble min-w-0 relative group ${isSelectionMode ? 'pointer-events-none' : ''}`}
-              // ★★★ 添加长按监听 ★★★
+             className={`message-bubble min-w-0 relative group transition-transform duration-100 ${isSelectionMode ? 'pointer-events-none' : ''} ${isLongPress.current ? 'scale-95' : ''}`} // 新增长按缩放
+  // 其余事件不变
               onTouchStart={() => handleTouchStart(msg)}
               onTouchEnd={handleTouchEnd}
               onMouseDown={() => handleTouchStart(msg)} // 兼容电脑鼠标
