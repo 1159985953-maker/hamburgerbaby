@@ -94,6 +94,49 @@ const AppState = {
     removeEventListener: () => {}
 };
 
+// 这是一组代码：替换整个 HiddenBracketText 组件（添加 useRef 持久化 + 唯一 key）
+const HiddenBracketText: React.FC<{ content: string; fontSize?: string; msgId: string }> = ({ content, fontSize = 'text-sm', msgId }) => {
+  // 用 useRef 存储每个消息的展开状态（不随渲染重置）
+  const showRef = useRef(false);
+  const [show, setShow] = useState(false);
+
+  // 组件加载时读取 ref 的值
+  useEffect(() => {
+    setShow(showRef.current);
+  }, []);
+
+  const toggleShow = () => {
+    const newShow = !show;
+    setShow(newShow);
+    showRef.current = newShow; // 持久化到 ref
+  };
+
+  const regex = /(\([^)]*[\u4e00-\u9fa5]+[^)]*\)|（[^）]*[\u4e00-\u9fa5]+[^）]*）)/g;
+  const matches = content.match(regex);
+  if (!matches) {
+    return <span className={fontSize}>{content}</span>;
+  }
+  const mainText = content.replace(regex, '').trim();
+  const translationText = matches.map(m => m.replace(/^(\(|（)|(\)|）)$/g, '')).join(' ');
+
+  return (
+    <div className="cursor-pointer group" onClick={toggleShow}>
+      <div className={`flex items-center ${fontSize} leading-relaxed relative`}>
+        <span>{mainText}</span>
+        {!show && <span className="w-1.5 h-1.5 bg-red-400 rounded-full ml-1.5 shrink-0 opacity-50"></span>}
+      </div>
+      {show && (
+        <div className="mt-2 pt-2 border-t border-black/10 animate-slideDown">
+          <div className={`${fontSize} text-gray-500 italic`}>{translationText}</div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+
+
+
 
 
 
@@ -434,7 +477,11 @@ const saveSettings = () => {
       enabled: currentProactiveConfig?.enabled ?? false,
       minGapMinutes: currentProactiveConfig?.minGapMinutes ?? 480, // <--- 修改：默认值改为480分钟
       maxDaily: currentProactiveConfig?.maxDaily ?? 2
-    }
+    },
+    bubbleColorUser: editForm.bubbleColorUser, // 新增
+  bubbleColorAI: editForm.bubbleColorAI, // 新增
+  bubbleFontSize: editForm.bubbleFontSize, // 新增
+  chatScale: editForm.chatScale // 新增
   };
   
   handleUpdateContact(updates);
@@ -2199,48 +2246,6 @@ const readTavernPng = async (file: File): Promise<any | null> => {
 
 
 
-// 这是一组代码：替换整个 HiddenBracketText 组件（添加 useRef 持久化 + 唯一 key）
-const HiddenBracketText: React.FC<{ content: string; fontSize?: string; msgId: string }> = ({ content, fontSize = 'text-sm', msgId }) => {
-  // 用 useRef 存储每个消息的展开状态（不随渲染重置）
-  const showRef = useRef(false);
-  const [show, setShow] = useState(false);
-
-  // 组件加载时读取 ref 的值
-  useEffect(() => {
-    setShow(showRef.current);
-  }, []);
-
-  const toggleShow = () => {
-    const newShow = !show;
-    setShow(newShow);
-    showRef.current = newShow; // 持久化到 ref
-  };
-
-  const regex = /(\([^)]*[\u4e00-\u9fa5]+[^)]*\)|（[^）]*[\u4e00-\u9fa5]+[^）]*）)/g;
-  const matches = content.match(regex);
-  if (!matches) {
-    return <span className={fontSize}>{content}</span>;
-  }
-  const mainText = content.replace(regex, '').trim();
-  const translationText = matches.map(m => m.replace(/^(\(|（)|(\)|）)$/g, '')).join(' ');
-
-  return (
-    <div className="cursor-pointer group" onClick={toggleShow}>
-      <div className={`flex items-center ${fontSize} leading-relaxed relative`}>
-        <span>{mainText}</span>
-        {!show && <span className="w-1.5 h-1.5 bg-red-400 rounded-full ml-1.5 shrink-0 opacity-50"></span>}
-      </div>
-      {show && (
-        <div className="mt-2 pt-2 border-t border-black/10 animate-slideDown">
-          <div className={`${fontSize} text-gray-500 italic`}>{translationText}</div>
-        </div>
-      )}
-    </div>
-  );
-};
-
-
-
 
 
 
@@ -3947,73 +3952,162 @@ if (view === 'settings' && activeContact) {
           )}
         </section>
 
-        {/* 外观定制 */}
-        <section className="bg-white rounded-2xl p-4 shadow-sm border border-gray-200">
-          <h3 className="text-xs font-bold text-gray-400 uppercase mb-3">🎨 Appearance Customization</h3>
 
+
+
+
+
+{/* 这是一组代码：外观设置面板（终极修复版：找回了CSS预设功能 + 颜色/缩放控制） */}
+        <section className="bg-white rounded-2xl p-4 shadow-sm border border-gray-200">
+          <h3 className="text-xs font-bold text-gray-400 uppercase mb-3">🎨 外观个性化定制</h3>
 
           
-          <div className="bg-gray-50 p-3 rounded-xl border border-gray-200 mb-4">
-            <label className="text-[10px] text-gray-500 font-bold uppercase block mb-2">Theme Presets</label>
-            <div className="flex gap-2 mb-2">
-              <select
-                className="flex-1 p-2 rounded-lg border text-sm outline-none bg-white"
-                value={selectedPresetId}
-                onChange={(e) => handleLoadPreset(e.target.value)}
-              >
-                <option value="">-- Load a Preset --</option>
-                {globalSettings.themePresets?.map(p => (
-                  <option key={p.id} value={p.id}>{p.name}</option>
-                ))}
-              </select>
-              <button onClick={handleDeletePreset} className="bg-red-100 text-red-500 px-3 rounded-lg font-bold hover:bg-red-200">Del</button>
+          
+          <div className="w-full h-px bg-gray-100 my-4"></div>
+
+          {/* 2. 气泡颜色设置 */}
+          <div className="grid grid-cols-2 gap-4 mb-4">
+            <div>
+               <label className="text-[10px] text-gray-500 font-bold mb-1 block">我的气泡颜色</label>
+               <div className="flex items-center gap-2">
+                 <input 
+                   type="color" 
+                   value={form.bubbleColorUser || "#22c55e"} 
+                   onChange={(e) => setEditForm({...editForm, bubbleColorUser: e.target.value})}
+                   className="h-8 w-full cursor-pointer rounded border border-gray-200 p-0.5 bg-white"
+                 />
+               </div>
             </div>
-            <div className="flex gap-2">
-              <input
-                type="text"
-                placeholder="New Preset Name"
-                className="flex-1 p-2 rounded-lg border text-sm outline-none"
-                value={presetName}
-                onChange={e => setPresetName(e.target.value)}
-              />
-              <button onClick={handleSavePreset} className="bg-green-100 text-green-600 px-3 rounded-lg font-bold text-sm hover:bg-green-200">Save</button>
+            <div>
+               <label className="text-[10px] text-gray-500 font-bold mb-1 block">AI 气泡颜色</label>
+               <div className="flex items-center gap-2">
+                 <input 
+                   type="color" 
+                   value={form.bubbleColorAI || "#ffffff"} 
+                   onChange={(e) => setEditForm({...editForm, bubbleColorAI: e.target.value})}
+                   className="h-8 w-full cursor-pointer rounded border border-gray-200 p-0.5 bg-white"
+                 />
+               </div>
             </div>
           </div>
-          <div className="mb-4">
-            <div className="flex justify-between items-end mb-1">
-              <label className="text-xs font-bold text-gray-400">Custom CSS Code</label>
-              <button onClick={() => setEditForm({ ...editForm, customCSS: "" })} className="text-[10px] text-gray-400 underline">Reset</button>
-            </div>
-            <textarea
-              className="w-full h-64 bg-gray-800 text-green-400 font-mono text-[11px] p-3 rounded-xl outline-none resize-none leading-relaxed"
-              placeholder="/* Paste your CSS here... */&#10;.message-wrapper { ... }"
-              value={editForm.customCSS || form.customCSS || ""}
-              onChange={(e) => setEditForm({ ...editForm, customCSS: e.target.value })}
-              spellCheck={false}
-            />
+
+          {/* 3. 整体界面缩放 (单滑块) */}
+          <div className="bg-blue-50 p-4 rounded-xl border border-blue-100 mb-4">
+             <div className="flex justify-between text-xs text-blue-800 mb-2 font-bold">
+               <span>🔍 界面整体缩放 (字号+头像)</span>
+               <span>{((form.chatScale || 1) * 100).toFixed(0)}%</span>
+             </div>
+             <Slider
+                minimumValue={0.8}
+                maximumValue={1.3}
+                step={0.05}
+                value={form.chatScale || 1}
+                onValueChange={(val: number) => setEditForm({ ...editForm, chatScale: val })}
+             />
           </div>
-          <div>
-            <label className="text-xs font-bold text-gray-400 uppercase mb-1 block">Chat Background URL</label>
+
+          {/* 4. 聊天背景图 */}
+          <div className="pt-2">
+            <label className="text-xs font-bold text-gray-400 uppercase mb-2 block">Chat Background URL</label>
             <div className="flex gap-2">
               <input
                 type="text"
                 placeholder="https://..."
-                className="flex-1 border p-2 rounded-lg text-xs outline-none"
+                className="flex-1 border p-2 rounded-lg text-xs outline-none bg-gray-50"
                 value={editForm.chatBackground || form.chatBackground || ""}
                 onChange={(e) => setEditForm({ ...editForm, chatBackground: e.target.value })}
               />
-              <label className="bg-gray-100 border px-3 py-2 rounded-lg text-xs cursor-pointer hover:bg-gray-200">
-                Upload
+              <label className="bg-gray-100 border px-3 py-2 rounded-lg text-xs cursor-pointer hover:bg-gray-200 flex items-center transition-colors">
+                📷 上传
                 <input type="file" className="hidden" onChange={(e) => handleImageUpload(e, 'chatBackground')} />
               </label>
             </div>
           </div>
+          
+          {/* 1. ★★★ [已找回] Theme Presets 主题预设管理 ★★★ */}
+          <div className="bg-gray-50 p-3 rounded-xl border border-gray-200 mb-6">
+            <div className="flex justify-between items-center mb-2">
+               <label className="text-[10px] text-gray-500 font-bold uppercase">💾 主题预设 (Theme Presets)</label>
+               <span className="text-[9px] text-gray-400">{globalSettings.themePresets?.length || 0} Saved</span>
+            </div>
+            
+            {/* 选择与删除 */}
+            <div className="flex gap-2 mb-2">
+              <select
+                className="flex-1 p-2 rounded-lg border border-gray-300 text-xs outline-none bg-white h-9"
+                value={selectedPresetId}
+                onChange={(e) => handleLoadPreset(e.target.value)}
+              >
+                <option value="">-- 选择已保存的预设 --</option>
+                {globalSettings.themePresets?.map(p => (
+                  <option key={p.id} value={p.id}>{p.name}</option>
+                ))}
+              </select>
+              <button 
+                onClick={handleDeletePreset} 
+                className="bg-red-100 text-red-500 px-3 rounded-lg font-bold hover:bg-red-200 h-9 text-xs transition-colors"
+                disabled={!selectedPresetId}
+              >
+                删除
+              </button>
+            </div>
+
+            {/* 新增与保存 */}
+            <div className="flex gap-2">
+              <input
+                type="text"
+                placeholder="给当前样式起个名..."
+                className="flex-1 p-2 rounded-lg border border-gray-300 text-xs outline-none h-9 focus:border-blue-500 transition-colors"
+                value={presetName}
+                onChange={e => setPresetName(e.target.value)}
+              />
+              <button 
+                onClick={handleSavePreset} 
+                className="bg-green-100 text-green-600 px-3 rounded-lg font-bold text-xs hover:bg-green-200 h-9 transition-colors whitespace-nowrap"
+              >
+                保存当前
+              </button>
+            </div>
+          </div>
+          
+          {/* 5. 自定义 CSS 代码 */}
+          <div className="mt-4">
+             <details>
+                <summary className="text-xs font-bold text-gray-400 cursor-pointer hover:text-blue-500 transition-colors select-none">
+                  高级：编辑 CSS 代码 &gt;
+                </summary>
+                <div className="relative mt-2">
+                    <div className="flex justify-between items-center mb-1 px-1">
+                        <span className="text-[10px] text-gray-400">在此粘贴代码可覆盖上方设置</span>
+                        <button onClick={() => setEditForm({ ...editForm, customCSS: "" })} className="text-[10px] text-red-400 underline hover:text-red-600">
+                           清空代码
+                        </button>
+                    </div>
+                    <textarea
+                      className="w-full h-32 bg-gray-800 text-green-400 font-mono text-[10px] p-3 rounded-xl outline-none resize-none leading-relaxed shadow-inner"
+                      value={editForm.customCSS || form.customCSS || ""}
+                      onChange={(e) => setEditForm({ ...editForm, customCSS: e.target.value })}
+                      spellCheck={false}
+                      placeholder="/* .message-wrapper { ... } */"
+                    />
+                </div>
+             </details>
+          </div>
         </section>
+
+
+
+
 
         {/* 保存按钮 */}
         <button onClick={saveSettings} className="w-full bg-green-500 text-white py-3 rounded-xl font-bold shadow-lg active:scale-95 transition">
           💾 Save All Changes
         </button>
+
+
+
+
+
 
         {/* 危险区 */}
         <div className="mt-auto pt-10 pb-4">
@@ -4171,11 +4265,9 @@ return (
   
   
   
-  
-  {/* ... 在你的代码中找到 activeContact.history.map ... */}
-
+{/* 这是一组代码：消息渲染核心 (完美还原尖角样式 + 整体缩放支持) */}
 {activeContact.history.map((msg, index) => {
-    // ... 这一块计算时间的逻辑保持不变 ...
+    // 1. 计算时间间隔
     let showInterval = false;
     let intervalMinutes = 0;
     if (index > 0) {
@@ -4183,103 +4275,154 @@ return (
       intervalMinutes = Math.floor((msg.timestamp - prevMsg.timestamp) / 60000);
       if (intervalMinutes > 20) { showInterval = true; }
     }
-// 只有当角色相同，且【没有显示时间分割线】时，才算是连续消息（才隐藏头像）
-// 这样一旦出现“相隔 19 小时”，头像就会强制显示，视觉上断开连接
-const isConsecutive = index > 0 && activeContact.history[index - 1].role === msg.role && !showInterval;
+    
+    // 2. 连续发言判断 (逻辑：同一个人发 + 间隔短 = 连续)
+    // 如果是连续的，头像会隐藏，且气泡不需要尖角
+    // 如果是第一条 (!isConsecutive)，需要显示头像 + 尖角
+    const isConsecutive = index > 0 && activeContact.history[index - 1].role === msg.role && !showInterval;
     const isSelected = selectedIds.includes(msg.id);
     const duration = msg.voiceDuration || 10;
     const timeStr = new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    
-    // 👇👇👇【新增】判断是否处于编辑模式 👇👇👇
     const isEditing = editingMsgId === msg.id;
+
+    // ★★★ 3. 计算缩放后的尺寸 ★★★
+    // 默认比例是 1。基础头像40px，基础字体14px。
+    const scale = activeContact.chatScale || 1; 
+    const currentAvatarSize = 40 * scale; 
+    const currentFontSize = `${14 * scale}px`;
+    const currentPaddingY = `${5 * scale}px`; // 纵向内边距随比例缩放
+    const currentPaddingX = `${12 * scale}px`; // 横向内边距随比例缩放
+
+    // 颜色设置
+    const userBg = activeContact.bubbleColorUser || '#22c55e';
+    const aiBg = activeContact.bubbleColorAI || '#ffffff';
 
     return (
       <React.Fragment key={msg.id}>
         {showInterval && (
-          <div className="text-center my-4">
-            <span className="text-xs text-gray-400 bg-gray-100 px-3 py-1 rounded-full">
+          <div className="text-center my-4 animate-fadeIn">
+            <span className="text-[10px] text-gray-400 bg-gray-100 px-3 py-1 rounded-full">
               {intervalMinutes < 60 ? `相隔 ${intervalMinutes} 分钟` : `相隔 ${Math.floor(intervalMinutes / 60)} 小时`}
             </span>
           </div>
         )}
 
-       <div className={`message-wrapper ${msg.role === 'user' ? 'user' : 'ai'} flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'} animate-slideUp`}>
-  {/* 多选勾选框 */}
-  {isSelectionMode && (
-    <div className={`mr-2 flex items-center justify-center ${msg.role === 'user' ? 'order-2' : 'order-1'}`}>
-      <div onClick={() => toggleMessageSelection(msg.id)} className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${isSelected ? 'bg-blue-500 border-blue-500' : 'border-gray-300 bg-white'}`}>
-        {isSelected && <span className="text-white text-xs font-bold">✓</span>}
-      </div>
-    </div>
-  )}
-  {/* 头像 */}
-  <div className={`w-10 shrink-0 self-end flex ${msg.role === 'user' ? 'justify-end order-3' : 'justify-start order-1'}`}>
-    {msg.role === 'assistant' && !isConsecutive && <img src={activeContact.avatar} className="w-8 h-8 rounded-full object-cover" alt="AI" />}
-    {msg.role === 'user' && !isConsecutive && <img src={activeContact.userAvatar} className="w-8 h-8 rounded-full ml-2 object-cover border border-white" alt="user" />}
-  </div>
-  {/* 气泡统一宽度 */}
-  <div className={`flex items-end gap-2 order-2 ${msg.role === 'user' ? 'flex-row-reverse' : 'flex-row'} max-w-[70%]`}>
-    <div
-      className={`message-bubble min-w-0 relative group transition-transform duration-100 ${isSelectionMode ? 'pointer-events-none' : ''} ${isLongPress.current ? 'scale-95' : ''}`}
-      onTouchStart={() => handleTouchStart(msg)}
-      onTouchEnd={handleTouchEnd}
-      onMouseDown={() => handleTouchStart(msg)}
-      onMouseUp={handleTouchEnd}
-      onMouseLeave={handleTouchEnd}
-      onContextMenu={(e) => e.preventDefault()}
-    >
+       <div 
+         className={`message-wrapper ${msg.role === 'user' ? 'user' : 'ai'} flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'} animate-slideUp mb-4`}
+         style={{ minHeight: `${currentAvatarSize}px` }} // 确保行高至少容纳头像
+       >
+          {/* 多选勾选框 */}
+          {isSelectionMode && (
+            <div className={`mx-2 flex items-center justify-center ${msg.role === 'user' ? 'order-2' : 'order-1'}`}>
+              <div onClick={() => toggleMessageSelection(msg.id)} className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${isSelected ? 'bg-blue-500 border-blue-500' : 'border-gray-300 bg-white'}`}>
+                {isSelected && <span className="text-white text-xs font-bold">✓</span>}
+              </div>
+            </div>
+          )}
+
+          {/* ★★★ 头像区域 (大小随 scale 变化) ★★★ */}
+          <div 
+             className={`shrink-0 self-start flex ${msg.role === 'user' ? 'justify-end order-3' : 'justify-start order-1'}`}
+             style={{ width: `${currentAvatarSize}px` }}
+          >
+            {msg.role === 'assistant' && !isConsecutive && (
+                <img 
+                    src={activeContact.avatar} 
+                    className="rounded-full object-cover border border-gray-100" 
+                    style={{ width: `${currentAvatarSize}px`, height: `${currentAvatarSize}px` }} 
+                    alt="AI" 
+                />
+            )}
+            {msg.role === 'user' && !isConsecutive && (
+                <img 
+                    src={activeContact.userAvatar} 
+                    className="rounded-full ml-2 object-cover border border-white" 
+                    style={{ width: `${currentAvatarSize}px`, height: `${currentAvatarSize}px` }} 
+                    alt="user" 
+                />
+            )}
+            {/* 连续发言占位，保持缩进 */}
+            {isConsecutive && <div style={{ width: `${currentAvatarSize}px` }}></div>}
+          </div>
+
+          {/* ★★★ 气泡核心区域 ★★★ */}
+          <div className={`flex items-end gap-2 order-2 ${msg.role === 'user' ? 'flex-row-reverse' : 'flex-row'} max-w-[75%]`}>
+            <div
+              className={`message-bubble min-w-0 relative group transition-transform duration-75 active:scale-95`} // 修复：长按缩放动画 active:scale-95
+              onTouchStart={() => handleTouchStart(msg)}
+              onTouchEnd={handleTouchEnd}
+              onMouseDown={() => handleTouchStart(msg)}
+              onMouseUp={handleTouchEnd}
+              onMouseLeave={handleTouchEnd}
+              onContextMenu={(e) => e.preventDefault()}
+            >
               {isEditing ? (
-                // === 编辑模式 UI ===
-                <div className="bg-white border-2 border-blue-400 rounded-xl p-2 shadow-lg min-w-[200px] animate-scaleIn">
-                  <span className="text-xs font-bold text-blue-500 mb-1 block">✏️ 编辑消息</span>
-                  <textarea 
+                // 编辑模式
+                <div className="bg-white border-2 border-blue-400 rounded-xl p-2 shadow-lg min-w-[200px]">
+                  <textarea
                     value={editContent}
                     onChange={(e) => setEditContent(e.target.value)}
-                    className="w-full text-sm p-2 bg-gray-50 rounded border border-gray-200 outline-none resize-none focus:bg-white transition"
-                    rows={4}
+                    className="w-full text-sm p-2 bg-gray-50 rounded outline-none resize-none"
+                    rows={3}
                     autoFocus
-                    // 防止点击输入框触发长按
-                    onMouseDown={(e) => e.stopPropagation()}
-                    onTouchStart={(e) => e.stopPropagation()}
+                    onMouseDown={e => e.stopPropagation()}
+                    onTouchStart={e => e.stopPropagation()}
                   />
                   <div className="flex justify-end gap-2 mt-2">
-                    <button onClick={handleCancelEdit} className="text-xs px-3 py-1 bg-gray-200 text-gray-600 rounded hover:bg-gray-300">取消</button>
-                    <button onClick={handleSaveEdit} className="text-xs px-3 py-1 bg-blue-500 text-white rounded font-bold hover:bg-blue-600">保存</button>
+                    <button onClick={handleCancelEdit} className="text-xs px-3 py-1 bg-gray-200 rounded">取消</button>
+                    <button onClick={handleSaveEdit} className="text-xs px-3 py-1 bg-blue-500 text-white rounded">保存</button>
                   </div>
                 </div>
               ) : (
-                // === 正常显示模式 UI ===
-                <div className={
-  `content px-3 py-[6px] rounded-xl text-sm leading-relaxed relative break-words whitespace-pre-wrap ` + // <--- 必须有 whitespace-pre-wrap
-  (!activeContact.customCSS ? (msg.role === 'user' ? 'bg-green-500 text-white' : 'bg-white text-gray-800 border border-gray-100') : '')
-}>
-                  {/* 这里保留你原来的渲染逻辑 (引用、语音、图片等) */}
+                // ★★★ 正常气泡 (尖角逻辑在这里！) ★★★
+                <div 
+                   className={
+                    `content rounded-xl leading-relaxed relative break-words whitespace-pre-wrap shadow-sm ` + 
+                    (!activeContact.customCSS ? (msg.role === 'user' ? 'text-white' : 'text-gray-800 border border-gray-100') : '')
+                   }
+                   style={{
+                       backgroundColor: !activeContact.customCSS ? (msg.role === 'user' ? userBg : aiBg) : undefined,
+                       fontSize: currentFontSize,
+                       paddingTop: currentPaddingY, 
+                       paddingBottom: currentPaddingY,
+                       paddingLeft: currentPaddingX,
+                       paddingRight: currentPaddingX,
+                       
+                       // ★★★ 核心样式修复：尖尖角 ★★★
+                       // 如果是用户(user) 且 是第一条(!isConsecutive) -> 右上角变成直角(2px)
+                       borderTopRightRadius: (msg.role === 'user' && !isConsecutive) ? '2px' : '16px',
+                       // 如果是AI(assistant) 且 是第一条(!isConsecutive) -> 左上角变成直角(2px)
+                       borderTopLeftRadius: (msg.role === 'assistant' && !isConsecutive) ? '2px' : '16px',
+                       // 其他角保持圆润
+                       borderBottomLeftRadius: '16px',
+                       borderBottomRightRadius: '16px',
+                   }}
+                >
                   {msg.content.startsWith("> 引用") && (
-                    <div className="quote-block text-xs mb-2 p-2 rounded opacity-80 bg-black/10">{msg.content.split('\n\n')[0]}</div>
+                    <div className="text-xs mb-1 p-1 opacity-70 border-l-2 border-white/50 pl-2">{msg.content.split('\n\n')[0]}</div>
                   )}
                   {msg.type === 'voice' || msg.content.trim().startsWith('[Voice Message]') ? (
-                    <VoiceBubble 
-                      msg={msg} 
-                      isPlaying={playingMsgId === msg.id} 
-                      progress={audioProgress} 
-                      duration={duration} 
-                      onPlay={() => playMessageAudio(msg.id, msg.content)} 
-                      onSeek={handleSeek} 
-                      isUser={msg.role === 'user'} 
+                    <VoiceBubble
+                      msg={msg}
+                      isPlaying={playingMsgId === msg.id}
+                      progress={audioProgress}
+                      duration={duration}
+                      onPlay={() => playMessageAudio(msg.id, msg.content)}
+                      onSeek={handleSeek}
+                      isUser={msg.role === 'user'}
                     />
                   ) : msg.type === 'image' ? (
                     <img src={msg.content} className="rounded-lg max-w-full" alt="msg" />
                   ) : (
-                    // 只有简单的文本才显示 HiddenBracketText
-                  <HiddenBracketText 
-  content={msg.content.replace(/^>.*?\n\n/, '')} 
-  msgId={msg.id}  // ← 加这一行，防止不同消息共用状态
-/>
+                    <HiddenBracketText
+                        content={msg.content.replace(/^>.*?\n\n/, '')}
+                        msgId={msg.id}
+                        fontSize={""} // 使用继承的 font-size
+                    />
                   )}
                 </div>
               )}
             </div>
-
             {/* 时间戳 */}
             {!isEditing && <div className="text-[10px] text-gray-400 whitespace-nowrap shrink-0 pb-1">{timeStr}</div>}
           </div>
@@ -4298,7 +4441,7 @@ const isConsecutive = index > 0 && activeContact.history[index - 1].role === msg
               <div className="w-10 shrink-0 flex justify-start">
                 <img src={activeContact.avatar} className="w-8 h-8 rounded-full object-cover" alt="AI" />
               </div>
-              <div className="flex items-end gap-2">
+              <div className="flex items-end gap-4">
                 <div className="bg-white px-4 py-3 rounded-xl text-sm shadow-sm max-w-[80px]">
                   <div className="flex gap-1 items-center">
                     <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></span>
