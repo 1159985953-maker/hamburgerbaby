@@ -136,8 +136,149 @@ const HiddenBracketText: React.FC<{ content: string; fontSize?: string; msgId: s
 
 
 
+// ==================== [最终版] 全量资产清算 (单位: w) ====================
+// ==================== [用户设定版] Token 详情 (严格跟随输入框) ====================
+const TokenDetailModal: React.FC<{
+  onClose: () => void;
+  form: any;
+  activeContact: any;
+  worldBooks: any[];
+}> = ({ onClose, form, activeContact, worldBooks }) => {
+  // ★★★ 核心修正：优先读取 form (输入框里的值)，没有才读 activeContact (存的值) ★★★
+  // 如果输入框是空的，兜底才用 20
+  const inputDepth = form.contextDepth !== undefined ? form.contextDepth : activeContact.contextDepth;
+  const depth = Number(inputDepth) || 20; 
 
+  // 1. 根据这个 depth 切片
+  const historySlice = (activeContact.history || []).slice(-depth);
 
+  // ================= 算力统计 =================
+  // 1. 系统消耗 (System Base)
+  const val_SystemBase = 800;
+
+  // 2. 角色人设 (Persona)
+  const p1 = form.persona || activeContact.persona || "";
+  const p2 = form.description || activeContact.description || "";
+  const finalPersona = p1.length > p2.length ? p1 : p2;
+  const val_CharPersona = Math.round(finalPersona.length * 1.3);
+
+  // 3. 用户设定 (User Profile)
+  const uName = form.userName || activeContact.userName || "";
+  const uPersona = form.userPersona || activeContact.userPersona || "";
+  const val_UserPersona = Math.round((uName + uPersona).length * 1.3);
+
+  // 4. 心理状态 (HEF)
+  const hefObj = form.hef || activeContact.hef || {};
+  const val_State = Math.round(JSON.stringify(hefObj).length * 1.3);
+
+  // 5. 世界书 (Lore)
+  const enabledNames = form.enabledWorldBooks || activeContact.enabledWorldBooks || [];
+  const activeBooks = worldBooks.filter(wb => enabledNames.includes(wb.name));
+  const val_Lore = Math.round(JSON.stringify(activeBooks).length * 1.3);
+
+  // 6. 长期记忆 (Memory)
+  const memories = activeContact.longTermMemories || [];
+  const val_Memory = Math.round(JSON.stringify(memories).length * 1.3);
+
+  // 7. 历史切片 (基于用户设定的 depth)
+  let val_SliceText = 0;
+  let val_SliceImageRaw = 0;
+  let imgCount = 0;
+
+  historySlice.forEach((m: any, index: number) => {
+    // 智能折叠逻辑：最新的图算原图，旧图算折叠
+    const isLatest = index === historySlice.length - 1;
+
+    if (m.type === 'image' || (m.content && m.content.startsWith('data:image'))) {
+      imgCount++;
+      if (isLatest) {
+         val_SliceImageRaw += m.content.length; 
+      } else {
+         val_SliceText += 50; // 折叠占位符
+      }
+    } else {
+      val_SliceText += m.content.length;
+    }
+  });
+  
+  const token_SliceText = Math.round(val_SliceText * 1.3);
+  const token_SliceImage = Math.round(val_SliceImageRaw);
+
+  // ★ 总计 ★
+  const totalTokens = val_SystemBase + val_CharPersona + val_UserPersona + val_State + val_Lore + val_Memory + token_SliceText + token_SliceImage;
+
+  // ★ w 单位 ★
+  const formatNum = (num: number) => {
+    if (num >= 10000) return `${(num / 10000).toFixed(2)}w`;
+    return num;
+  };
+
+  const RenderBar = ({ label, val, color, icon, warning }: any) => {
+    const percent = totalTokens > 0 ? Math.min(100, (val / totalTokens) * 100) : 0;
+    const visualPercent = val > 0 ? Math.max(2, percent) : 0;
+    
+    return (
+      <div className="mb-3">
+        <div className="flex justify-between text-xs mb-1 items-end">
+          <span className="flex items-center gap-1 text-gray-700 font-bold">
+            <span>{icon}</span> {label}
+            {warning && <span className="text-[9px] text-red-500 bg-red-50 px-1 rounded ml-1">{warning}</span>}
+          </span>
+          <span className="font-mono text-gray-500 text-[10px]">
+             {formatNum(val)}
+          </span>
+        </div>
+        <div className="w-full bg-gray-100 rounded-full h-1.5 overflow-hidden">
+          <div className={`h-full rounded-full ${color}`} style={{ width: `${visualPercent}%` }}></div>
+        </div>
+      </div>
+    );
+  };
+
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm animate-fadeIn" onClick={onClose}>
+      <div className="bg-white w-[90%] max-w-sm rounded-2xl shadow-2xl overflow-hidden animate-scaleIn max-h-[90vh] flex flex-col" onClick={e => e.stopPropagation()}>
+        
+        <div className="bg-indigo-600 p-4 border-b flex justify-between items-center shrink-0 text-white">
+          <div>
+            <h3 className="font-bold text-sm">🧠 总token</h3>
+            {/* 这里明确显示正在使用多少条 */}
+            <p className="text-[10px] text-indigo-200">
+              基于当前设置: 最近 <span className="font-bold text-white underline">{depth}</span> 条记录
+            </p>
+          </div>
+          <button onClick={onClose} className="w-6 h-6 bg-white/20 hover:bg-white/40 rounded-full text-white font-bold text-xs transition">✕</button>
+        </div>
+        
+        <div className="p-5 overflow-y-auto custom-scrollbar">
+          <div className="flex justify-center mb-6">
+            <div className="text-center w-full p-4 bg-gray-50 rounded-2xl border border-gray-200">
+              <div className="text-4xl font-black text-gray-800 font-mono tracking-tighter">
+                {formatNum(totalTokens)}
+              </div>
+              <div className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mt-1">
+                Estimated Tokens
+              </div>
+            </div>
+          </div>
+
+          <div className="space-y-1">
+            <h4 className="text-[10px] font-bold text-gray-400 uppercase mb-2">1. 固定消耗 (System)</h4>
+            <RenderBar label="人设与设定" val={val_CharPersona + val_UserPersona} color="bg-purple-500" icon="👤" />
+            <RenderBar label="世界书与规则" val={val_Lore + val_SystemBase} color="bg-green-500" icon="🌍" />
+            <RenderBar label="心理与记忆" val={val_State + val_Memory} color="bg-yellow-500" icon="🧠" />
+            
+            <div className="h-px bg-gray-100 my-4"></div>
+
+            <h4 className="text-[10px] font-bold text-gray-400 uppercase mb-2">2. 滑动窗口 ({depth}条)</h4>
+            <RenderBar label={`文本切片 (${historySlice.length}条)`} val={token_SliceText} color="bg-indigo-500" icon="📝" />
+            <RenderBar label={`图片切片 (${imgCount}张)`} val={token_SliceImage} color="bg-red-500" icon="🖼️" warning={imgCount > 0 && token_SliceImage > 1000 ? "含大图" : null} />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
 
 
 
@@ -224,6 +365,10 @@ const ChatApp: React.FC<ChatAppProps> = ({
   const [isSelectionMode, setIsSelectionMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [isAiTyping, setIsAiTyping] = useState(false); // AI 是否正在“打字”
+  const [showTokenModal, setShowTokenModal] = useState(false);
+
+
+
 
 
 
@@ -1751,31 +1896,56 @@ Lore: ${loreText || "无"}
       ? (Array.isArray(currentHistory) ? currentHistory.slice(-(activeContact?.contextDepth || 20)) : [])
       : [];
 
-// ==================== [省流优化] 历史记录清洗 ====================
-    // 1. 截取最近的 N 条消息
+// ==================== [智能图片折叠 & 概括系统] ====================
+    // 1. 截取历史
     const rawHistorySlice = Array.isArray(currentHistory)
       ? currentHistory.slice(-(activeContact?.contextDepth || 20))
       : [];
 
-    // 2. ★★★ 核心清洗步骤 ★★★
-    // 强制只保留 role 和 content，剔除 thought_chain、hef、voiceDuration 等所有杂质
-    // 这样 AI 读到的就是干干净净的对话文本，极大节省 Token
-    const cleanHistorySlice = rawHistorySlice.map(msg => {
-        // 如果内容里包含 [Voice Message] 或图片，通常也可以简化，这里保留原样
-        let cleanContent = msg.content;
+    // 2. 清洗数据
+    const cleanHistorySlice = rawHistorySlice.map((msg, index) => {
+        const isLatestMessage = index === rawHistorySlice.length - 1;
         
-        // 双重保险：如果 msg.content 居然意外包含了 JSON 字符串（旧数据残留），尝试提取纯文本
-        if (msg.role === 'assistant' && cleanContent.trim().startsWith('[')) {
+        let cleanContent = msg.content;
+
+        // 检测是否是图片 (Base64 或 type='image')
+        const isImage = msg.type === 'image' || cleanContent.startsWith('data:image') || cleanContent.length > 2000;
+
+        if (isImage) {
+            if (isLatestMessage) {
+                 // ★ 情况A：最新发的一张图
+                 // 保留原样，让 AI (GPT-4o/Claude) 能够看到并进行第一次点评
+                 // 注意：如果你的 API 不支持 Vision，这里也会导致报错，但为了“能看懂”，必须保留。
+                 console.log("保留最新图片供 AI 读取");
+            } else {
+                 // ★ 情况B：历史记录里的旧图 (省流核心)
+                 // 除非你手动在数据库里存了 summary 字段，否则前端不知道图里是什么。
+                 // 我们生成一个“元数据描述”，告诉 AI 这里曾有一张图。
+                 
+                 const timeStr = new Date(msg.timestamp).toLocaleTimeString();
+                 // 如果 msg 对象里以后扩展了 summary 字段，优先用 summary
+                 const summary = (msg as any).summary || "一张图片"; 
+                 
+                 cleanContent = msg.role === 'user'
+                    ? `[系统记录: 用户在 ${timeStr} 发送了${summary}，鉴于Token限制已折叠]` 
+                    : `[系统记录: AI在 ${timeStr} 发送了${summary}，已折叠]`;
+            }
+        } 
+        
+        // 移除思维链残留
+        else if (msg.role === 'assistant' && cleanContent.trim().startsWith('[')) {
              try {
                  const parsed = JSON.parse(cleanContent);
                  if (Array.isArray(parsed)) {
-                     // 提取出 text 部分
                      const textParts = parsed.filter((p: any) => p.type === 'text').map((p: any) => p.content).join('\n');
                      if (textParts) cleanContent = textParts;
                  }
-             } catch (e) {
-                 // 解析失败就算了，按原样发
-             }
+             } catch (e) { }
+        }
+
+        // 长度强制熔断 (防止某条文本莫名其妙几十万字)
+        if (cleanContent.length > 10000 && !isLatestMessage) {
+            cleanContent = cleanContent.substring(0, 500) + "...(内容过长已截断)";
         }
 
         return {
@@ -1784,11 +1954,9 @@ Lore: ${loreText || "无"}
         };
     });
 
-
-
     const apiMessages = [
-      { role: 'system', content: systemPrompt },
-      ...recentHistorySlice
+      { role: 'system', content: systemPrompt }, 
+      ...cleanHistorySlice
     ];
 
     // ★★★ 注入：如果在聊天列表中检测到大间隔，插入系统提示 ★★★
@@ -3818,76 +3986,95 @@ if (view === 'settings' && activeContact) {
           </div>
         </section>
 
-        {/* 3. Memory & Lore */}
-{/* 3. Memory & Lore 控制台 (Token 计算器版) */}
-      {/* 3. Memory & Lore 控制台 (数字输入 + Token计算器版) */}
-        <section className="bg-white rounded-2xl p-4 shadow-sm border border-gray-200 animate-fadeIn">
-          {/* 顶部标题栏 + 实时 Token 估算 */}
-          <div className="flex items-center justify-between mb-4 border-b border-gray-100 pb-2">
-             <h3 className="text-xs font-bold text-gray-400 uppercase">🧠 Memory Console</h3>
-             
-             {/* 实时 Token 估算器 */}
-             <div className="bg-gray-100 px-2 py-1 rounded text-[10px] font-mono">
-               {(() => {
-                 // 估算逻辑
-                 const historyCount = form.contextDepth || 20;
-                 const historyMsgs = activeContact.history.slice(-historyCount);
-                 const historyText = historyMsgs.map(m => m.content).join('');
-                 
-                 const systemLen = (form.persona?.length || 0) + 1500; 
-                 const historyLen = historyText.length;
-                 const loreLen = (worldBooks.filter(wb => (form.enabledWorldBooks||[]).includes(wb.name)).reduce((acc, wb) => acc + JSON.stringify(wb).length, 0));
-                 
-                 const totalChars = systemLen + historyLen + loreLen;
-                 const estTokens = Math.round(totalChars * 1.2);
-                 
-                 let colorClass = "text-green-600";
-                 if (estTokens > 50000) colorClass = "text-orange-500";
-                 if (estTokens > 100000) colorClass = "text-red-600 font-bold";
-
-                 return (
-                   <span className={colorClass}>
-                     预计消耗: ≈{estTokens} tokens
-                   </span>
-                 );
-               })()}
+{/* 3. Memory & Lore 控制台 (完全体) */}
+        <section className="bg-white rounded-2xl p-4 shadow-sm border border-gray-200">
+          <div className="flex items-center justify-between mb-4 border-b border-gray-100 pb-3">
+             <div className="flex flex-col">
+               <h3 className="text-xs font-bold text-gray-400 uppercase">🧠 Memory Console</h3>
+               <span className="text-[9px] text-gray-400">控制 AI 的记忆长度与 Token</span>
              </div>
+             
+{/* 点击显示 Context Token 统计 (实时响应输入框版) */}
+             <button 
+               onClick={() => setShowTokenModal(true)} 
+               className="bg-blue-50 hover:bg-blue-100 active:bg-blue-200 text-blue-600 px-3 py-1.5 rounded-lg text-[10px] font-mono border border-blue-200 transition-colors flex items-center gap-1 shadow-sm"
+             >
+               <span>📊</span>
+               {(() => {
+                 // ================= 实时算法 =================
+                 // 1. ★★★ 强行读取输入框的值 ★★★
+                 const inputDepth = form.contextDepth !== undefined ? form.contextDepth : activeContact.contextDepth;
+                 const depth = Number(inputDepth) || 20;
+
+                 const historySlice = (activeContact.history || []).slice(-depth);
+
+                 // 2. 固定消耗
+                 const baseCost = 800;
+                 const pCost = (form.persona || activeContact.persona || "").length * 1.3;
+                 const uCost = ((form.userName || "") + (form.userPersona || "")).length * 1.3;
+                 const hefCost = JSON.stringify(form.hef || activeContact.hef || {}).length * 1.3;
+                 
+                 const enabledNames = form.enabledWorldBooks || activeContact.enabledWorldBooks || [];
+                 const activeBooks = worldBooks.filter(wb => enabledNames.includes(wb.name));
+                 const loreCost = JSON.stringify(activeBooks).length * 1.3;
+                 
+                 const memCost = JSON.stringify(activeContact.longTermMemories || []).length * 1.3;
+
+                 // 3. 切片消耗
+                 let sliceCost = 0;
+                 historySlice.forEach((m: any, idx: number) => {
+                     const isLatest = idx === historySlice.length - 1;
+                     if (m.type === 'image' || (m.content && m.content.startsWith('data:image'))) {
+                         sliceCost += isLatest ? m.content.length : 50;
+                     } else {
+                         sliceCost += m.content.length;
+                     }
+                 });
+                 sliceCost = Math.round(sliceCost * 1.3);
+
+                 // 4. 总计
+                 const totalEst = Math.round(baseCost + pCost + uCost + hefCost + loreCost + memCost + sliceCost);
+                 
+                 // ★ w 单位 ★
+                 const displayNum = totalEst >= 10000 ? `${(totalEst/10000).toFixed(2)}w` : totalEst;
+                 
+                 return <span className="font-bold">≈ {displayNum} &gt;</span>;
+               })()}
+             </button>
           </div>
 
-          {/* 数字输入区域 (回归 Grid 布局) */}
+          {/* 数字输入区域 */}
           <div className="grid grid-cols-2 gap-4 mb-4">
             {/* 上下文条数设置 */}
-            <div>
-              <label className="text-[10px] text-gray-500 font-bold uppercase block mb-1">
-                Context Depth (条数)
+            <div className="bg-gray-50 p-2 rounded-xl border border-gray-100">
+              <label className="text-[10px] text-gray-500 font-bold uppercase block mb-1 text-center">
+                Context Depth (记忆条数)
               </label>
-              <input
-                type="number"
-                value={form.contextDepth || 0}
-                onChange={e => setEditForm({ ...editForm, contextDepth: parseInt(e.target.value) || 0 })}
-                className="w-full border p-2 rounded-lg text-sm bg-gray-50 text-center font-bold text-blue-600 outline-none focus:ring-2 focus:ring-blue-200 transition"
-                placeholder="20"
-              />
-              <p className="text-[9px] text-gray-400 mt-1 text-center">
-                AI 读取最近 {form.contextDepth || 0} 条
-              </p>
+              <div className="flex items-center justify-center">
+                <input
+                  type="number"
+                  value={form.contextDepth || 20}
+                  onChange={e => setEditForm({ ...editForm, contextDepth: parseInt(e.target.value) || 0 })}
+                  className="w-full bg-transparent text-center font-bold text-blue-600 text-lg outline-none"
+                  placeholder="20"
+                />
+              </div>
             </div>
 
             {/* 自动总结阈值设置 */}
-            <div>
-              <label className="text-[10px] text-gray-500 font-bold uppercase block mb-1">
-                Auto-Sum Trigger
+            <div className="bg-gray-50 p-2 rounded-xl border border-gray-100">
+              <label className="text-[10px] text-gray-500 font-bold uppercase block mb-1 text-center">
+                Summary Trigger (总结阈值)
               </label>
-              <input
-                type="number"
-                value={form.summaryTrigger || 0}
-                onChange={e => setEditForm({ ...editForm, summaryTrigger: parseInt(e.target.value) || 0 })}
-                className="w-full border p-2 rounded-lg text-sm bg-gray-50 text-center font-bold text-gray-700 outline-none focus:ring-2 focus:ring-gray-200 transition"
-                placeholder="0"
-              />
-              <p className="text-[9px] text-gray-400 mt-1 text-center">
-                {form.summaryTrigger || 0} 条消息触发总结
-              </p>
+              <div className="flex items-center justify-center">
+                <input
+                  type="number"
+                  value={form.summaryTrigger || 50}
+                  onChange={e => setEditForm({ ...editForm, summaryTrigger: parseInt(e.target.value) || 0 })}
+                  className="w-full bg-transparent text-center font-bold text-gray-700 text-lg outline-none"
+                  placeholder="50"
+                />
+              </div>
             </div>
           </div>
 
@@ -3896,7 +4083,7 @@ if (view === 'settings' && activeContact) {
               setView('chat');
               setTimeout(() => setShowPersonaPanel(true), 100);
             }}
-            className="w-full bg-yellow-50 text-yellow-700 py-3 rounded-xl font-bold border border-yellow-200 hover:bg-yellow-100 transition text-xs flex items-center justify-center gap-2"
+            className="w-full bg-yellow-50 text-yellow-700 py-3 rounded-xl font-bold border border-yellow-200 hover:bg-yellow-100 transition text-xs flex items-center justify-center gap-2 active:scale-95"
           >
             <span>📝</span> 管理长期记忆便签墙
           </button>
@@ -4194,7 +4381,9 @@ if (view === 'settings' && activeContact) {
 
 
 
-        {/* 危险区 */}
+
+
+
         <div className="mt-auto pt-10 pb-4">
           <section className="bg-red-50 rounded-2xl p-4 border border-red-100 text-center">
             <h3 className="text-xs font-bold text-red-400 uppercase mb-3">Danger Zone</h3>
@@ -4206,10 +4395,22 @@ if (view === 'settings' && activeContact) {
             </button>
           </section>
         </div>
+
+        {/* 👇👇👇 在这里插入弹窗代码 (就在 settings 视图结束前) 👇👇👇 */}
+        {showTokenModal && (
+          <TokenDetailModal
+            onClose={() => setShowTokenModal(false)}
+            form={editForm} // 注意：在设置页里，我们看的是正在编辑的 editForm
+            activeContact={activeContact}
+            worldBooks={worldBooks}
+          />
+        )}
+        {/* 👆👆👆 插入结束 👆👆👆 */}
+
       </div>
     </div>
   );
-}
+} // <--- 这里是 if (view === 'settings') 的结束大括号
 
   // ==================== 聊天界面 ====================
 
@@ -4644,6 +4845,25 @@ style={{ paddingBottom: '12px' }}  // 只留一点内间距，让输入框不紧
                 onRefineMemory={handleRefineMemory}
             />
         )}
+
+{showTokenModal && activeContact && (
+          <TokenDetailModal
+            onClose={() => setShowTokenModal(false)}
+            form={activeContact} // 或者是 editForm
+            activeContact={activeContact}
+            worldBooks={worldBooks}
+          />
+        )}
+
+
+
+
+
+
+
+
+
+
       </div>
     );
   }
