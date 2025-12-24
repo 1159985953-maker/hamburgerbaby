@@ -4436,11 +4436,11 @@ onClick={() => {
                     </div>
                  </div>
 
-                 {/* ★★★ 标签详情弹窗 (Modal) ★★★ */}
+{/* ★★★ 标签详情弹窗 (Modal) - 智能防误触版 ★★★ */}
                  {viewingTag && (
                    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/20 backdrop-blur-sm animate-fadeIn" onClick={() => setViewingTag(null)}>
                       <div className="bg-white w-[85%] max-w-xs rounded-2xl shadow-2xl p-5 animate-scaleIn transform transition-all" onClick={e => e.stopPropagation()}>
-                         
+                        
                          {/* 标题 */}
                          <div className="text-center mb-4">
                             <span className="text-xs text-gray-400 font-bold uppercase tracking-widest">TAG DETAILS</span>
@@ -4449,62 +4449,72 @@ onClick={() => {
                                Created on {new Date(viewingTag.timestamp).toLocaleString()}
                             </p>
                          </div>
-
                          {/* 备注输入区 */}
                          <div className="bg-yellow-50 p-3 rounded-xl border border-yellow-200 mb-4 relative">
                             <label className="text-[9px] font-bold text-yellow-700 uppercase mb-1 block">
                                📝 为什么会有这个印象？(备注)
                             </label>
                             <textarea
-                               className="w-full bg-transparent text-sm text-gray-700 outline-none resize-none h-20 placeholder-yellow-300/50"
+                               className="w-full bg-transparent text-sm text-gray-700 outline-none resize-none h-24 placeholder-yellow-300/50 leading-relaxed"
                                placeholder="写点什么... AI会看到哦"
                                value={viewingTag.note || ""}
                                onChange={(e) => {
-                                  // 实时更新 state (有点hacky但有效)
                                   setViewingTag({ ...viewingTag, note: e.target.value });
                                }}
                             />
                          </div>
-
                          {/* 按钮组 */}
                          <div className="flex gap-2">
-               
-                              <button 
+              
+                              <button
                                onClick={() => {
-                                  // 1. 准备一条系统通知，把备注内容大声告诉 AI
-                                  const timestamp = Date.now();
-                                  const noteContent = viewingTag.note ? viewingTag.note : "无";
+                                  // ★★★ 核心修复：先检查有没有改动！ ★★★
+                                  // 1. 从现有联系人数据里找到原始标签
+                                  const originalTag = contact.userTags.find((t: any) => t.id === viewingTag.id);
                                   
+                                  const oldNote = (originalTag?.note || "").trim();
+                                  const newNote = (viewingTag.note || "").trim();
+
+                                  // 2. 如果内容没变，直接关闭，不打扰 AI
+                                  if (oldNote === newNote) {
+                                      setViewingTag(null);
+                                      return; 
+                                  }
+
+                                  // 3. 只有内容变了，才执行下面的发送逻辑
+                                  const timestamp = Date.now();
+                                  const noteContent = newNote ? newNote : "（用户清空了备注）";
+                                 
                                   const sysMsg: Message = {
                                       id: "sys_note_" + timestamp,
                                       role: 'system',
-                                      // ★★★ 关键：把备注内容写进系统通知里 ★★★
-                                      content: `【系统通知】用户更新了对标签 [${viewingTag.content}] 的详细备注：\n“${noteContent}”\n(指令：这是用户对你产生该印象的具体原因，请在接下来的对话中针对这个原因进行互动)`,
+                                      // 内容已经美化，去掉了指令括号
+                                      content: `【系统通知】你更新了对标签 [${viewingTag.content}] 的详细备注：\n“${noteContent}”\n(指令：这是用户对你产生该印象的具体原因，请在接下来的对话中针对这个原因进行互动)`,
                                       timestamp: timestamp
                                   };
-
-                                  // 2. 同时更新：标签数据 + 聊天记录
+                                  
+                                  // 4. 更新数据
                                   setContacts((prev: any) => prev.map((c: any) => {
                                      if (c.id === contact.id) {
-                                        return { 
-                                           ...c, 
+                                        return {
+                                           ...c,
                                            userTags: c.userTags.map((t: any) => t.id === viewingTag.id ? viewingTag : t),
-                                           history: [...c.history, sysMsg] // 插入聊天记录
+                                           history: [...c.history, sysMsg]
                                         };
                                      }
                                      return c;
                                   }));
-                                  
+                                 
                                   setViewingTag(null);
                                }}
                                className="flex-1 bg-gray-900 text-white py-2 rounded-xl font-bold text-xs hover:bg-gray-700 transition"
                             >
                                保存备注
                             </button>
-                            <button 
+                            <button
                                onClick={() => {
                                   if(confirm("确定要摘下这个标签吗？")) {
-                                     setContacts((prev: any) => prev.map((c: any) => 
+                                     setContacts((prev: any) => prev.map((c: any) =>
                                         c.id === contact.id ? { ...c, userTags: c.userTags.filter((t: any) => t.id !== viewingTag.id) } : c
                                      ));
                                      setViewingTag(null);
@@ -4699,12 +4709,25 @@ contact.agreements.slice().reverse().map((agreement: Agreement) => {
                 const profile = contact.userProfile || {};
                 const themeColor = profile.themeColor || '#f3e8ff';
 
-                // --- 辅助组件：可更换的拍立得相框 ---
+
+
+
+  // --- 辅助组件：可更换的拍立得相框 (V2.0 - 强制塑形版) ---
                 const PhotoFrame: React.FC<{ id: string; className: string; defaultImage: string; }> = ({ id, className, defaultImage }) => {
                   const photo = (profile as any)[id] || defaultImage;
                   return (
                     <label className={`absolute bg-white p-1.5 rounded-sm shadow-lg border border-gray-200 cursor-pointer group hover:z-20 transition-transform duration-300 ${className}`}>
-                      <img src={photo} className="w-full h-full object-cover" alt={`frame-${id}`} />
+                      {/* 
+                        ★★★ 核心修复在这里！★★★
+                        - object-cover: 告诉图片，你要“覆盖”整个容器，而不是“拉伸”来填满它。
+                        - w-full h-full: 确保图片本身会尝试填满父容器。
+                        - rounded-sm: 给图片也加上一点小圆角，更精致。
+                      */}
+                      <img 
+                        src={photo} 
+                        className="w-full h-full object-cover rounded-sm" 
+                        alt={`frame-${id}`} 
+                      />
                       <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white text-xs font-bold">更换</div>
                       <input type="file" className="hidden" accept="image/*"
                         onChange={async (e) => {
@@ -4718,6 +4741,11 @@ contact.agreements.slice().reverse().map((agreement: Agreement) => {
                   );
                 };
 
+
+
+
+
+
                 return (
                   <div className="h-full flex flex-col relative rounded-b-2xl" style={{ backgroundColor: themeColor }}>
                     {/* --- 背景纹理 & 自定义背景图 --- */}
@@ -4730,28 +4758,57 @@ contact.agreements.slice().reverse().map((agreement: Agreement) => {
                       
                     {/* ★★★ 散落的拍立得照片 (装饰 V2.0 - 更多！) ★★★ */}
                       <PhotoFrame id="scattered_photo_1" className="top-16 -left-8 w-24 h-28 transform -rotate-12 hover:rotate-0 hover:scale-125" defaultImage="https://picsum.photos/200/300?random=1" />
-                      <PhotoFrame id="scattered_photo_2" className="bottom-24 -right-10 w-28 h-32 transform rotate-15 hover:rotate-0 hover:scale-125" defaultImage="https://picsum.photos/200/300?random=2" />
+                      <PhotoFrame id="scattered_photo_2" className="bottom-10 -right-10 w-60 h-60 transform rotate-15 hover:rotate-0 hover:scale-125" defaultImage="https://picsum.photos/200/300?random=2" />
                       <PhotoFrame id="scattered_photo_3" className="bottom-10 -left-6 w-20 h-24 transform rotate-10 hover:rotate-0 hover:scale-125" defaultImage="https://picsum.photos/200/300?random=4" />
                       <PhotoFrame id="scattered_photo_4" className="top-28 -right-4 w-16 h-20 transform -rotate-10 hover:rotate-0 hover:scale-125 opacity-70 hover:opacity-100" defaultImage="https://picsum.photos/200/300?random=5" />
 
                       <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-lg border border-white/50 p-6 relative flex flex-col items-center min-h-[300px]">
                         {/* ★★★ 铅笔和回形针 (装饰) - 回来了！ ★★★ */}
                         <div className="absolute -top-8 -right-4 text-5xl opacity-80 transform rotate-12 pointer-events-none">✏️</div>
+                         <div className="absolute top-14 right-40 text-5xl opacity-80 transform rotate-12 pointer-events-none">💚</div>
                         <div className="absolute top-16 -left-4 text-3xl opacity-70 transform -rotate-45 pointer-events-none">📎</div>
+                        <div className="absolute top-20 left-40 text-3xl opacity-70 transform -rotate-45 pointer-events-none">⭐️</div>
                         
                         {/* ★★★ 和纸胶带 - 回来了！ ★★★ */}
                         <div className="absolute -top-2 left-1/2 -translate-x-1/2 w-24 h-6 bg-yellow-200/70 transform -rotate-2 shadow-sm" style={{ clipPath: 'polygon(0 0, 100% 0, 100% 100%, 0% 100%)' }}></div>
                         <h4 className="text-sm font-bold text-gray-700 mb-4">{contact.name} 的秘密手账</h4>
                         
-                        {/* ★★★ 中心照片 (带手绘框和拍立得框) - 回来了！ ★★★ */}
-                        <div className="relative mb-6">
-                           <svg className="absolute -inset-2 w-[calc(100%+1rem)] h-[calc(100%+1rem)] opacity-60" viewBox="0 0 100 120"><path d="M 5,5 C 2,2 98,2 95,5 L 95,115 C 98,118 2,118 5,115 L 5,5 Z" stroke="#888" strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round" style={{ strokeDasharray: "5, 5" }}/></svg>
-                           {/* 我们把 PhotoFrame 组件用在这里，而不是简单的 label */}
-                           <PhotoFrame id="main_photo" className="relative w-24 h-28 transform rotate-2 hover:rotate-0 hover:scale-110" defaultImage={profile.photo || "https://picsum.photos/200/300?random=3"} />
+{/* ★★★ 中心照片 (V2.0 - 终极防拉伸修复版) ★★★ */}
+                        <div className="relative mb-6 flex-shrink-0 z-10">
+                            {/* 手绘虚线框SVG */}
+                            <svg className="absolute -inset-3 w-[calc(100%+1.5rem)] h-[calc(100%+1.5rem)] opacity-60 pointer-events-none" viewBox="0 0 100 120">
+                                <path d="M 5,5 C 2,2 98,2 95,5 L 95,115 C 98,118 2,118 5,115 L 5,5 Z" stroke="#888" strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round" style={{ strokeDasharray: "5, 5" }}/>
+                            </svg>
+                           
+                            {/* 照片本体框：加了强制 object-fit: cover */}
+                            <label className="relative block w-28 h-36 bg-white p-2 rounded-sm shadow-xl border border-gray-200 cursor-pointer group transform rotate-2 hover:rotate-0 hover:scale-105 transition-transform duration-300">
+                              {/* 这里的 object-cover 是防拉伸的关键 */}
+                              <img
+                                src={profile.photo || "https://picsum.photos/200/300?random=3"}
+                                className="w-full h-full rounded-sm block"
+                                style={{ objectFit: "cover" }} 
+                                alt="main profile"
+                              />
+                              
+                              {/* 悬停显示的黑色遮罩 */}
+                              <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white text-xs font-bold rounded-sm">
+                                📷 更换照片
+                              </div>
+                              
+                              {/* 文件上传输入框 */}
+                              <input type="file" className="hidden" accept="image/*"
+                                onChange={async (e) => {
+                                  if (e.target.files && e.target.files[0]) {
+                                    const base64 = await fileToBase64(e.target.files[0]);
+                                    setContacts(prev => prev.map(c => c.id === contact.id ? { ...c, userProfile: { ...(c.userProfile || {}), photo: base64 } } : c));
+                                  }
+                                }}
+                              />
+                            </label>
                         </div>
 
                         {/* 如果没有档案，显示占位符 */}
-                        {(!profile.personality_traits && !profile.preferences && !profile.habits) && (<div className="text-center text-gray-400 py-4 flex flex-col items-center justify-center flex-1"><p className="text-sm"> 正在努力更了解你...</p><p className="text-xs mt-2">当聊到“高光时刻”，{contact.name} 会在这里为你更新档案。</p></div>)}
+                        {(!profile.personality_traits && !profile.preferences && !profile.habits) && (<div className="text-center text-gray-400 py-4 flex flex-col items-center justify-center flex-1"><p className="text-sm"> 正在努力更了解你...</p><p className="text-xs mt-2">{contact.name} 会在这里偷偷为你更新档案(^_^)</p></div>)}
                         
                         {/* 档案条目 */}
                         <TraitItem icon="🎭" label="性格特点" traits={profile.personality_traits} />
@@ -6520,34 +6577,68 @@ return (
       if (intervalMinutes > 20) { showInterval = true; }
     }
     
-    // =========================================================================
-    // ★★★ 核心新增：系统消息渲染 (System Notification) ★★★
-    // 处理 role === 'system' 或者内容包含"撤回"的消息
+// =========================================================================
+    // ★★★ 核心新增：系统消息渲染 (System Notification) - 升级版便签UI ★★★
     // =========================================================================
     if (msg.role === 'system' || msg.content.includes("撤回了一条消息")) {
-        // 提取显示文本
-        let sysText = msg.content;
-        // 如果是撤回消息的兼容处理
-        if (msg.content.includes("撤回了一条消息") && msg.role !== 'system') {
-             sysText = `${msg.role === 'user' ? '你' : `"${activeContact.name}"`} 撤回了一条消息`;
+        // --- 1. 文本清洗与转换 ---
+        let displayContent = msg.content;
+        
+        // A. 去掉 ugly 的【系统通知】前缀和 (指令...)
+        displayContent = displayContent.replace('【系统通知】', '').trim();
+        displayContent = displayContent.replace(/\(指令：[\s\S]*?\)/g, '').trim(); // 隐藏指令
+        displayContent = displayContent.replace(/（指令：[\s\S]*?）/g, '').trim(); // 兼容中文括号
+
+        // B. 智能替换称呼 (让话语更自然)
+        if (displayContent.includes('用户')) {
+            displayContent = displayContent.replaceAll('用户', '你');
+        }
+        if (!msg.content.includes("撤回")) {
+             displayContent = displayContent.replace('你的印象墙', `${activeContact.name} 的印象墙`);
         }
 
+        // C. 识别消息类型
+        const isRecall = msg.content.includes("撤回");
+        
+        // --- 2. 渲染UI ---
         return (
           <React.Fragment key={msg.id}>
             {showInterval && (
-              <div className="text-center my-4 animate-fadeIn">
-                <span className="text-[10px] text-gray-400 bg-gray-100 px-3 py-1 rounded-full">
-                  {intervalMinutes < 60 ? `相隔 ${intervalMinutes} 分钟` : `相隔 ${Math.floor(intervalMinutes / 60)} 小时`}
+              <div className="text-center my-6 animate-fadeIn">
+                <span className="text-[10px] text-gray-400 bg-gray-100 px-3 py-1 rounded-full font-mono">
+                  {intervalMinutes < 60 ? `${intervalMinutes}m` : `${Math.floor(intervalMinutes / 60)}h`}
                 </span>
               </div>
             )}
-            
-            {/* 系统消息 UI：居中灰色胶囊 */}
-            <div className="flex justify-center my-3 animate-fadeIn">
-                <span className="text-[10px] font-bold text-gray-400 bg-gray-100/80 border border-gray-200 px-3 py-1.5 rounded-full select-none cursor-default flex items-center gap-1.5 shadow-sm backdrop-blur-sm">
-                   <span className="text-blue-400">🔔</span>
-                   <span>{sysText.replace('【系统通知】', '')}</span>
-                </span>
+           
+            {/* ★★★ 这里改了！my-8 (32px) 拉大垂直间距，不再挤在一起！ ★★★ */}
+            <div className="flex justify-center my-8 animate-slideUp px-4">
+                {isRecall ? (
+                    // 样式A: 撤回消息
+                    <span className="text-[10px] text-gray-400 italic bg-gray-50 border border-gray-100 px-3 py-1 rounded-full">
+                       {msg.role === 'user' ? '你' : activeContact.name} 撤回了一条消息 🗑️
+                    </span>
+                ) : (
+                    // 样式B: 印象便签 (恢复小巧 + 舒适间距)
+                    // 这里的 max-w-[80%] 限制最大宽度，不强制 min-w 了
+                    <div className="relative bg-[#FFFBEB] text-[#78350F] text-xs px-5 py-4 rounded-sm shadow-md border border-[#FDE68A] transform -rotate-1 hover:rotate-0 transition-transform duration-300 max-w-[80%] inline-block">
+                        {/* 顶部的胶带装饰 */}
+                        <div className="absolute -top-1.5 left-1/2 -translate-x-1/2 w-12 h-4 bg-yellow-200/60 opacity-80 rotate-1 shadow-sm backdrop-blur-[1px]"></div>
+                        
+                        {/* 图标与内容 (gap-2 适中) */}
+                        <div className="flex flex-col items-center gap-2 text-center">
+                           <span className="text-base">🏷️</span>
+                           <span className="font-bold leading-relaxed whitespace-pre-wrap font-sans">
+                             {displayContent}
+                           </span>
+                        </div>
+
+                        {/* 回形针装饰 */}
+                        {msg.content.includes("备注") && (
+                            <div className="absolute -right-2 -bottom-2 text-lg text-gray-400 rotate-12 drop-shadow-sm">📎</div>
+                        )}
+                    </div>
+                )}
             </div>
           </React.Fragment>
         );
