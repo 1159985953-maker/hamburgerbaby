@@ -1425,6 +1425,10 @@ ${memoryContent}
 
 现在开始你的回忆梳理与精炼：`;
 
+
+
+
+
     // ★★★ 核心修复：role 改为 'user' ★★★
     const rawResponse = await generateResponse([{ role: 'user', content: systemPrompt }], activePreset);
 
@@ -1601,6 +1605,9 @@ ${existingProfileText}
 }
 
 现在，请基于这句话 **"${highlightQuote}"**，开始你的创作。`;
+
+
+
 
     // (后续的逻辑和之前一样，不需要修改)
     const rawResponse = await generateResponse([{ role: 'user', content: systemPrompt }], activePreset);
@@ -1979,8 +1986,6 @@ const getEnergyInstruction = (mood: CharacterMood | undefined): string => {
 
 
 
-
-
   // 1. 基础安全检查
  if (!activeContact || !Array.isArray(activeContact.history)) {
     console.error("Critical Error: activeContact or history is invalid", activeContact);
@@ -2267,35 +2272,24 @@ const generateSystemPrompt = (contact: Contact, gapDesc: string, aiTime: string)
 [ 
   {
     "type": "thought_chain",
-    "time_awareness": {
-      "my_time": "在这里复述你看到的精确时间，例如：2025-12-25 22:10:00",
-      "time_gap_perception": "${gapDescription}"
-    },
+    "time_gap": "${gapDescription}",
     "score_updates": {
        "friendship_change": 0,
        "romance_change": 0
     },
-    "true_emotion": "内心的真实感受（如：其实很想ta，但是怕被觉得烦，Sadness: 80）",
-    "internal_conflict": "描述你内心的欲望冲突和挣扎",
-    "masking_strategy": "采用的防御策略",
-    "deliberate_delay_ms": 0,
-    "masking_level": 50,
-    "subtext": "这句话表层之下的潜台词是什么",
+    "masking_level": 10,
     "hef_update": {
-      "joy": 50, "anger": 0, "sadness": 0, "fear": 0, "trust": 50,
-      "reason": "为什么变化"
+      "joy": 50, "anger": 0, "sadness": 0, "fear": 0, "trust": 50
     },
-    "action": {},
-    "new_agreement": {},
-    "feeling": "当前感受（一句话）",
-    "strategy": "下一步计划（一句话）",
-    "intent": "想表达什么"
+    "action": {}, 
+    "new_agreement": {}
   },
   {"type": "text", "content": "回复内容"}
 ]
 
 铁律：
 - 绝对禁止输出 \`\`\`json 或任何代码块。
+- 不要输出 "true_emotion", "subtext", "internal_conflict" 等多余字段，只输出上面列出的。
 - 绝对禁止在JSON外加任何文字、解释、换行。
 - 绝对禁止漏掉第一项 thought_chain。
 - 所有内容必须是合法JSON。
@@ -2436,7 +2430,6 @@ ${(() => {
 现在，开始回复用户的最后一条消息！
 `;
     
-    // ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲ 替换结束 ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲
 
 
 
@@ -2525,7 +2518,73 @@ const SharedMemoryCard: React.FC<{ data: any }> = ({ data }) => {
     // 2. ★★★ 深度清洗数据 (剥离图片和思维链) ★★★
     const cleanHistorySlice = rawHistorySlice.map((msg, index) => {
         const isLatestMessage = index === rawHistorySlice.length - 1;
+      
+      
+      
+        let cleanText = msg.content.replace(/```json/g, '').replace(/```/g, '').trim();
+        // 尝试补全数组括号 (针对开头是 { 结尾是 } 的情况)
+        if (cleanText.startsWith('{') && cleanText.endsWith('}')) {
+             // 这一步是为了应对像你截图里那样，全是逗号分隔的对象，没有外层数组
+             cleanText = `[${cleanText}]`; 
+        }
         
+        let parts: any[] = [];
+        let thought: any = null;
+
+        try {
+            // 1. 正常人尝试：标准的 JSON 解析
+            const parsed = JSON.parse(cleanText);
+            if (Array.isArray(parsed)) {
+                thought = parsed.find((i: any) => i.type === 'thought_chain' || i.score_updates);
+                parts = parsed.filter((i: any) => i.type === 'text' || i.type === 'voice');
+            } else { throw new Error("Not array"); }
+
+        } catch (e) {
+            console.warn("⚠️ 标准解析失败，启动【暴力吸尘器模式】");
+            
+            // ★★★ 2. 暴力吸尘器：正则提取所有 content ★★★
+            // 这个正则的意思是：找到所有 "content": "xxxx" 里的 xxxx
+            // 它可以跨越换行，忽略格式错误，只要有内容就能吸出来！
+            const regex = /"content"\s*:\s*"((?:[^"\\]|\\.)*)"/g;
+            let match;
+            
+            // 循环吸取所有匹配项
+            while ((match = regex.exec(cleanText)) !== null) {
+                try {
+                    // JSON.parse一下是为了处理转义字符 (比如把 \n 变成换行)
+                    const contentStr = JSON.parse(`"${match[1]}"`);
+                    // 排除掉那些看起来像“写日记/写信”的内容 (通常很长)
+                    // 这里我们假设聊天内容通常不会包含 "WRITE_DIARY" 这种指令词
+                    if (!match[0].includes("WRITE_")) {
+                        parts.push({ type: 'text', content: contentStr });
+                    }
+                } catch (err) {
+                    // 如果转义失败，直接用原始字符串
+                    parts.push({ type: 'text', content: match[1] });
+                }
+            }
+
+            // 如果吸尘器也没吸到东西 (AI可能真的发纯文本了)
+            if (parts.length === 0) {
+                parts = [{ type: 'text', content: cleanText }];
+            }
+        }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        
+        // 
         let cleanContent = msg.content;
 
         // --- A. 图片折叠 (你的旧逻辑，保留) ---
@@ -2543,6 +2602,15 @@ const SharedMemoryCard: React.FC<{ data: any }> = ({ data }) => {
                  console.log(`[Token优化] 折叠了一张旧图片`);
             }
         } 
+        
+
+
+
+
+
+
+
+        
         
         // --- B. ★★★ 思维链剥离 (核心新增！) ★★★ ---
         // 只有 AI 的回复才需要剥离
@@ -2639,7 +2707,7 @@ const SharedMemoryCard: React.FC<{ data: any }> = ({ data }) => {
 
 
 
-// ▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼ 解析与更新逻辑 (终极融合修复版) ▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼
+// ▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼ 解析与更新逻辑 (终极融合修复版·防代码泄露版) ▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼
     
     // 1. ★★★ 变量前置定义 (防止 ReferenceError) ★★★
     let parts: { type: string; content: string; thought_chain?: any }[] = [];
@@ -2657,30 +2725,32 @@ const SharedMemoryCard: React.FC<{ data: any }> = ({ data }) => {
     let maskingLevel = 0;
 
     try {
+        // 尝试寻找最外层的 JSON 数组结构
         const jsonMatch = finalResp.match(/\[\s*\{[\s\S]*\}\s*\]/);
 
         if (jsonMatch && jsonMatch[0]) {
             const parsed = JSON.parse(jsonMatch[0]);
             if (!Array.isArray(parsed)) throw new Error("解析结果不是一个数组");
             
-            // 提取思考链
-            if (parsed.length > 0 && parsed[0].type === "thought_chain") {
-                extractedThought = parsed[0];
+            // --- A. 提取思考链 (不依赖顺序，遍历查找) ---
+            extractedThought = parsed.find((item: any) => item.type === "thought_chain" || item.score_updates);
+            
+            if (extractedThought) {
                 console.log("【🧠 AI内心戏】", extractedThought);
 
                 // (A) [读心术模块] 约定识别
-                if (extractedThought.new_agreement) {
+                if (extractedThought.new_agreement && Object.keys(extractedThought.new_agreement).length > 0) {
                   console.log("【约定系统】AI 识别到一个新约定:", extractedThought.new_agreement);
                   const newAgreementData = extractedThought.new_agreement;
                   const newAgreement: Agreement = {
                     id: `agr_${Date.now()}`,
-                    content: newAgreementData.content,
+                    content: newAgreementData.content || "新的约定",
                     status: 'pending',
                     importance: newAgreementData.importance || 5,
                     trigger: {
-                        type: newAgreementData.trigger.type,
-                        value: new Date(newAgreementData.trigger.value).getTime(),
-                        original_text: newAgreementData.trigger.original_text || ""
+                        type: newAgreementData.trigger?.type || "time",
+                        value: new Date(newAgreementData.trigger?.value || Date.now()).getTime(),
+                        original_text: newAgreementData.trigger?.original_text || ""
                     },
                     created_at: Date.now()
                   };
@@ -2688,9 +2758,8 @@ const SharedMemoryCard: React.FC<{ data: any }> = ({ data }) => {
                   setContacts(prev => prev.map(c => c.id === activeContact.id ? { ...c, agreements: [...(c.agreements || []), newAgreement] } : c));
                 }
 
-                // (B) [情侣空间] 动作指令处理
-             // (B) [情侣空间] 动作指令处理 (修复：没解锁不许动！)
-if (extractedThought.action && extractedThought.action.type && activeContact.RelationShipUnlocked) {
+                // (B) [情侣空间] 动作指令处理 (修复：没解锁不许动！)
+                if (extractedThought.action && extractedThought.action.type && activeContact.RelationShipUnlocked) {
                     const { action } = extractedThought;
                     const todayStr = new Date().toLocaleDateString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit' }).replace(/\//g, '-');
                     
@@ -2727,8 +2796,8 @@ if (extractedThought.action && extractedThought.action.type && activeContact.Rel
                 // --- 爱意阻尼计算 ---
                 if (rawRomance !== 0) {
                     const currentScore = activeContact.affectionScore || 50;
-                    const currentJoy = (hefUpdateData && hefUpdateData.joy) || 0;
-                    const currentTrust = (hefUpdateData && hefUpdateData.trust) || 0;
+                    const currentJoy = (extractedThought.hef_update && extractedThought.hef_update.joy) || 0;
+                    const currentTrust = (extractedThought.hef_update && extractedThought.hef_update.trust) || 0;
                     const lastUserMsg = currentHistory[currentHistory.length - 1]?.content || "";
                     const sweetWords = ["喜欢", "爱", "宝宝", "老公", "老婆", "亲亲", "抱抱", "想你", "在意", "好听", "乖", "宝贝"];
                     const hasHook = sweetWords.some(word => lastUserMsg.includes(word));
@@ -2776,22 +2845,65 @@ if (extractedThought.action && extractedThought.action.type && activeContact.Rel
                 if (typeof extractedThought.masking_level === 'number') maskingLevel = extractedThought.masking_level;
                 if (typeof extractedThought.energy_change === 'number') energyChange = extractedThought.energy_change;
                 if (extractedThought.energy_status) newEnergyStatus = extractedThought.energy_status;
-
-                parts = parsed.slice(1).filter((item: any) => (item.type === 'text' || item.type === 'voice') && item.content?.trim()).map((item: any) => ({ ...item, thought_chain: extractedThought }));
-            } else {
-                parts = parsed.filter((item: any) => (item.type === 'text' || item.type === 'voice') && item.content?.trim()).map((item: any) => ({ ...item, thought_chain: null }));
             }
+
+            // --- B. 关键修复：严格只提取 text/voice，绝对丢弃 thought_chain ---
+            // 我们不再假设第一项是思考链，而是直接过滤
+            parts = parsed
+                .filter((item: any) => (item.type === 'text' || item.type === 'voice') && item.content)
+                .map((item: any) => ({ 
+                    type: item.type, 
+                    content: item.content, // 只保留内容，防止JSON泄露
+                    thought_chain: extractedThought 
+                }));
+
         } else {
-            throw new Error("在AI回复中未找到有效的JSON数组格式。");
+            throw new Error("No JSON array found");
         }
+
     } catch (error) {
-        console.error("JSON解析失败，启用兜底:", error);
-        parts = [{ type: 'text', content: "（AI似乎走神了，请再试一次~）", thought_chain: null }];
-        // rChange 和 fChange 默认为 0，不会崩
+        console.warn("⚠️ JSON解析失败，启用强力清洁模式:", error);
+        
+        // ★★★ 强力清洁逻辑：如果 JSON 解析崩了，绝对不直接显示原始字符串 ★★★
+        // 你的旧代码在这里直接把 finalResp 给了 content，导致代码泄露
+        // 现在我们用正则把 "content": "xxxx" 里的 xxxx 抠出来
+        
+        const contentRegex = /"content"\s*:\s*"((?:[^"\\]|\\.)*)"/g;
+        let match;
+        const cleanParts = [];
+        
+        while ((match = contentRegex.exec(finalResp)) !== null) {
+            try {
+                // 处理转义字符
+                const cleanText = JSON.parse(`"${match[1]}"`);
+                // 排除看起来像代码的指令
+                if (!cleanText.includes("thought_chain") && !cleanText.includes("WRITE_DIARY")) {
+                    cleanParts.push({ type: 'text', content: cleanText, thought_chain: null });
+                }
+            } catch (e) {
+                 // 如果转义失败，直接用原文，但去掉代码特征
+                 if (!match[1].includes("{")) {
+                    cleanParts.push({ type: 'text', content: match[1], thought_chain: null });
+                 }
+            }
+        }
+
+        if (cleanParts.length > 0) {
+            parts = cleanParts;
+        } else {
+            // 如果连正则都抠不出来，说明格式彻底乱了，为了不显示代码，我们显示一个兜底文案或者尝试清洗
+            let safeContent = finalResp.replace(/```json/g, '').replace(/```/g, '').trim();
+            // 如果开头是 [ { ... 这种代码格式，强制不显示
+            if (safeContent.startsWith('[') || safeContent.includes('"type":')) {
+                safeContent = "... (AI 似乎在整理思绪)";
+            }
+            parts = [{ type: 'text', content: safeContent, thought_chain: null }];
+        }
     }
 
+    // 防止最后依然为空
     if (parts.length === 0) {
-        parts = [{ type: 'text', content: "...", thought_chain: extractedThought || null }];
+        parts = [{ type: 'text', content: "...", thought_chain: null }];
     }
 
     // 2. 动态打字延迟
@@ -2805,17 +2917,48 @@ if (extractedThought.action && extractedThought.action.type && activeContact.Rel
     
     await new Promise(resolve => setTimeout(resolve, totalDelay));
 
-    // 3. 构建消息
-    const newMessages: Message[] = [];
-    parts.forEach((part, i) => {
-        newMessages.push({
-            id: Date.now().toString() + i + Math.random(),
-            role: 'assistant',
-            content: part.content,
-            timestamp: Date.now() + (i * 1200),
-            type: 'text',
+    // ==================== [V9.5 修复版] 温柔分句 (只按回车切气泡) ====================
+        const newMessages: Message[] = [];
+        
+        parts.forEach((part, partIndex) => {
+            if (!part.content) return; 
+
+            // 1. 语音消息：直接发，不切
+            if (part.type === 'voice') {
+                newMessages.push({
+                    id: Date.now().toString() + partIndex,
+                    role: 'assistant',
+                    content: part.content,
+                    timestamp: Date.now() + (partIndex * 1000),
+                    type: 'voice'
+                });
+                return;
+            }
+
+            // 2. ★★★ 核心修复：只用换行符 (\n) 切割 ★★★
+            // 之前的错误是因为用了 [.?!] 导致句号也切开了。
+            // 现在的逻辑：如果解析正常，content 就是纯文本。
+            // 只有当文本里有显式的 \n 时才分气泡。
+            const rawSentences = part.content.split(/\n+/);
+
+            // 3. 生成消息
+            rawSentences
+                .map(s => s.trim())
+                .filter(s => s.length > 0)
+                .forEach((sentence, sentenceIndex) => {
+                    // 稍微延迟一点点，保持节奏感
+                    const delay = (partIndex * 1000) + (sentenceIndex * 800); 
+                    
+                    newMessages.push({
+                        id: Date.now().toString() + partIndex + "_" + sentenceIndex + Math.random(),
+                        role: 'assistant',
+                        content: sentence,
+                        timestamp: Date.now() + delay,
+                        type: 'text'
+                    });
+                });
         });
-    });
+        // ==================== 温柔分句结束 ====================
     
     // 如果有系统通知，追加一条
     if (systemNotice) {
@@ -2909,10 +3052,7 @@ if (extractedThought.action && extractedThought.action.type && activeContact.Rel
         onNewMessage(activeContact.id, activeContact.name, activeContact.avatar, lastMsg.content, activeContact.id);
     }
     
-    // ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲ 解析逻辑结束 ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲
-
-
-
+// ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲ 解析逻辑结束 ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲
 
 
   } catch (error: any) {
