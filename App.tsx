@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import ChatApp from './components/ChatApp';
-import CoupleSpace from './components/CoupleSpace';
+import RelationshipSpace from './components/RelationshipSpace';
 import SettingsApp from './components/SettingsApp';
 import WorldBookApp from './components/WorldBookApp';
 import WallpaperApp from './components/AppearanceApp';
@@ -41,7 +41,7 @@ const INITIAL_CONTACTS: Contact[] = [
     timezone: "Asia/Seoul",
     contextDepth: 20,
     summaryTrigger: 50,
-    coupleSpaceUnlocked: false,
+    RelationShipUnlocked: false,
     enabledWorldBooks: [],
     voiceId: "female-shaonv-jingpin",
     playlist: [],
@@ -67,7 +67,7 @@ const sanitizeContact = (c: any): any => {
     diaries: Array.isArray(c.diaries) ? c.diaries : [],
     questions: Array.isArray(c.questions) ? c.questions : [],
     letters: Array.isArray(c.letters) ? c.letters : [],
-    coupleSpaceUnlocked: c.coupleSpaceUnlocked === true,
+  RelationShipUnlocked: c.RelationShipUnlocked === true,
     name: c.name || "",
     history: Array.isArray(c.history) ? c.history : [],
     hef: c.hef || {},
@@ -206,7 +206,7 @@ lifeAIHistory?: {role: 'user'|'assistant', content: string}[];
 const [homePageIndex, setHomePageIndex] = useState(0); // 0 代表第一页, 1 代表第二页
 // =======================================================
   const [jumpToContactId, setJumpToContactId] = useState<string | null>(null);
-  const [currentApp, setCurrentApp] = useState<'home' | 'chat' | 'coupleSpace' | 'settings' | 'worldbook' | 'wallpaper'>('home');
+  const [currentApp, setCurrentApp] = useState<'home' | 'chat' | 'RelationShip' | 'settings' | 'worldbook' | 'wallpaper'>('home');
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [isLoaded, setIsLoaded] = useState(false);
   const [quickAddMode, setQuickAddMode] = useState(false); // 快速添加任务弹窗状态
@@ -255,7 +255,7 @@ const [globalSettings, setGlobalSettings] = useState<GlobalSettings>({
 widgets: [
   { id: 'chat', icon: "💬", text: "Chat", url: "chat" },
   { id: 'book', icon: "📕", text: "Book", url: "worldbook" },
-  { id: 'couple', icon: "❤️", text: "Couple", url: "coupleSpace" },
+  { id: 'RelationShip', icon: "🧑‍🤝‍🧑", text: "RelationShip", url: "RelationShip" },
   { id: 'diary', icon: "📖", text: "Diary", url: "diary" },
   { id: 'settings', icon: "⚙️", text: "Settings", url: "settings" },
   { id: 'theme', icon: "🎨", text: "Theme", url: "wallpaper" }
@@ -599,6 +599,224 @@ useEffect(() => {
 
 
 
+// ==================== [新功能] 6. Shadow AI (影子分身) 行动引擎 ====================
+// 负责：自动写信、自动打理花园、同步记忆给主AI
+useEffect(() => {
+  const runShadowAI = async () => {
+    if (!isLoaded || contacts.length === 0) return;
+
+    const todayStr = new Date().toLocaleDateString();
+    let hasChanges = false;
+    const activePreset = globalSettings.apiPresets.find(p => p.id === globalSettings.activePresetId);
+
+    // 遍历所有已解锁空间的角色
+    const updatedContacts = await Promise.all(contacts.map(async (c) => {
+      // 1. 门槛检查：没解锁空间、或者今天已经行动过的，跳过
+      if (!c.RelationshipSpaceUnlocked || c.garden?.lastShadowAction === todayStr) {
+        return c;
+      }
+
+      // 2. 概率计算 (基于人设)
+      // 外向(Extraversion)高、宜人(Agreeableness)高、好感度高的，行动概率大
+      const big5 = c.hef?.INDIVIDUAL_VARIATION?.personality_big5 || { extraversion: 5, agreeableness: 5 };
+      const affection = c.affectionScore || 50;
+      
+      // 基础概率 30% + 性格修正 + 好感修正
+      let probability = 0.3 + (big5.extraversion - 5) * 0.05 + (affection - 50) * 0.005;
+      // 限制在 10% - 90% 之间
+      probability = Math.max(0.1, Math.min(0.9, probability));
+
+      // 没随到概率，今天休息，标记已检查
+      if (Math.random() > probability) {
+        return { ...c, garden: { ...(c.garden || {}), lastShadowAction: todayStr } }; 
+      }
+
+      // 3. 决定行动类型 (写信 vs 浇水/施肥)
+      // 默认 70% 浇水(小动作)，30% 写信(大动作)
+      const actionType = Math.random() > 0.7 ? 'WRITE_LETTER' : 'GARDEN_CARE';
+      let newContact = { ...c };
+      let memorySyncMsg = ""; // 要同步给主AI的记忆
+
+      if (actionType === 'WRITE_LETTER' && activePreset) {
+         try {
+            console.log(`[Shadow AI] ${c.name} 决定写一封信...`);
+            const prompt = `
+你现在是 "${c.name}" 的【内心独白版】。
+你正在“关系空间”里，给用户 "${c.userName}" 写一封信。
+请根据你当前对TA的好感度(${affection})和最近的相处状态，写一段心里话。
+要求：
+1. 像写日记或便签一样自然，不要太长（100-200字）。
+2. 如果是死对头，写一封挑战书或嘲讽信。如果是恋人，写一封情书。如果是朋友，写一封分享心情的信。
+3. 必须输出纯JSON格式：{"title": "信的标题", "content": "信的内容"}
+            `;
+            const res = await generateResponse([{ role: 'user', content: prompt }], activePreset);
+            const jsonMatch = res.match(/\{[\s\S]*\}/);
+            if (jsonMatch) {
+                const letterData = JSON.parse(jsonMatch[0]);
+                const newLetter: LoveLetter = {
+                    id: Date.now().toString(),
+                    title: letterData.title,
+                    content: letterData.content,
+                    timestamp: Date.now(),
+                    isOpened: false,
+                    from: 'ai'
+                };
+                // 存入信箱
+                newContact.letters = [...(newContact.letters || []), newLetter];
+                // 标记行动
+                newContact.garden = { ...(newContact.garden || {}), lastShadowAction: todayStr };
+                // 准备同步给主AI
+                memorySyncMsg = `【系统通知】(你的潜意识) 刚刚在关系空间里给用户写了一封标题为《${letterData.title}》的信。用户看到红点后会去读的。`;
+                hasChanges = true;
+            }
+         } catch (e) { console.error("写信失败", e); }
+      } 
+      else {
+         // 行动B: 浇水/施肥 (升级版：影子AI回忆剪辑)
+         console.log(`[Shadow AI] ${c.name} 决定去花园浇水并回顾往事...`);
+         
+         const garden = newContact.garden || { seed: 'rose', level: 0, exp: 0 };
+         // 增加经验
+         const newExp = garden.exp + 10;
+         const newLevel = newExp >= 100 ? garden.level + 1 : garden.level;
+         
+         // 更新花园数据
+         newContact.garden = { 
+             ...garden, 
+             level: newLevel, 
+             exp: newExp >= 100 ? 0 : newExp,
+             lastShadowAction: todayStr,
+             aiWateredToday: true 
+         };
+
+         // ★★★ 核心升级：尝试生成回忆卡片 (JSON格式) ★★★
+         let cardGenerated = false;
+         
+         // 1. 筛选聊天记录 (只看文本)
+         const validMsgs = c.history.filter(m => m.type === 'text' && m.role !== 'system' && m.content.length > 2);
+         
+         // 只有当有 Preset 且 聊天记录够多时，才触发 AI 剪辑
+         if (activePreset && validMsgs.length >= 5) {
+             try {
+                 // 准备最近 50 条素材
+                 const recentChat = validMsgs.slice(-50).map(m => ({
+                    role: m.role,
+                    name: m.role === 'user' ? c.userName : c.name,
+                    content: m.content
+                 }));
+
+                 const prompt = `
+你现在是"${c.name}"的潜意识。你在给花浇水时，突然想起了一段和用户的对话。
+请从最近的聊天记录中，截取一段【最有趣 / 最甜 / 或最难忘】的**连续对话**。
+
+要求：
+1. **连续性**：必须是原文中连续发生的对话，不能拼凑。
+2. **长度**：截取 **3 到 5 句**。
+3. **格式**：直接返回 JSON。
+
+聊天素材：
+${JSON.stringify(recentChat)}
+
+输出格式 (纯JSON):
+{
+  "title": "潜意识的标题 (如: 那次傻笑)",
+  "dialogue": [
+    {"role": "user", "content": "..."},
+    {"role": "assistant", "content": "..."}
+  ]
+}`;
+                 // 调用 API
+                 const res = await generateResponse([{ role: 'user', content: prompt }], activePreset);
+                 const jsonMatch = res.match(/\{[\s\S]*\}/);
+                 
+                 if (jsonMatch) {
+                     const result = JSON.parse(jsonMatch[0]);
+                     
+                     // 构建卡片数据
+                     const sharePayload = {
+                        type: "memory_share_card", // 必须有这个标记，ChatApp 才能渲染成卡片
+                        title: result.title || "悄悄回味",
+                        seedName: seedName, // 注意：如果这里报错 seedName 未定义，请改成 (garden.seed || "花")
+                        level: newLevel,
+                        timestamp: Date.now(),
+                        messages: result.dialogue.map((d: any) => ({
+                            role: d.role,
+                            // 自动补全头像
+                            avatar: d.role === 'user' ? c.userAvatar : c.avatar,
+                            content: d.content
+                        }))
+                     };
+                     
+                     // 将 JSON 字符串赋值给 memorySyncMsg
+                     memorySyncMsg = JSON.stringify(sharePayload);
+                     cardGenerated = true;
+                 }
+             } catch (e) {
+                 console.error("[Shadow AI] 回忆生成失败", e);
+             }
+         }
+
+         // 兜底：如果 AI 生成失败（或者聊天记录太少），才用普通的文字提示
+         if (!cardGenerated) {
+             memorySyncMsg = `【系统通知】(你的潜意识) 刚刚去花园给花浇了水，看着花朵发了会儿呆。`;
+         }
+         
+         hasChanges = true;
+      }
+
+
+
+
+
+
+
+
+      
+
+      // 4. 记忆同步 (关键！)
+      if (memorySyncMsg) {
+          newContact.history = [...newContact.history, {
+              id: Date.now().toString() + "_sync",
+              role: 'system',
+              content: memorySyncMsg,
+              timestamp: Date.now(),
+              type: 'text'
+          }];
+          // 只有写信才发红点通知，浇水默默做就行
+          if (actionType === 'WRITE_LETTER') {
+              setGlobalNotification({
+                  type: 'new_message', 
+                  contactId: c.id, 
+                  name: c.name, 
+                  avatar: c.avatar, 
+                  content: "💌 寄来了一封新信件",
+                  userName: globalSettings.userName || "User",
+                  userSignature: globalSettings.userSignature || ""
+              });
+          }
+      }
+      return newContact;
+    }));
+
+    if (hasChanges) {
+        setContacts(updatedContacts);
+    }
+  };
+
+  // 启动定时器：每 10 分钟检查一次，或者每次打开APP时触发
+  const interval = setInterval(runShadowAI, 1000 * 60 * 10);
+  // 为了测试，加载后延迟5秒立刻执行一次
+  setTimeout(runShadowAI, 5000);
+
+  return () => clearInterval(interval);
+}, [isLoaded, contacts]); // 依赖项
+
+
+
+
+
+
+
 
 
 
@@ -756,30 +974,49 @@ const renderHome = () => {
               </label>
 
               {/* 右侧 App Grid (图标保持小尺寸) */}
+{/* 右侧 App Grid (图标保持小尺寸 + 红点提醒) */}
               <div className="flex-1 aspect-square grid grid-cols-2 grid-rows-2 gap-3">
-                {['chat', 'life', 'couple', 'diary'].map(id => {
+                {['chat', 'life', 'RelationshipSpace', 'diary'].map(id => {
                   let widget = globalSettings.widgets?.find(w => w.id === id);
                   if (!widget) {
                      const defaults = [
                        { id: 'chat', icon: "💬", text: "Chat", url: "chat" },
                        { id: 'life', icon: "📅", text: "life", url: "life" },
-                       { id: 'couple', icon: "❤️", text: "Couple", url: "coupleSpace" },
+                       { id: 'RelationshipSpace', icon: "🧑‍🤝‍🧑", text: "RelationshipSpace", url: "RelationshipSpace" },
                        { id: 'diary', icon: "📖", text: "Diary", url: "diary" }
                      ];
                      widget = defaults.find(w => w.id === id);
                   }
                   if (!widget) return null;
 
+                  // ★★★ 计算红点数量 ★★★
+                  let badgeCount = 0;
+                  if (id === 'Relationship') {
+                      // 遍历所有角色，把 未读信件 + 未读回答 加起来
+                      contacts.forEach(c => {
+                          const unreadLetters = (c.letters || []).filter(l => !l.isOpened && l.from === 'ai').length;
+                          const unreadAnswers = (c.questions || []).filter(q => q.aiAnswer && !q.isReadByPlayer).length; // 假设你有这个字段，没有就算了
+                          badgeCount += unreadLetters;
+                      });
+                  }
+
                   return (
-                    <div key={id} className="cursor-pointer group flex flex-col items-center justify-center rounded-2xl transition-colors hover:bg-white/5" onClick={() => setCurrentApp(widget.url as any)}>
+                    <div key={id} className="cursor-pointer group flex flex-col items-center justify-center rounded-2xl transition-colors hover:bg-white/5 relative" onClick={() => setCurrentApp(widget.url as any)}>
                       {/* 图标尺寸 w-14 h-14 保持精致 */}
-                      <div className="w-14 h-14 rounded-2xl flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform overflow-hidden bg-white/20 backdrop-blur-md border border-white/20 flex-shrink-0">
+                      <div className="w-14 h-14 rounded-2xl flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform overflow-hidden bg-white/20 backdrop-blur-md border border-white/20 flex-shrink-0 relative">
                         {widget.customIcon ? (
                           <img src={widget.customIcon} className="w-full h-full object-cover" alt={widget.text} />
                         ) : (
                           <div className="flex items-center justify-center text-3xl">
                             <span>{widget.icon}</span>
                           </div>
+                        )}
+                        
+                        {/* ★★★ 红点 Badge ★★★ */}
+                        {badgeCount > 0 && (
+                            <div className="absolute top-0 right-0 w-5 h-5 bg-red-500 rounded-full flex items-center justify-center border-2 border-white/50 text-[10px] text-white font-bold animate-bounce">
+                                {badgeCount > 9 ? '9+' : badgeCount}
+                            </div>
                         )}
                       </div>
                       <span className="text-xs text-gray-800 mt-1 text-center font-bold drop-shadow-sm">{widget.text}</span>
@@ -788,6 +1025,13 @@ const renderHome = () => {
                 })}
               </div>
             </div>
+
+
+
+
+
+
+
 
           {/* ==================== 3.2 替换主页 To-Do 小组件代码 ==================== */}
               {/* --- 区域C: 主页上的 To-Do List 小组件 --- */}
@@ -983,41 +1227,34 @@ return (
 
     {/* 其他 App (逻辑不变) */}
 
-{currentApp === 'coupleSpace' && contacts[0] && (
-  (() => {
-    let target = contacts[0];
-    const safeProfile = { ...target, diaries: target.diaries || [], questions: target.questions || [], letters: target.letters || [], history: target.history || [] };
-    
-    return (
-      <CoupleSpace
-        profile={safeProfile}
-        onClose={() => setCurrentApp('home')}
-        onUnlock={(contactId) => {
-          setContacts(prev => prev.map(c => 
-            c.id === contactId ? { ...c, coupleSpaceUnlocked: true } : c
-          ));
-        }}
-        setContacts={setContacts}
-        // ★★★ 核心连接：把CoupleSpace的行动，变成一条系统消息发回聊天 ★★★
-        onCoupleSpaceAction={(systemMessage) => {
-          const newMessage: Message = {
-            id: Date.now().toString(),
-            role: 'system',
-            content: systemMessage,
-            timestamp: Date.now(),
-            type: 'text'
-          };
-          // 找到当前角色并把这条系统消息塞进历史记录
-          setContacts(prev => prev.map(c => 
-             c.id === safeProfile.id ? { ...c, history: [...c.history, newMessage] } : c
-          ));
-          // 同时，自动切回聊天界面，让用户看到并让AI能回应
-          setCurrentApp('chat'); 
-        }}
-      />
-    );
-  })()
-)}
+{/* ==================== 🔧 修复：关系空间 (加了白色背景防黑屏) ==================== */}
+ {(currentApp === 'RelationShip' || currentApp === 'RelationshipSpace') && (
+      <div className="absolute inset-0 z-50 bg-slate-50">
+        <RelationshipSpace
+          contacts={contacts}
+          setContacts={setContacts}
+          globalSettings={globalSettings}
+          onClose={() => setCurrentApp('home')}
+          onRelationshipSpaceAction={(contactId, systemMessage) => {
+            // 处理空间发回来的消息
+            const newMessage: Message = {
+              id: Date.now().toString(),
+              role: 'system',
+              content: systemMessage,
+              timestamp: Date.now(),
+              type: 'text'
+            };
+            
+            setContacts(prev => prev.map(c => 
+               c.id === contactId ? { ...c, history: [...c.history, newMessage] } : c
+            ));
+            
+            setJumpToContactId(contactId);
+            setCurrentApp('chat');
+          }}
+        />
+      </div>
+    )}
 
 
 
@@ -1242,7 +1479,12 @@ return (
     )}
   </div>
 );
+
+
+// 🛡️ 兜底渲染：如果状态全都没命中，显示加载中（防止黑屏）
+  return <div className="h-full w-full bg-white flex items-center justify-center text-gray-400">正在进入空间...</div>;
 };
+
 // ========== 新代码到此结束 ==========
 
 export default App;

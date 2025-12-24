@@ -353,6 +353,15 @@ export interface Agreement {
 export interface Contact {
 
 
+  garden?: {
+    seed: string;       // 种子类型ID
+    level: number;      // 等级
+    exp: number;        // 经验值
+    lastWaterDate: string; // 最后浇水日期
+    lastFertilizeDate: string; // 最后施肥日期
+    // ★ 新增：花朵精灵的记忆
+    flowerHistory?: { role: 'user' | 'assistant'; content: string; timestamp: number }[];
+  };
   userTags: UserTag[];
   isAffectionLocked?: boolean;
   bubbleColorUser?: string;
@@ -377,7 +386,7 @@ export interface Contact {
   timezone: string;
   contextDepth: number;
   summaryTrigger: number;
-  coupleSpaceUnlocked: boolean;
+  RelationShipUnlocked: boolean;
   enabledWorldBooks: string[];
   voiceId?: string;
   playlist?: Song[];
@@ -394,7 +403,8 @@ export interface Contact {
   pendingProactive?: boolean;
 
  // ★★★ 核心修改：好感度 & 关系状态机 (对应 #9, #10) ★★★
-  affectionScore: number;
+  affectionScore: number; // 这代表【爱意值/心动值】(Romance)
+  friendshipScore: number; // 这代表【友谊值/信任值】(Friendship) - 新增！
   relationshipStatus: 'Feud' | 'Conflict' | 'Acquaintance' | 'Friend' | 'Honeymoon' | 'Stable' | 'Breaking' | 'Broken';
   
   // ★★★ 核心修改：AI勿扰模式 (对应 #13) ★★★
