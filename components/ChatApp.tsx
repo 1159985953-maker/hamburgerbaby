@@ -500,12 +500,48 @@ const [isAnalyzing, setIsAnalyzing] = useState(false); // 控制 AI 分析的加
 
 
 
-const activeContact = contacts.find(c => c.id === activeContactId);
-if (activeContact && (!activeContact.userImpressions || activeContact.userImpressions.length === 0)) {
-  activeContact.userImpressions = [
-    { id: 'test1', category: 'personality', content: '测试印象：活泼开朗', quotes: ['你好开心啊'], confidence: 8, last_updated: Date.now() },
-    { id: 'test2', category: 'preference', content: '测试印象：喜欢喝咖啡', quotes: ['我爱咖啡'], confidence: 7, last_updated: Date.now() }
-  ];
+activeContact.userImpressions = [
+  {
+    id: 'test1',
+    category: 'habit',
+    content: '有晚睡的习惯',
+    quotes: ['昨晚又三点才睡...'],
+    confidence: 7,
+    last_updated: Date.now()
+  },
+  {
+    id: 'test2',
+    category: 'preference',
+    content: '喜欢吃辣的火锅',
+    quotes: ['我爱吃麻辣火锅'],
+    confidence: 8,
+    last_updated: Date.now()
+  },
+  {
+    id: 'test3',
+    category: 'preference',
+    content: '喜欢的电影是《星际穿越》',
+    quotes: ['我最爱看《星际穿越》了'],
+    confidence: 9,
+    last_updated: Date.now()
+  },
+  {
+    id: 'test4',
+    category: 'preference',
+    content: '喜欢的歌曲是周杰伦的《稻香》',
+    quotes: ['听《稻香》让我放松'],
+    confidence: 6,
+    last_updated: Date.now()
+  },
+  {
+    id: 'test5',
+    category: 'personality',
+    content: '在ta面前有点傲娇，但很温柔',
+    quotes: ['哼，才不关心你呢...'],
+    confidence: 8,
+    last_updated: Date.now()
+  }
+];
 }
 
 
@@ -4556,6 +4592,7 @@ onClick={() => {
                   <div className="text-center text-gray-400 py-10 h-full flex flex-col items-center justify-center">
                     <span className="text-4xl mb-4 block">🗂️</span>
                     <p className="text-sm">这里空空如也</p>
+                    <p className="text-xs mt-2">这是 {contact.name} 对你的印象笔记，如你的性格、在ta面前的样子、喜欢吃什么、喜欢的电影、歌曲等。ta会通过聊天慢慢记住这些～</p>
                     <p className="text-xs mt-2">和 AI 聊天中定下的约定会出现在这里哦～</p>
                   </div>
                 ) : (
@@ -4697,11 +4734,11 @@ contact.agreements.slice().reverse().map((agreement: Agreement) => {
               {memoryTab === 'impressions' && (
                 <div className="h-full flex flex-col px-4">
                   <div className="flex justify-between items-center mb-4 flex-shrink-0">
-                    <h4 className="text-sm font-bold text-gray-600">
-                      {contact.name} 对 {contact.userName} 的记忆画像
-                    </h4>
-                    <span className="text-xs text-gray-400">{contact.userImpressions?.length || 0} 条印象</span>
-                  </div>
+  <h4 className="text-sm font-bold text-gray-600">
+    {contact.name} 对 {contact.userName} 的记忆画像
+  </h4>
+  <span className="text-xs text-gray-400">{contact.userImpressions?.length || 0} 条印象</span>
+</div>
                   {/* 这里是全新的“印象集”内容，我们也马上填上 */}
                    <div className="flex-1 overflow-y-auto space-y-3 pb-20 custom-scrollbar">
                     {(!contact.userImpressions || contact.userImpressions.length === 0) ? (
