@@ -504,6 +504,12 @@ const RelationshipSpace: React.FC<RelationshipSpaceProps> = ({ contacts, setCont
   const [showSettings, setShowSettings] = useState(false);
   const [showWriteLetter, setShowWriteLetter] = useState(false);
   const [letterDraft, setLetterDraft] = useState({ title: '', content: '' });
+
+// ★★★ 新增：用户提问功能的状态 ★★★
+  const [showQuestionModal, setShowQuestionModal] = useState(false);
+  const [questionDraft, setQuestionDraft] = useState("");
+
+
 // ★★★ 新增：用于存放刚刚生成的“回忆卡片”数据，准备预览 ★★★
   const [previewCardData, setPreviewCardData] = useState<any>(null);
   // 获取当前关系
@@ -672,7 +678,18 @@ const RelationshipSpace: React.FC<RelationshipSpaceProps> = ({ contacts, setCont
 
                           {/* 问答 (落子无悔) */}
                           <div className="px-6 mt-6">
-                              <h3 className="text-sm font-bold text-gray-500 mb-4 px-1 flex items-center justify-between"><span className="flex items-center gap-2">🧩 灵魂拷问</span><span className="text-[10px] bg-white px-2 py-1 rounded-full text-gray-400 border border-gray-100 font-mono">{targetContact.questions?.length || 0} CARDS</span></h3>
+                             {/* ★★★ 标题栏：增加了“提问”按钮 ★★★ */}
+                          <div className="text-sm font-bold text-gray-500 mb-4 px-1 flex items-center justify-between">
+                              <span className="flex items-center gap-2">🧩 灵魂拷问</span>
+                              
+                              {/* --- 新增的提问按钮 --- */}
+                              <button 
+                                onClick={() => setShowQuestionModal(true)}
+                                className="text-[10px] bg-white text-gray-600 px-3 py-1 rounded-full font-bold hover:bg-gray-50 transition shadow-sm border border-gray-200 flex items-center gap-1"
+                              >
+                                ✍️ 提问
+                              </button>
+                          </div>
                               <QACardStack 
                                 questions={targetContact.questions || []} 
                                 theme={theme} 
@@ -752,6 +769,64 @@ const RelationshipSpace: React.FC<RelationshipSpaceProps> = ({ contacts, setCont
                       </div>
                   </div>
               )}
+
+
+
+
+{/* ★★★ 新增：用户提问弹窗 ★★★ */}
+              {showQuestionModal && (
+                  <div className="absolute inset-0 bg-black/50 z-[60] flex items-center justify-center p-6 animate-fadeIn">
+                      <div className="bg-white w-full max-w-sm rounded-2xl p-6 shadow-2xl animate-scaleIn">
+                          <h3 className="font-bold text-lg text-gray-800 mb-4 text-center">🧩 灵魂拷问</h3>
+                          <p className="text-xs text-center text-gray-400 mb-4">
+                            向 TA 提出一个问题，<br/>TA 会在某个时刻给你答案。
+                          </p>
+                          <textarea 
+                             className="w-full h-28 bg-gray-50 border border-gray-200 rounded-xl p-4 text-sm outline-none resize-none mb-4 focus:ring-2 focus:ring-purple-200"
+                             placeholder="例如：对你来说，最重要的是什么？"
+                             value={questionDraft}
+                             onChange={e => setQuestionDraft(e.target.value)}
+                             autoFocus
+                          />
+                          <div className="flex gap-3">
+                              <button onClick={() => setShowQuestionModal(false)} className="flex-1 py-3 bg-gray-100 rounded-xl font-bold text-gray-500">取消</button>
+                              <button 
+                                onClick={() => {
+                                    if(!questionDraft.trim()) return alert("问题不能为空哦！");
+                                    
+                                    // 1. 创建一个新的 QA 对象 (注意：aiAnswer 为空，等待AI回答)
+                                    const newQA: QAEntry = {
+                                        id: Date.now().toString(),
+                                        question: questionDraft,
+                                        aiAnswer: "", // AI 尚未回答
+                                        userAnswer: "这是我提出的问题", // 可以用一个标记表明这是用户提的
+                                        date: new Date().toLocaleDateString(),
+                                        timestamp: Date.now(),
+                                    };
+
+                                    // 2. 更新数据
+                                    setContacts(prev => prev.map(c => 
+                                        c.id === targetContact.id ? { ...c, questions: [...(c.questions||[]), newQA] } : c
+                                    ));
+
+                                    // 3. 发送系统通知给 AI
+                                    onRelationshipSpaceAction(targetContact.id, `[系统通知] 用户向你提出了一个灵魂拷问：\n“${questionDraft}”\n(请在未来的某个时刻，通过 'action' 指令回答这个问题)`);
+                                    
+                                    // 4. 重置并关闭
+                                    setQuestionDraft("");
+                                    setShowQuestionModal(false);
+                                    alert("问题已送达！等待 TA 的回答吧~");
+                                }}
+                                className={`flex-1 py-3 rounded-xl font-bold text-white shadow-lg bg-purple-500 shadow-purple-200`}
+                              >
+                                  发送
+                              </button>
+                          </div>
+                      </div>
+                  </div>
+              )}
+
+
 
 
 {/* ★★★ 回忆卡片预览 & 分享弹窗 ★★★ */}
