@@ -291,19 +291,6 @@ export interface AgreementTrigger {
 
 
 
-// ==================== [新功能] 用户印象画像系统 - 核心数据结构 ====================
-export type ImpressionCategory = 'personality' | 'preference' | 'habit' | 'appearance' | 'memory';
-
-// 定义“一条印象”的数据结构
-export interface Impression {
-  id: string; // 唯一ID
-  category: ImpressionCategory; // 分类：性格、偏好、习惯、外貌、记忆
-  content: string; // 印象内容，例如：“喜欢在深夜喝可乐”
-  quotes: string[]; // 支撑这条印象的原文引述，例如：“我超爱喝可乐的！”
-  last_updated: number; // 上次更新这条印象的时间
-  confidence: number; // AI对这条印象的信心度 (1-10)
-}
-// ==================== 新代码块结束 ====================
 
 
 
@@ -314,26 +301,34 @@ export interface Impression {
 
 
 
+// ==================== [新功能 V3.0] 动态人格档案 - 核心数据结构 ====================
 
-
-// ==================== 这是一个新代码块：三层欲望模型 - 核心数据结构 ====================
-
-// 第二层：情感需求 (中期欲望)
-export interface EmotionalNeed {
-  // 需求类型：渴望连接、渴望安抚、渴望新奇、稳定/满足
-  type: 'connection' | 'reassurance' | 'novelty' | 'stability';
-  // 对AI的指令描述，解释当前需求的具体表现
-  description: string;
-  // 需求强度 (1-10)，强度越高，越能影响AI的行为
-  intensity: number;
-  // 触发这个需求的原因，用于调试和AI的自我认知
-  trigger_reason: string;
-  // 上次更新此需求的时间戳
-  updated_at: number;
+// 定义档案里的每一个“特征”，都附带证据
+export interface ProfileTrait {
+  value: string; // 特征值，例如 "活泼" 或 "火锅"
+  quote: string; // 证据原文
+  timestamp: number; // 记录时间
 }
 
+// 定义完整的用户档案结构 (V2.0 - 带自定义主题)
+export interface UserProfile {
+  name?: ProfileTrait;
+  photo?: string; // AI眼中的用户照片
+  themeColor?: string; // 用户自定义的主题色
+  background_image?: string; // 用户自定义的背景图
+  scattered_photos?: string[]; // 新增：用于存放散落的拍立得照片URL
+  scattered_photo_1?: string; // 散落照片1
+  scattered_photo_2?: string; // 散落照片2
+  scattered_photo_3?: string; // 散落照片3
+  scattered_photo_4?: string; // 散落照片4
+  personality_traits?: ProfileTrait[];
+  preferences?: {
+    likes?: ProfileTrait[];
+    dislikes?: ProfileTrait[];
+  };
+  habits?: ProfileTrait[];
+}
 // ==================== 新代码块结束 ====================
-
 
 
 
@@ -437,7 +432,8 @@ export interface Contact {
   // ==================== 这是新加的一行：当前欲望 ====================
 emotionalNeed?: EmotionalNeed; // 第二层欲望：情感需求
 // ==================== [新功能] AI对用户的印象画像 ====================
-  userImpressions?: Impression[];
+userProfile?: UserProfile; // AI为你建立的专属人格档案
+aiTagsForUser?: UserTag[]; // 新增：AI为用户打的标签
 }
 
 export interface Widget {

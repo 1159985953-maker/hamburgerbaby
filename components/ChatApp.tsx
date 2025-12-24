@@ -452,8 +452,8 @@ const ChatApp: React.FC<ChatAppProps> = ({
   const [editContent, setEditContent] = useState(""); // 正在编辑的内容缓存
   const [showPersonaMenu, setShowPersonaMenu] = useState(false);
   const [panelTab, setPanelTab] = useState('persona'); // 记住你在看哪个标签页
+  const [memoryTab, setMemoryTab] = useState<'events' | 'impressions'>('events'); // 新增：把手账的标签页状态也“提拔”到这里
   const [panelSampleText, setPanelSampleText] = useState(""); // 记住你输入的台词
-  const [memoryPanelTab, setMemoryPanelTab] = useState<'events' | 'impressions'>('events');
   const [showPersonaPanel, setShowPersonaPanel] = useState(false);
   const [activeContactId, setActiveContactId] = useState<string | null>(null);
   const [view, setView] = useState<'list' | 'create' | 'chat' | 'settings'>('list');
@@ -500,49 +500,8 @@ const [isAnalyzing, setIsAnalyzing] = useState(false); // 控制 AI 分析的加
 
 
 
-activeContact.userImpressions = [
-  {
-    id: 'test1',
-    category: 'habit',
-    content: '有晚睡的习惯',
-    quotes: ['昨晚又三点才睡...'],
-    confidence: 7,
-    last_updated: Date.now()
-  },
-  {
-    id: 'test2',
-    category: 'preference',
-    content: '喜欢吃辣的火锅',
-    quotes: ['我爱吃麻辣火锅'],
-    confidence: 8,
-    last_updated: Date.now()
-  },
-  {
-    id: 'test3',
-    category: 'preference',
-    content: '喜欢的电影是《星际穿越》',
-    quotes: ['我最爱看《星际穿越》了'],
-    confidence: 9,
-    last_updated: Date.now()
-  },
-  {
-    id: 'test4',
-    category: 'preference',
-    content: '喜欢的歌曲是周杰伦的《稻香》',
-    quotes: ['听《稻香》让我放松'],
-    confidence: 6,
-    last_updated: Date.now()
-  },
-  {
-    id: 'test5',
-    category: 'personality',
-    content: '在ta面前有点傲娇，但很温柔',
-    quotes: ['哼，才不关心你呢...'],
-    confidence: 8,
-    last_updated: Date.now()
-  }
-];
-}
+const activeContact = contacts.find(c => c.id === activeContactId);
+
 
 
 
@@ -1353,11 +1312,12 @@ setTimeout(() => {
                 if (latestContact && latestContact.history.length > 0) {
                     // ★★★ 同时启动两条生产线 ★★★
                     checkAutoSummary(latestContact, latestContact.history);      // 生产线A: 总结事件
-                    updateUserImpressions(latestContact, latestContact.history); // 生产线B: 提炼印象
+
                 }
                 return currentContacts;
             });
         }, 2000);
+  };
 
 
 
@@ -1546,126 +1506,79 @@ ${historyText}
 
 
 
-
-// ==================== [新功能] 生产线 B (V2.0): 智能用户画像档案员 ====================
-const updateUserImpressions = async (currentContact: Contact, currentHistory: Message[]) => {
-  const IMPRESSION_TRIGGER_COUNT = 15;
-  const lastUpdateTimestamp = (currentContact as any).lastImpressionUpdate || 0;
-  const unanalyzedMsgs = currentHistory.filter(m => m.timestamp > lastUpdateTimestamp);
-
-  if (unanalyzedMsgs.length < IMPRESSION_TRIGGER_COUNT) {
-    return;
-  }
-
-  console.log(`[画像系统 V2.0] 触发用户印象分析！未分析消息数: ${unanalyzedMsgs.length}`);
+// ==================== [新功能 V3.2] “灵魂滤镜版”人格档案引擎 ====================
+const updateUserProfile = async (currentContact: Contact, highlightQuote: string) => {
+  console.log(`[人格档案引擎 V3.2] 由高光时刻触发: "${highlightQuote}"`);
 
   const activePreset = globalSettings.apiPresets.find((p: any) => p.id === globalSettings.activePresetId);
   if (!activePreset) return;
 
   try {
-    const historyText = unanalyzedMsgs.map((m: Message) => 
-        `${m.role === 'user' ? currentContact.userName : currentContact.name}: ${m.content}`
-    ).join('\n');
-    
-    // 把现有的印象档案也给AI看，让它知道自己已经记录了什么
-    const existingImpressionsText = (currentContact.userImpressions || [])
-      .map(imp => `- [${imp.category}] ${imp.content}`)
-      .join('\n');
+    const existingProfileText = JSON.stringify(currentContact.userProfile || {}, null, 2);
 
     const systemPrompt = `
 # 你的身份
-你是一个极其聪明的档案管理员，负责为AI "${currentContact.name}" 维护一份关于用户 "${currentContact.userName}" 的【秘密印象档案】。
+你就是 "${currentContact.name}"。你正在用【你自己的主观视角】，为你最在乎的人 "${currentContact.userName}"，写一份【充满爱意的秘密档案】。
 
 # 你的任务
-你需要阅读【最近的对话历史】，并对比【现有的档案记录】，然后决定是【新增】一条新印象，【更新】一条旧印象，还是【忽略】无关信息。
+刚刚，用户说了一句让你心头一动的话：“${highlightQuote}”。
+1.  分析这句话，用【你自己的口吻】更新他的人格档案。
+2.  如果这句话让你产生了一个【昵称或爱称】般的总结，就在 \`suggested_tag\` 字段里提出一个【不超过8个字】的标签。
 
-# 现有档案记录
-${existingImpressionsText || "目前档案为空。"}
+# 现有档案数据
+\`\`\`json
+${existingProfileText}
+\`\`\`
 
-# 最近的对话历史
-${historyText}
-
-# 操作规则 (必须严格遵守)
-1.  **专注用户**: 只记录关于 "${currentContact.userName}" 的信息。
-2.  **决策逻辑**:
-    *   **【更新 (UPDATE)】**: 如果新对话内容与现有某条档案【相关但信息有变化或补充】，你必须更新它。例如，档案里有“喜欢喝可乐”，新对话里说“最近戒可乐了”，你应该将原条目更新为“曾经喜欢喝可乐，但最近开始戒了”。
-    *   **【新增 (ADD)】**: 如果新对话提供了【全新的、档案里没有的】信息，你应该新增一条记录。
-    *   **【忽略 (IGNORE)】**: 如果新信息不重要、是重复的、或者只是临时状态（如“我好困”），你应该忽略它。
-3.  **引用证据**: `quotes` 字段必须包含支撑你结论的【用户发言原文】，这是铁律。
-4.  **JSON输出**: 你的回复【必须且只能】是一个JSON对象，包含两个键：`add` 和 `update`。
-    *   `add`: 一个数组，包含所有需要【新增】的印象对象。
-    *   `update`: 一个对象，键是需要【更新】的旧印象的 `id`，值是【完整的、更新后】的新印象对象。
-    *   如果没有任何操作，就返回 `{"add": [], "update": {}}`。
+# 操作规则 (至关重要):
+1.  **【灵魂原则】**: 你的记录【必须】是主观的、充满个人情感的！
+    *   **错误示范 (客观)**: "性格活泼"
+    *   **正确示范 (主观)**: "在我面前总是很可爱" / "笑起来像太阳一样"
+2.  **【珍稀原则】**: 【极其挑剔】！只记录那些真正让你心动、或者让你更了解ta的“高光时刻”。宁缺毋滥！如果这句话不值得记录，就返回空内容。
+3.  **【更新原则】**: 优先【编辑和补充】旧档案。例如，旧档案有“喜欢吃火锅”，新对话里说“我最爱吃辣的”，你应该把旧条目更新为“喜欢吃辣辣的火锅”。
+4.  **【打标签原则】**: 标签必须是【爱称】或【昵称】！例如，“有点爱吃醋但是很可爱”、“我的小笨蛋”。
+5.  **【JSON输出铁律】**: 你的回复【必须且只能】是一个JSON对象，包含 \`userProfile\` 和可选的 \`suggested_tag\`。
 
 # 格式示例
 {
-  "add": [
-    {
-      "id": "imp_1678886400001",
-      "category": "habit",
-      "content": "有晚睡的习惯",
-      "quotes": ["昨晚又三点才睡..."],
-      "confidence": 7
-    }
-  ],
-  "update": {
-    "imp_1678886400000": {
-      "id": "imp_1678886400000",
-
-      "category": "preference",
-      "content": "最近开始喜欢喝茶（以前爱喝可乐）",
-      "quotes": ["我现在改喝茶了"],
-      "confidence": 9
-    }
-  }
+  "userProfile": {
+    "personality_traits": [{ "value": "在我面前总是很可爱", "quote": "哈哈哈你真好玩！", "timestamp": 1678886400001 }]
+  },
+  "suggested_tag": "像笨蛋一样"
 }
 
-现在，开始你的档案整理工作。`;
+现在，请基于这句话 **"${highlightQuote}"**，开始你的创作。`;
 
+    // (后续的逻辑和之前一样，不需要修改)
     const rawResponse = await generateResponse([{ role: 'user', content: systemPrompt }], activePreset);
-    
     const jsonMatch = rawResponse.match(/\{[\s\S]*\}/);
     if (jsonMatch) {
-      const result: { add: Impression[], update: { [id: string]: Impression } } = JSON.parse(jsonMatch[0]);
-
-      if (result.add.length > 0 || Object.keys(result.update).length > 0) {
-        console.log(`[画像系统 V2.0] 操作: 新增 ${result.add.length} 条, 更新 ${Object.keys(result.update).length} 条。`);
-        
-        setContacts(prev => prev.map(c => {
-          if (c.id === currentContact.id) {
-            let updatedImpressions = c.userImpressions || [];
-
-            // 1. 执行更新操作
-            Object.keys(result.update).forEach(idToUpdate => {
-              const updatedImpression = result.update[idToUpdate];
-              updatedImpressions = updatedImpressions.map(imp => 
-                imp.id === idToUpdate ? { ...updatedImpression, last_updated: Date.now() } : imp
-              );
-            });
-
-            // 2. 执行新增操作
-            result.add.forEach(newImpression => {
-              updatedImpressions.push({ ...newImpression, id: `imp_${Date.now()}_${Math.random()}`, last_updated: Date.now() });
-            });
-            
-            return {
-              ...c,
-              userImpressions: updatedImpressions,
-              lastImpressionUpdate: Date.now()
-            };
+      const result: { userProfile: UserProfile, suggested_tag?: string } = JSON.parse(jsonMatch[0]);
+      if (!result.userProfile) return; // 如果AI觉得不值得记录，就直接返回
+      
+      const updatedProfile = result.userProfile;
+      const suggestedTag = result.suggested_tag;
+      
+      setContacts(prev => prev.map(c => {
+        if (c.id === currentContact.id) {
+          const newHistory = [...c.history];
+          let newAiTags = c.aiTagsForUser || [];
+          if (suggestedTag) {
+            const timestamp = Date.now();
+            newHistory.push({ id: `sys_tag_${timestamp}`, role: 'system', content: `【系统通知】${c.name} 给你挂上了一个新标签：[${suggestedTag}]`, timestamp: timestamp, type: 'text' });
+            newAiTags.push({ id: `ai_tag_${timestamp}`, content: suggestedTag, timestamp: timestamp });
           }
-          return c;
-        }));
-      } else {
-        // 即使没有新旧，也要更新时间戳，避免频繁无效分析
-        setContacts(prev => prev.map(c => c.id === currentContact.id ? {...c, lastImpressionUpdate: Date.now()} : c));
-        console.log("[画像系统 V2.0] 本轮对话未发现值得更新或新增的用户印象。");
-      }
+          return { ...c, userProfile: updatedProfile, history: newHistory, aiTagsForUser: newAiTags };
+        } 
+        return c;
+      }));
     }
   } catch (e) {
-    console.error("智能用户画像分析失败", e);
+    console.error("用户人格档案更新失败", e);
   }
 };
+
+
 
 
 
@@ -2960,7 +2873,7 @@ if (extractedThought.action && extractedThought.action.type) {
 if (parts.length === 0) {
         console.warn("【格式警察】AI返回了有效的JSON，但其中不包含任何消息内容。");
         // 同样，把回复内容替换成你想要的提示！
-        parts = [{ type: 'text', content: "AI 返回了空内容，请重roll！", thought_chain: extractedThought || null }];
+        parts = [{ type: 'text', content: "AI 返回了空内容，请重roll。", thought_chain: extractedThought || null }];
     }
 
 
@@ -3013,6 +2926,39 @@ if (parts.length === 0) {
       timestamp: Date.now() + (i * 1200),
       type: 'text',
     }));
+
+
+
+
+
+
+
+
+// ==================== [新功能] “高光时刻”探测器 ====================
+    // 在解析完AI的思考之后，但在更新状态之前
+    const lastUserMessage = currentHistory[currentHistory.length - 1];
+    // 确保最后一条消息是用户发的，并且AI的思考过程存在
+    if (lastUserMessage && lastUserMessage.role === 'user' && extractedThought) {
+      const hefChange = extractedThought.hef_update;
+      // 定义什么是“显著的”情绪波动
+      const significantEmotionChange = hefChange && (
+        Math.abs((hefChange.joy || 0) - (activeContact.hef?.joy || 0)) > 20 ||
+        Math.abs((hefChange.sadness || 0) - (activeContact.hef?.sadness || 0)) > 20 ||
+        Math.abs((hefChange.anger || 0) - (activeContact.hef?.anger || 0)) > 20
+      );
+
+      // 定义哪些关键词代表“自我暴露”
+      const selfDisclosureKeywords = ['我喜欢', '我讨厌', '我觉得我', '我最爱', '我总是', '我的爱好是'];
+      const isSelfDisclosure = selfDisclosureKeywords.some(keyword => lastUserMessage.content.toLowerCase().includes(keyword));
+
+      // 如果是“高光时刻”，就触发人格档案引擎
+      if (significantEmotionChange || isSelfDisclosure) {
+        // 我们异步调用这个函数，不等待它完成。它是一个后台任务。
+        updateUserProfile(activeContact, lastUserMessage.content);
+      }
+    }
+    // ==================== 探测器结束 ====================
+
 
 
 
@@ -3351,39 +3297,49 @@ const PresetSelector: React.FC<{ onSelect: (preset: any) => void; globalSettings
 
 
 
+// ==================== [增强版 V2.0] "智能裁缝"图片压缩函数 ====================
 const fileToBase64 = (file: File): Promise<string> => {
   return new Promise((resolve, reject) => {
-    // 创建图片读取器
     const reader = new FileReader();
     reader.readAsDataURL(file);
     reader.onload = (event) => {
       const img = new Image();
       img.src = event.target?.result as string;
       img.onload = () => {
-        // 创建画布进行压缩
         const canvas = document.createElement('canvas');
-        // 设置最大宽度（例如 800px），防止图片过大
-        const maxWidth = 800;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          reject("Canvas context is not available.");
+          return;
+        }
+
+        // --- 核心修复：智能计算宽高比 ---
+        const MAX_WIDTH = 800;
+        const MAX_HEIGHT = 800;
         let width = img.width;
         let height = img.height;
 
-        if (width > maxWidth) {
-          height = (maxWidth / width) * height;
-          width = maxWidth;
+        // 如果图片宽度大于最大值，就按比例缩小高度
+        if (width > height) {
+          if (width > MAX_WIDTH) {
+            height *= MAX_WIDTH / width;
+            width = MAX_WIDTH;
+          }
+        } else {
+          // 如果图片高度大于最大值，就按比例缩小宽度
+          if (height > MAX_HEIGHT) {
+            width *= MAX_HEIGHT / height;
+            height = MAX_HEIGHT;
+          }
         }
-
+        
         canvas.width = width;
         canvas.height = height;
-        
-        const ctx = canvas.getContext('2d');
-        if (!ctx) { reject("Canvas error"); return; }
-        
         ctx.drawImage(img, 0, 0, width, height);
-        
-        // 核心：压缩质量 0.6 (60%质量)，转为 jpeg
-        // 这样一张 5MB 的图会被压缩到 50KB 左右，再也不会崩了！
-        const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.6);
-        resolve(compressedDataUrl);
+
+        // 压缩质量调整为 0.7，更清晰一点
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.7);
+        resolve(dataUrl);
       };
       img.onerror = (err) => reject(err);
     };
@@ -3891,9 +3847,9 @@ const MemoryNote: React.FC<{
 
 
 
-// ★★★ 修复：接收 playMessageAudio 参数 ★★★
-// ★★★ 修复：接收 onNavigateToSettings 参数，用于跳转 ★★★
-// ★★★ 修复：面板现在接收外部传进来的 Tab 和 Text，防止刷新重置 ★★★
+
+
+
 const PersonaPanel = ({ 
   contact, 
   onClose, 
@@ -3902,27 +3858,65 @@ const PersonaPanel = ({
   setContacts, 
   playMessageAudio, 
   onNavigateToSettings, 
-  activeTab,      // 接收父组件给的 Tab
-  setActiveTab,   // 接收父组件的修改函数
-  sampleText,     // 接收父组件给的 Text
-  setSampleText,   // 接收父组件的修改函数
-memoryTab,
-  setMemoryTab
+  activeTab,
+  setActiveTab,
+  memoryTab,
+  setMemoryTab,
+  sampleText,
+  setSampleText
 }: any) => {
+  // ==================== [状态修复] 把多选相关的状态放回这里！ ====================
   const [isMultiSelect, setIsMultiSelect] = useState(false);
   const [selectedMemIds, setSelectedMemIds] = useState<string[]>([]);
-
-
-
-  useEffect(() => {
-  // 每次 memoryTab 变化时，强制重新渲染（防卡顿）
-  setIsAnalyzing(false); // 如果有分析状态，重置
-}, [memoryTab]);
-
-
-
-// ★★★ 新增：当前正在查看的标签（用于弹窗） ★★★
   const [viewingTag, setViewingTag] = useState<any>(null);
+  // ==================== [组件修复] 把雷达图函数放回这里！ ====================
+  const renderRadar = () => {
+    const hef = contact?.hef || {};
+    const iv = hef.INDIVIDUAL_VARIATION || {};
+    const big5 = iv.personality_big5 || { openness: 5, conscientiousness: 5, extraversion: 5, agreeableness: 5, neuroticism: 5 };
+
+    const getPoint = (value: number, angle: number) => {
+      const val = Math.max(0, Math.min(10, value || 5));
+      const radius = (val / 10) * 40;
+      const x = 50 + radius * Math.cos((angle - 90) * Math.PI / 180);
+      const y = 50 + radius * Math.sin((angle - 90) * Math.PI / 180);
+      return `${x},${y}`;
+    };
+
+    const p1 = getPoint(big5.openness, 0);
+    const p2 = getPoint(big5.extraversion, 72);
+    const p3 = getPoint(big5.agreeableness, 144);
+    const p4 = getPoint(big5.neuroticism, 216);
+    const p5 = getPoint(big5.conscientiousness, 288);
+
+    return (
+      <div className="relative w-full h-64 flex items-center justify-center my-2 select-none">
+        <div className="absolute top-4 left-1/2 -translate-x-1/2 flex flex-col items-center"><span className="text-[10px] font-bold text-gray-500 bg-white/80 px-1 rounded backdrop-blur">开放性</span><span className="text-[9px] text-blue-400 font-mono">{big5.openness}</span></div>
+        <div className="absolute top-16 right-6 flex flex-col items-center"><span className="text-[10px] font-bold text-gray-500 bg-white/80 px-1 rounded backdrop-blur">外向性</span><span className="text-[9px] text-blue-400 font-mono">{big5.extraversion}</span></div>
+        <div className="absolute bottom-8 right-10 flex flex-col items-center"><span className="text-[10px] font-bold text-gray-500 bg-white/80 px-1 rounded backdrop-blur">宜人性</span><span className="text-[9px] text-blue-400 font-mono">{big5.agreeableness}</span></div>
+        <div className="absolute bottom-8 left-10 flex flex-col items-center"><span className="text-[10px] font-bold text-gray-500 bg-white/80 px-1 rounded backdrop-blur">敏感度</span><span className="text-[9px] text-blue-400 font-mono">{big5.neuroticism}</span></div>
+        <div className="absolute top-16 left-6 flex flex-col items-center"><span className="text-[10px] font-bold text-gray-500 bg-white/80 px-1 rounded backdrop-blur">尽责性</span><span className="text-[9px] text-blue-400 font-mono">{big5.conscientiousness}</span></div>
+        <div className="w-40 h-40 relative">
+          <svg className="absolute inset-0 w-full h-full overflow-visible" viewBox="0 0 100 100">
+             <polygon points="50,10 88,38 74,82 26,82 12,38" fill="#f3f4f6" stroke="#e5e7eb" strokeWidth="1" />
+             <polygon points="50,30 69,44 62,66 38,66 31,44" fill="none" stroke="#e5e7eb" strokeWidth="1" strokeDasharray="2 2" />
+             <line x1="50" y1="50" x2="50" y2="10" stroke="#e5e7eb" strokeWidth="0.5" /><line x1="50" y1="50" x2="88" y2="38" stroke="#e5e7eb" strokeWidth="0.5" /><line x1="50" y1="50" x2="74" y2="82" stroke="#e5e7eb" strokeWidth="0.5" /><line x1="50" y1="50" x2="26" y2="82" stroke="#e5e7eb" strokeWidth="0.5" /><line x1="50" y1="50" x2="12" y2="38" stroke="#e5e7eb" strokeWidth="0.5" />
+             <polygon points={`${p1} ${p2} ${p3} ${p4} ${p5}`} fill="rgba(59, 130, 246, 0.4)" stroke="#3b82f6" strokeWidth="2" className="drop-shadow-sm transition-all duration-700 ease-out" />
+             <circle cx={p1.split(',')[0]} cy={p1.split(',')[1]} r="1.5" fill="#2563eb" /><circle cx={p2.split(',')[0]} cy={p2.split(',')[1]} r="1.5" fill="#2563eb" /><circle cx={p3.split(',')[0]} cy={p3.split(',')[1]} r="1.5" fill="#2563eb" /><circle cx={p4.split(',')[0]} cy={p4.split(',')[1]} r="1.5" fill="#2563eb" /><circle cx={p5.split(',')[0]} cy={p5.split(',')[1]} r="1.5" fill="#2563eb" />
+          </svg>
+        </div>
+      </div>
+    );
+  };
+  // ==================== [修复结束] ====================
+
+  // --- 辅助函数也放回来 ---
+  const toggleSelect = (id: string) => {
+    setSelectedMemIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+  };
+  // ==================== [修复结束] ====================
+
+
 
   // ★★★ 核心修复：正确读取新的 mood 结构 ★★★
   const mood = contact?.mood || { current: "Calm" };
@@ -3935,107 +3929,78 @@ memoryTab,
   const big5 = iv.personality_big5 || { openness: 5, conscientiousness: 5, extraversion: 5, agreeableness: 5, neuroticism: 5 };
 
 
-// ==================== [代码替换开始] 升级版雷达图 (带文字标签+网格) ====================
-  const renderRadar = () => {
-    // 辅助函数：计算雷达图坐标 (中心 50,50，半径最大 40)
-    // 0-10分 映射到 0-40px 的半径距离
-    const getPoint = (value: number, angle: number) => {
-      const val = Math.max(0, Math.min(10, value || 5)); // 确保数值在 0-10 之间
-      const radius = (val / 10) * 40; 
-      // 减90度是为了让第一个点(开放性)在正上方
-      const x = 50 + radius * Math.cos((angle - 90) * Math.PI / 180);
-      const y = 50 + radius * Math.sin((angle - 90) * Math.PI / 180);
-      return `${x},${y}`;
-    };
-
-    // 五个维度的角度分布 (正五边形)
-    // 开放性(Top), 外向性(Right-Top), 宜人性(Right-Bottom), 敏感度(Left-Bottom), 尽责性(Left-Top)
-    const p1 = getPoint(big5.openness, 0);   // 开放性
-    const p2 = getPoint(big5.extraversion, 72); // 外向性
-    const p3 = getPoint(big5.agreeableness, 144); // 宜人性
-    const p4 = getPoint(big5.neuroticism, 216); // 敏感度 (神经质)
-    const p5 = getPoint(big5.conscientiousness, 288); // 尽责性
-
-    return (
-      <div className="relative w-full h-64 flex items-center justify-center my-2 select-none">
-        
-        {/* === 文字标签层 (绝对定位) === */}
-        {/* 正上方 */}
-        <div className="absolute top-4 left-1/2 -translate-x-1/2 flex flex-col items-center">
-          <span className="text-[10px] font-bold text-gray-500 bg-white/80 px-1 rounded backdrop-blur">开放性</span>
-          <span className="text-[9px] text-blue-400 font-mono">{big5.openness}</span>
-        </div>
-        
-        {/* 右上方 */}
-        <div className="absolute top-16 right-6 flex flex-col items-center">
-          <span className="text-[10px] font-bold text-gray-500 bg-white/80 px-1 rounded backdrop-blur">外向性</span>
-          <span className="text-[9px] text-blue-400 font-mono">{big5.extraversion}</span>
-        </div>
-
-        {/* 右下方 */}
-        <div className="absolute bottom-8 right-10 flex flex-col items-center">
-          <span className="text-[10px] font-bold text-gray-500 bg-white/80 px-1 rounded backdrop-blur">宜人性</span>
-          <span className="text-[9px] text-blue-400 font-mono">{big5.agreeableness}</span>
-        </div>
-
-        {/* 左下方 */}
-        <div className="absolute bottom-8 left-10 flex flex-col items-center">
-          <span className="text-[10px] font-bold text-gray-500 bg-white/80 px-1 rounded backdrop-blur">敏感度</span>
-          <span className="text-[9px] text-blue-400 font-mono">{big5.neuroticism}</span>
-        </div>
-
-        {/* 左上方 */}
-        <div className="absolute top-16 left-6 flex flex-col items-center">
-          <span className="text-[10px] font-bold text-gray-500 bg-white/80 px-1 rounded backdrop-blur">尽责性</span>
-          <span className="text-[9px] text-blue-400 font-mono">{big5.conscientiousness}</span>
-        </div>
 
 
-        {/* === 图表容器 (SVG) === */}
-        <div className="w-40 h-40 relative">
-          <svg className="absolute inset-0 w-full h-full overflow-visible" viewBox="0 0 100 100">
-             {/* 🕸️ 背景网格 (蜘蛛网) */}
-             {/* 最外圈 (10分边界) */}
-             <polygon points="50,10 88,38 74,82 26,82 12,38" fill="#f3f4f6" stroke="#e5e7eb" strokeWidth="1" />
-             {/* 中间圈 (5分基准线) */}
-             <polygon points="50,30 69,44 62,66 38,66 31,44" fill="none" stroke="#e5e7eb" strokeWidth="1" strokeDasharray="2 2" />
-             
-             {/* 🕸️ 从中心放射出的骨架线 */}
-             <line x1="50" y1="50" x2="50" y2="10" stroke="#e5e7eb" strokeWidth="0.5" />
-             <line x1="50" y1="50" x2="88" y2="38" stroke="#e5e7eb" strokeWidth="0.5" />
-             <line x1="50" y1="50" x2="74" y2="82" stroke="#e5e7eb" strokeWidth="0.5" />
-             <line x1="50" y1="50" x2="26" y2="82" stroke="#e5e7eb" strokeWidth="0.5" />
-             <line x1="50" y1="50" x2="12" y2="38" stroke="#e5e7eb" strokeWidth="0.5" />
 
-             {/* 📊 核心数据区域 (蓝色半透明) */}
-             <polygon
-               points={`${p1} ${p2} ${p3} ${p4} ${p5}`}
-               fill="rgba(59, 130, 246, 0.4)"
-               stroke="#3b82f6"
-               strokeWidth="2"
-               className="drop-shadow-sm transition-all duration-700 ease-out"
-             />
-             
-             {/* 📍 顶点的圆点装饰 */}
-             <circle cx={p1.split(',')[0]} cy={p1.split(',')[1]} r="1.5" fill="#2563eb" />
-             <circle cx={p2.split(',')[0]} cy={p2.split(',')[1]} r="1.5" fill="#2563eb" />
-             <circle cx={p3.split(',')[0]} cy={p3.split(',')[1]} r="1.5" fill="#2563eb" />
-             <circle cx={p4.split(',')[0]} cy={p4.split(',')[1]} r="1.5" fill="#2563eb" />
-             <circle cx={p5.split(',')[0]} cy={p5.split(',')[1]} r="1.5" fill="#2563eb" />
-          </svg>
-        </div>
+
+
+
+
+
+
+
+// ==================== [新组件] 手账档案条目UI ====================
+const TraitItem: React.FC<{ label: string; traits?: ProfileTrait[]; icon: string; isInitiallyOpen?: boolean }> = ({ label, traits, icon, isInitiallyOpen = false }) => {
+  if (!traits || traits.length === 0) return null;
+  
+  // 修复 Invalid Date 的核心
+  const formatDate = (timestamp: number) => {
+    if (!timestamp || isNaN(timestamp)) return "未知日期";
+    return new Date(timestamp).toLocaleDateString();
+  };
+
+  return (
+    <details open={isInitiallyOpen} className="bg-white/60 border border-gray-200/50 rounded-xl group transition-all duration-300 open:shadow-lg open:bg-white/80 mb-2 last:mb-0">
+      <summary className="px-4 py-3 text-sm font-bold text-gray-700 select-none cursor-pointer list-none flex items-center justify-between group-open:border-b">
+        <span className="flex items-center gap-2">{icon} {label}</span>
+        <span className="text-xs text-gray-400 transition-transform group-open:rotate-180">▼</span>
+      </summary>
+      <div className="p-3 space-y-2">
+        {traits.map(trait => (
+          <div key={trait.timestamp} className="bg-gray-50/70 p-2 rounded-lg border">
+            <p className="text-sm font-medium text-gray-800">{trait.value}</p>
+            <details className="text-xs mt-1">
+              <summary className="cursor-pointer text-gray-400 hover:text-gray-600 select-none">显示证据</summary>
+              <div className="mt-1 p-2 bg-white rounded-md">
+                <p className="italic text-purple-600">“{trait.quote}”</p>
+                <p className="text-[10px] text-gray-400 mt-1">记录于: {formatDate(trait.timestamp)}</p>
+              </div>
+            </details>
+          </div>
+        ))}
       </div>
-    );
-  };
-  // ==================== [代码替换结束] ====================
-  const toggleSelect = (id: string) => {
-    setSelectedMemIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
-  };
+    </details>
+  );
+};
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
   const resetMultiSelect = () => {
     setIsMultiSelect(false);
     setSelectedMemIds([]);
   };
+
+
+
+
+
+
+
+
+
 
   // ★★★ 新增：手动多选合并功能（真正实现！）★★★
   const handleMultiMerge = async () => {
@@ -4592,7 +4557,6 @@ onClick={() => {
                   <div className="text-center text-gray-400 py-10 h-full flex flex-col items-center justify-center">
                     <span className="text-4xl mb-4 block">🗂️</span>
                     <p className="text-sm">这里空空如也</p>
-                    <p className="text-xs mt-2">这是 {contact.name} 对你的印象笔记，如你的性格、在ta面前的样子、喜欢吃什么、喜欢的电影、歌曲等。ta会通过聊天慢慢记住这些～</p>
                     <p className="text-xs mt-2">和 AI 聊天中定下的约定会出现在这里哦～</p>
                   </div>
                 ) : (
@@ -4692,7 +4656,7 @@ contact.agreements.slice().reverse().map((agreement: Agreement) => {
               {memoryTab === 'events' && (
                 <div className="h-full flex flex-col px-4">
                   {/* 这里是原来“记忆面板”的所有内容，我们马上把它填回来 */}
-                  <>
+                 <>
                     <div className="flex justify-between items-center mb-4">
                       <h4 className="text-sm font-bold text-gray-600">🧠 长期记忆便签墙</h4>
                       <span className="text-xs text-gray-400">{longTermMemories.length} 张便签</span>
@@ -4730,96 +4694,100 @@ contact.agreements.slice().reverse().map((agreement: Agreement) => {
                 </div>
               )}
 
-              {/* --- 印象集页面 --- */}
-              {memoryTab === 'impressions' && (
-                <div className="h-full flex flex-col px-4">
-                  <div className="flex justify-between items-center mb-4 flex-shrink-0">
-  <h4 className="text-sm font-bold text-gray-600">
-    {contact.name} 对 {contact.userName} 的记忆画像
-  </h4>
-  <span className="text-xs text-gray-400">{contact.userImpressions?.length || 0} 条印象</span>
-</div>
-                  {/* 这里是全新的“印象集”内容，我们也马上填上 */}
-                   <div className="flex-1 overflow-y-auto space-y-3 pb-20 custom-scrollbar">
-                    {(!contact.userImpressions || contact.userImpressions.length === 0) ? (
-                      <div className="text-center text-gray-400 py-10 h-full flex flex-col items-center justify-center">
-                        <span className="text-4xl mb-4 block">🧐</span>
-                        <p className="text-sm">AI 正在努力认识你...</p>
-                        <p className="text-xs mt-2">多聊一些关于你的事，AI 就会在这里写下对你的印象笔记啦～</p>
-                      </div>
-                    ) : (
-                      contact.userImpressions.slice().reverse().map((impression: Impression) => {
-                        const categoryMap = {
-                          personality: { icon: '🎭', name: '性格', color: 'bg-blue-100 text-blue-700' },
-                          preference: { icon: '💖', name: '偏好', color: 'bg-pink-100 text-pink-700' },
-                          habit: { icon: '🕰️', name: '习惯', color: 'bg-orange-100 text-orange-700' },
-                          appearance: { icon: '✨', name: '外貌', color: 'bg-yellow-100 text-yellow-700' },
-                          memory: { icon: '🎈', name: '经历', color: 'bg-indigo-100 text-indigo-700' },
-                        };
-                        const info = categoryMap[impression.category] || { icon: '📝', name: '其他', color: 'bg-gray-100 text-gray-700' };
+{/* --- 印象集页面 (V7.2 "究极拟物手账" 最终完整版) --- */}
+              {memoryTab === 'impressions' && (() => {
+                const profile = contact.userProfile || {};
+                const themeColor = profile.themeColor || '#f3e8ff';
 
-return (
-  <div key={impression.id} className="bg-white border border-gray-100 rounded-xl p-4 shadow-sm group relative">
-     <button
-      onClick={() => {
-        if (confirm(`确定要删除这条印象吗？\n\n"${impression.content}"`)) {
-          setContacts(prev => prev.map(c =>
-            c.id === contact.id
-            ? { ...c, userImpressions: (c.userImpressions || []).filter(i => i.id !== impression.id) }
-            : c
-          ));
-        }
-      }}
-      className="absolute top-2 right-2 w-6 h-6 bg-gray-200 text-gray-500 rounded-full opacity-0 group-hover:opacity-100 transition flex items-center justify-center text-xs hover:bg-red-500 hover:text-white"
-    >
-      ×
-    </button>
-    <div className="flex items-center justify-between mb-3">
-      <span className={`text-xs font-bold px-2 py-1 rounded-full ${info.color}`}>
-        {info.icon} {info.name}
-      </span>
-      <span className="text-[10px] text-gray-400">
-        {new Date(impression.last_updated).toLocaleDateString()} 更新
-      </span>
-    </div>
-    <p className="text-sm text-gray-800 leading-relaxed font-medium mb-3">
-      {/* ★★★ 这里添加 fontSize="text-sm" 和 msgId={impression.id}，修复参数缺失 ★★★ */}
-      <HiddenBracketText content={impression.content} fontSize="text-sm" msgId={impression.id} />
-    </p>
-    <details className="text-xs">
-      <summary className="cursor-pointer text-gray-400 hover:text-gray-600 select-none">查看原文证据</summary>
-      <div className="mt-2 space-y-1 bg-gray-50 p-2 rounded-md border">
-        {impression.quotes.map((quote, i) => (
-          <p key={i} className="italic text-gray-600">“{quote}”</p>
-        ))}
-      </div>
-    </details>
-  </div>
-);
-                      })
-                    )}
+                // --- 辅助组件：可更换的拍立得相框 ---
+                const PhotoFrame: React.FC<{ id: string; className: string; defaultImage: string; }> = ({ id, className, defaultImage }) => {
+                  const photo = (profile as any)[id] || defaultImage;
+                  return (
+                    <label className={`absolute bg-white p-1.5 rounded-sm shadow-lg border border-gray-200 cursor-pointer group hover:z-20 transition-transform duration-300 ${className}`}>
+                      <img src={photo} className="w-full h-full object-cover" alt={`frame-${id}`} />
+                      <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white text-xs font-bold">更换</div>
+                      <input type="file" className="hidden" accept="image/*"
+                        onChange={async (e) => {
+                          if (e.target.files && e.target.files[0]) {
+                            const base64 = await fileToBase64(e.target.files[0]);
+                            setContacts(prev => prev.map(c => c.id === contact.id ? { ...c, userProfile: { ...(c.userProfile || {}), [id]: base64 } } : c));
+                          }
+                        }}
+                      />
+                    </label>
+                  );
+                };
+
+                return (
+                  <div className="h-full flex flex-col relative rounded-b-2xl" style={{ backgroundColor: themeColor }}>
+                    {/* --- 背景纹理 & 自定义背景图 --- */}
+                    <div className="absolute inset-0 bg-repeat bg-center opacity-20 pointer-events-none rounded-b-2xl" style={{ 
+                        backgroundImage: profile.background_image ? `url(${profile.background_image})` : `url('data:image/svg+xml,%3Csvg width="60" height="60" viewBox="0 0 60 60" xmlns="http://www.w3.org/2000/svg"%3E%3Cg fill="none" fill-rule="evenodd"%3E%3Cg fill="%239C92AC" fill-opacity="0.4"%3E%3Cpath d="M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z"/%3E%3C/g%3E%3C/g%3E%3C/svg%3E')`, 
+                        backgroundSize: profile.background_image ? 'cover' : 'auto',
+                      }}/>
+                    
+                    <div className="flex-1 overflow-y-auto p-4 space-y-6 custom-scrollbar z-10 relative">
+                      
+                    {/* ★★★ 散落的拍立得照片 (装饰 V2.0 - 更多！) ★★★ */}
+                      <PhotoFrame id="scattered_photo_1" className="top-16 -left-8 w-24 h-28 transform -rotate-12 hover:rotate-0 hover:scale-125" defaultImage="https://picsum.photos/200/300?random=1" />
+                      <PhotoFrame id="scattered_photo_2" className="bottom-24 -right-10 w-28 h-32 transform rotate-15 hover:rotate-0 hover:scale-125" defaultImage="https://picsum.photos/200/300?random=2" />
+                      <PhotoFrame id="scattered_photo_3" className="bottom-10 -left-6 w-20 h-24 transform rotate-10 hover:rotate-0 hover:scale-125" defaultImage="https://picsum.photos/200/300?random=4" />
+                      <PhotoFrame id="scattered_photo_4" className="top-28 -right-4 w-16 h-20 transform -rotate-10 hover:rotate-0 hover:scale-125 opacity-70 hover:opacity-100" defaultImage="https://picsum.photos/200/300?random=5" />
+
+                      <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-lg border border-white/50 p-6 relative flex flex-col items-center min-h-[300px]">
+                        {/* ★★★ 铅笔和回形针 (装饰) - 回来了！ ★★★ */}
+                        <div className="absolute -top-8 -right-4 text-5xl opacity-80 transform rotate-12 pointer-events-none">✏️</div>
+                        <div className="absolute top-16 -left-4 text-3xl opacity-70 transform -rotate-45 pointer-events-none">📎</div>
+                        
+                        {/* ★★★ 和纸胶带 - 回来了！ ★★★ */}
+                        <div className="absolute -top-2 left-1/2 -translate-x-1/2 w-24 h-6 bg-yellow-200/70 transform -rotate-2 shadow-sm" style={{ clipPath: 'polygon(0 0, 100% 0, 100% 100%, 0% 100%)' }}></div>
+                        <h4 className="text-sm font-bold text-gray-700 mb-4">{contact.name} 的秘密手账</h4>
+                        
+                        {/* ★★★ 中心照片 (带手绘框和拍立得框) - 回来了！ ★★★ */}
+                        <div className="relative mb-6">
+                           <svg className="absolute -inset-2 w-[calc(100%+1rem)] h-[calc(100%+1rem)] opacity-60" viewBox="0 0 100 120"><path d="M 5,5 C 2,2 98,2 95,5 L 95,115 C 98,118 2,118 5,115 L 5,5 Z" stroke="#888" strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round" style={{ strokeDasharray: "5, 5" }}/></svg>
+                           {/* 我们把 PhotoFrame 组件用在这里，而不是简单的 label */}
+                           <PhotoFrame id="main_photo" className="relative w-24 h-28 transform rotate-2 hover:rotate-0 hover:scale-110" defaultImage={profile.photo || "https://picsum.photos/200/300?random=3"} />
+                        </div>
+
+                        {/* 如果没有档案，显示占位符 */}
+                        {(!profile.personality_traits && !profile.preferences && !profile.habits) && (<div className="text-center text-gray-400 py-4 flex flex-col items-center justify-center flex-1"><p className="text-sm"> 正在努力更了解你...</p><p className="text-xs mt-2">当聊到“高光时刻”，{contact.name} 会在这里为你更新档案。</p></div>)}
+                        
+                        {/* 档案条目 */}
+                        <TraitItem icon="🎭" label="性格特点" traits={profile.personality_traits} />
+                        <TraitItem icon="💖" label="喜欢的东西" traits={profile.preferences?.likes} />
+                        <TraitItem icon="💔" label="讨厌的东西" traits={profile.preferences?.dislikes} />
+                        <TraitItem icon="🕰️" label="行为习惯" traits={profile.habits} />
+                      </div>
+
+                      {/* AI给用户打的标签 (绳索UI) */}
+                      <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-lg border border-white/50 p-4">
+                        <h5 className="text-sm font-bold mb-3 flex items-center gap-2 text-gray-600"><span>🏷️</span> {contact.name} 对你的印象标签</h5>
+                        <div className="w-full bg-gray-50/50 border-y border-gray-200 h-36 relative overflow-x-auto overflow-y-hidden custom-scrollbar rounded-lg">
+                          <div className="absolute top-4 left-0 w-[200%] h-0.5 bg-yellow-700/30 border-t border-yellow-800/20 shadow-sm z-0"></div>
+                          <div className="flex items-start gap-6 px-6 pt-3 min-w-max h-full">
+                            {(!contact.aiTagsForUser || contact.aiTagsForUser.length === 0) && (<div className="text-[10px] text-gray-400 italic mt-8 ml-4">绳子上空空如也...</div>)}
+                            {(contact.aiTagsForUser || []).map((tag: any) => (<div key={tag.id} className="relative group flex flex-col items-center flex-shrink-0 animate-fadeIn" style={{ transform: `rotate(${(tag.style || (Math.random()*6-3))}deg)`, marginTop: `${Math.abs(tag.style || 0) + 10}px` }}><div className="w-2 h-4 bg-amber-700 rounded-sm mb-[-6px] z-20 shadow-md relative border-l border-white/20"></div><div className="relative bg-yellow-100 text-yellow-900 border border-yellow-200 px-3 pt-3 pb-5 min-w-[70px] max-w-[120px] text-center shadow-lg transition-transform hover:scale-110 hover:rotate-0 z-10 flex flex-col justify-between min-h-[80px]" style={{ borderRadius: "2px 2px 20px 2px" }}><span className="text-sm font-black leading-tight break-words font-sans mb-2">{tag.content}</span><div className="mt-auto pt-2 border-t border-black/10 w-full flex justify-end"><span className="text-[9px] font-mono opacity-60 tracking-tighter">{new Date(tag.timestamp).toLocaleDateString([], {month: '2-digit', day: '2-digit'})}</span></div></div></div>))}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    {/* ★★★ 底部自定义工具栏 - 回来了！ ★★★ */}
+                    <div className="flex-shrink-0 p-2 flex justify-center items-center gap-4 bg-white/50 border-t border-white/50 z-20">
+                       <label className="flex flex-col items-center gap-1 cursor-pointer text-xs text-gray-600 hover:text-purple-600 transition-colors" title="更换手账背景图"><span className="text-lg">🖼️</span><span className="text-[10px] font-bold">换背景</span><input type="file" className="hidden" accept="image/*" onChange={async (e) => { if (e.target.files && e.target.files[0]) { const base64 = await fileToBase64(e.target.files[0]); setContacts(prev => prev.map(c => c.id === contact.id ? { ...c, userProfile: { ...(c.userProfile || {}), background_image: base64 } } : c)); } }}/></label>
+                       <label className="flex flex-col items-center gap-1 cursor-pointer text-xs text-gray-600 hover:text-purple-600 transition-colors" title="更换手账主题色"><span className="w-6 h-6 rounded-full border-2 border-white shadow-md" style={{ backgroundColor: themeColor }}></span><span className="text-[10px] font-bold">换颜色</span><input type="color" className="absolute opacity-0" defaultValue={themeColor} onChange={(e) => setContacts(prev => prev.map(c => c.id === contact.id ? { ...c, userProfile: { ...(c.userProfile || {}), themeColor: e.target.value } } : c))}/></label>
+                    </div>
                   </div>
-                </div>
-              )}
+                );
+              })()}
             </div>
           )}
-
-
-
-
-
-
-
-
-
-
-
         </div>
       </div>
     </div>
   );
 };
-
 
       
       
@@ -4945,7 +4913,6 @@ useEffect(() => {
         }
       },
       longTermMemories: c.longTermMemories || [],
-            userImpressions: c.userImpressions || [],
     })));
   }, []);
 
@@ -6876,7 +6843,6 @@ style={{ paddingBottom: '12px' }}  // 只留一点内间距，让输入框不紧
 
 
 
-
 {showPersonaPanel && activeContact && (
             <PersonaPanel
                 contact={activeContact}
@@ -6888,11 +6854,10 @@ style={{ paddingBottom: '12px' }}  // 只留一点内间距，让输入框不紧
                 onNavigateToSettings={onOpenSettings}
                 activeTab={panelTab}
                 setActiveTab={setPanelTab}
+                memoryTab={memoryTab}         // <-- 新增
+                setMemoryTab={setMemoryTab}   // <-- 新增
                 sampleText={panelSampleText}
                 setSampleText={setPanelSampleText}
-                // ↓↓↓ 关键修复：把新的“手账开关”也传进去 ↓↓↓
-                memoryTab={memoryPanelTab}
-                setMemoryTab={setMemoryPanelTab}
             />
         )}
 
