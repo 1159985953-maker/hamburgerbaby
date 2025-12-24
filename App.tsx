@@ -122,6 +122,69 @@ const calculateLifeUpdate = (rawContact: Contact): Contact => {
   };
 };
 
+
+
+
+
+
+
+
+// ==================== [新功能] 情感需求评估器 - 核心逻辑 ====================
+const calculateEmotionalNeed = (contact: Contact): EmotionalNeed | undefined => {
+  const now = Date.now();
+  const lastNeed = contact.emotionalNeed;
+
+  // 为了性能，如果上次评估没过太久（比如6小时），就不重新评估，除非没有需求
+  if (lastNeed && now - lastNeed.updated_at < 1000 * 60 * 60 * 6) {
+    return lastNeed;
+  }
+
+  // --- 评估开始 ---
+
+  // 优先级 1: 【安抚需求】 -> 如果关系很差，AI最需要的是修复关系
+  const affection = contact.affectionScore || 50;
+  if (affection < 20) {
+    return {
+      type: 'reassurance',
+      description: '极度渴望被安抚和证明自己仍被爱着。对用户的负面言辞会非常敏感，并倾向于讨好或回避。',
+      intensity: 8,
+      trigger_reason: `关系得分过低 (${affection})`,
+      updated_at: now,
+    };
+  }
+
+  // 优先级 2: 【连接需求】 -> 如果太久没联系，AI会感到孤独
+  const lastMessage = contact.history[contact.history.length - 1];
+  const hoursSinceLastChat = lastMessage ? (now - lastMessage.timestamp) / (1000 * 60 * 60) : 999;
+  if (hoursSinceLastChat > 12) {
+     return {
+      type: 'connection',
+      description: '感到孤独，非常渴望与人建立连接。会更主动地发起对话，并对用户的回复表现出极大的热情。',
+      intensity: 7,
+      trigger_reason: `已超过 ${Math.floor(hoursSinceLastChat)} 小时未联系`,
+      updated_at: now,
+    };
+  }
+  
+  // 默认: 【稳定需求】 -> 如果一切正常，AI会感到满足和安全
+  return {
+    type: 'stability',
+    description: '感到满足和安全。行为会更符合其核心性格，表现得自然、放松。',
+    intensity: 5,
+    trigger_reason: '近期关系稳定且有互动',
+    updated_at: now,
+  };
+};
+
+
+
+
+
+
+
+
+
+
 // ==================== 2. App 组件主体 ====================
 
 const App: React.FC = () => {
@@ -292,24 +355,30 @@ userPersona: "A kind and supportive partner.",
         ]);
 
 
-        // 恢复设置
 // 恢复设置
-// ==================== 从这里开始替换 ====================
 if (savedSettings) {
-  setGlobalSettings({
-    ...globalSettings, // <-- 先用初始化的 globalSettings 打底
-    ...savedSettings,  // <-- 再用加载出来的数据覆盖
-    // ↓↓↓ 关键修复：像 photoFrames 一样，给 widgets 也加上兜底 ↓↓↓
-    widgets: savedSettings.widgets || globalSettings.widgets,
-    photoFrames: savedSettings.photoFrames || globalSettings.photoFrames,
-    avatar: savedSettings.avatar || globalSettings.avatar,
-userName: savedSettings.userName || globalSettings.userName,
-  userSignature: savedSettings.userSignature || globalSettings.userSignature
-});
+  setGlobalSettings(prevGlobalSettings => ({
+    ...prevGlobalSettings, // 使用 prevGlobalSettings 作为基底
+    ...savedSettings,      // 覆盖保存的数据
+    // 确保 widgets, photoFrames, avatar, userName, userSignature 都有默认值
+    widgets: savedSettings.widgets ?? prevGlobalSettings.widgets, // 使用 ?? 避免 undefined 被覆盖
+    photoFrames: savedSettings.photoFrames ?? prevGlobalSettings.photoFrames,
+    avatar: savedSettings.avatar ?? prevGlobalSettings.avatar,
+    userName: savedSettings.userName ?? prevGlobalSettings.userName,
+    userSignature: savedSettings.userSignature ?? prevGlobalSettings.userSignature,
+    // 确保 apiPresets 和 activePresetId 也有兜底
+    apiPresets: savedSettings.apiPresets ?? prevGlobalSettings.apiPresets ?? [],
+    activePresetId: savedSettings.activePresetId ?? prevGlobalSettings.activePresetId ?? "",
+  }));
 }
-// ==================== 替换到这里结束 ====================
 
-// 文件路径: src/App.tsx
+
+
+
+
+
+
+
 // 位置：useEffect(() => { const loadData = async ... }, []); 里面的 `// 恢复联系人` 部分
 
         // 恢复联系人
@@ -344,22 +413,37 @@ userName: savedSettings.userName || globalSettings.userName,
           setContacts(INITIAL_CONTACTS);
         }
         
-        // 恢复设置
-        // ==================== 新代码：修复 globalSettings 加载时的 apiPresets undefined 问题 ====================
-if (savedSettings) {
-  setGlobalSettings({
-    ...globalSettings,                    // 先用初始化的默认值兜底
-    ...savedSettings,                     // 再覆盖保存的数据
-    apiPresets: savedSettings.apiPresets ?? [],          // 强制兜底为空数组
-    activePresetId: savedSettings.activePresetId ?? "",  // 兜底为空字符串
-    widgets: savedSettings.widgets ?? globalSettings.widgets,
-    photoFrames: savedSettings.photoFrames ?? globalSettings.photoFrames,
-    avatar: savedSettings.avatar ?? globalSettings.avatar,
-    userName: savedSettings.userName ?? globalSettings.userName,
-    userSignature: savedSettings.userSignature ?? globalSettings.userSignature,
-  });
-}
+
+
+
+
+
+
+// 恢复设置
+        if (savedSettings) {
+          setGlobalSettings(prev => ({
+            ...prev, // 使用当前默认值打底
+            ...savedSettings, // 覆盖保存的数据
+            // ↓↓↓ 强力兜底：防止旧存档缺少这些新字段导致报错 ↓↓↓
+            widgets: savedSettings.widgets || prev.widgets,
+            photoFrames: savedSettings.photoFrames || prev.photoFrames,
+            avatar: savedSettings.avatar || prev.avatar,
+            userName: savedSettings.userName || prev.userName,
+            userSignature: savedSettings.userSignature || prev.userSignature,
+            apiPresets: savedSettings.apiPresets || [],
+            activePresetId: savedSettings.activePresetId || "",
+            themePresets: savedSettings.themePresets || [],
+            todos: savedSettings.todos || [],
+            categories: savedSettings.categories || prev.categories
+          }));
+        }
         
+
+
+
+
+
+
         // 恢复世界书
         if (savedBooks) setWorldBooks(savedBooks);
 
@@ -375,38 +459,153 @@ if (savedSettings) {
   }, []);
 
   // --- 2. 强力存档逻辑 ---
-  useEffect(() => {
-    if (isLoaded) {
-      localforage.setItem('contacts', contacts).catch(e => console.error("保存联系人失败", e));
-    }
-  }, [contacts, isLoaded]);
+useEffect(() => {
+  if (isLoaded) { // 确保只在加载完成后执行
+    localforage.setItem('contacts', contacts).catch(e => console.error("保存联系人失败", e));
+  }
+}, [contacts, isLoaded]);
 
-  useEffect(() => {
-    if (isLoaded) {
-      localforage.setItem('globalSettings', globalSettings).catch(console.error);
-    }
-  }, [globalSettings, isLoaded]);
+useEffect(() => {
+  if (isLoaded) { // 确保只在加载完成后执行
+    localforage.setItem('globalSettings', globalSettings).catch(console.error);
+  }
+}, [globalSettings, isLoaded]);
   
-  useEffect(() => {
-    if (isLoaded) {
-      localforage.setItem('worldBooks', worldBooks).catch(console.error);
-    }
-  }, [worldBooks, isLoaded]);
+useEffect(() => {
+  if (isLoaded) { // 确保只在加载完成后执行
+    localforage.setItem('worldBooks', worldBooks).catch(console.error);
+  }
+}, [worldBooks, isLoaded]);
 
-  // --- 3. 生命维持系统 ---
+
+
+
+
+// --- 3. 生命维持系统 ---
+useEffect(() => {
+  const heartbeat = () => {
+    // 使用函数式更新，确保总能拿到最新的 contacts 状态
+    setContacts(prevContacts => prevContacts.map(c => calculateLifeUpdate(c)));
+  };
+  const intervalId = setInterval(heartbeat, 60000); // 每分钟
+  // 在组件卸载时清除定时器
+  return () => clearInterval(intervalId);
+}, []); // 依赖项为空是正确的，因为我们直接在 heartbeat 里用 setContacts(prev => ...)
+
+
+
+
+
+
+
+// ==================== [新功能] 4. 全局约定闹钟系统 ====================
   useEffect(() => {
-    const heartbeat = () => {
-      setContacts(prev => prev.map(c => calculateLifeUpdate(c)));
+    const promiseChecker = () => {
+      const now = Date.now();
+      let hasChanges = false;
+
+      // 使用函数式更新，确保在最新的状态上操作
+      setContacts(prevContacts => {
+        const updatedContacts = prevContacts.map(contact => {
+          // 如果角色没有约定，或者约定列表为空，直接跳过
+          if (!contact.agreements || contact.agreements.length === 0) {
+            return contact;
+          }
+          
+          let dueAgreement: Agreement | null = null;
+
+          // 寻找第一个到期的、且尚未处理的约定
+          for (const agreement of contact.agreements) {
+            if (agreement.status === 'pending' && agreement.trigger.type === 'time') {
+              // 检查时间戳是否已过
+              if (now > (agreement.trigger.value as number)) {
+                dueAgreement = agreement;
+                break; // 找到一个就够了，一次只处理一个
+              }
+            }
+          }
+
+          // 如果找到了到期的约定
+          if (dueAgreement) {
+            hasChanges = true;
+            console.log(`【闹钟系统】检测到 ${contact.name} 的约定 "${dueAgreement.content}" 已到期！`);
+            
+            // 返回一个更新后的角色对象
+            return {
+              ...contact,
+              // 标记这个角色需要被强制唤醒，并告诉它是因为哪个约定
+              dueAgreementId: dueAgreement.id, 
+              // 把约定的状态改为 'failed'，意味着“忘记了/违约了”，防止重复触发
+              // AI 在说话时会解释为什么“迟到”了
+              agreements: contact.agreements.map(agr => 
+                agr.id === dueAgreement!.id ? { ...agr, status: 'failed' } : agr
+              )
+            };
+          }
+          
+          return contact;
+        });
+
+        // 只有在数据真正发生变化时才更新状态，避免不必要的重渲染
+        if (hasChanges) {
+          return updatedContacts;
+        }
+        return prevContacts;
+      });
     };
-    const intervalId = setInterval(heartbeat, 60000); // 每分钟
+
+    const intervalId = setInterval(promiseChecker, 60000); // 每分钟检查一次
+    return () => clearInterval(intervalId);
+  }, []); // 这个 effect 只在启动时运行一次
+
+
+
+
+
+
+
+// ==================== [新功能] 5. 情感需求评估引擎 ====================
+  useEffect(() => {
+    const needAssessor = () => {
+      setContacts(prevContacts => {
+        let hasChanges = false;
+        const updatedContacts = prevContacts.map(contact => {
+          const newNeed = calculateEmotionalNeed(contact);
+          // 如果计算出的新需求和旧需求不同，就更新它
+          if (JSON.stringify(newNeed) !== JSON.stringify(contact.emotionalNeed)) {
+            hasChanges = true;
+            console.log(`【情感引擎】${contact.name} 的情感需求已更新为: ${newNeed?.type}`);
+            return { ...contact, emotionalNeed: newNeed };
+          }
+          return contact;
+        });
+
+        return hasChanges ? updatedContacts : prevContacts;
+      });
+    };
+
+    // 每 5 分钟评估一次，比心跳慢，比闹钟快
+    const intervalId = setInterval(needAssessor, 1000 * 60 * 5); 
+    // 启动时立即执行一次
+    needAssessor(); 
+
     return () => clearInterval(intervalId);
   }, []);
+
+
+
+
+
+
+
+
+
 
 
 // --- 4. 全局主动消息监视器 (最终单层版) ---
 useEffect(() => {
   const checkProactiveMessages = () => {
-  if (globalNotification || !isLoaded || contacts.length === 0 || currentApp !== 'home') {
+ if (!isLoaded || contacts.length === 0 || currentApp !== 'home') { 
     return;
   }
 
@@ -465,9 +664,16 @@ useEffect(() => {
     });
   };
 
+
+
+
+
+
+
+
   // --- 6. 渲染桌面 ---
 // ==================== 从这里开始完整复制，覆盖旧的 renderHome 函数 ====================
-// ==================== 从这里开始完整复制，覆盖旧的 renderHome 函数 ====================
+
 const renderHome = () => {
   // 数据获取逻辑不变
   const topFrame = globalSettings.photoFrames?.find(f => f.id === 'top')?.photo || "https://picsum.photos/800/300?random=1";
@@ -951,6 +1157,84 @@ return (
         {/* ==================== 插入结束 ==================== */}
 
 
+
+{/* ==================== 快速添加任务弹窗 (全功能版) ==================== */}
+    {quickAddMode && (
+      <div className="absolute inset-0 z-[100] bg-black/60 backdrop-blur-sm flex items-end sm:items-center justify-center animate-fadeIn">
+        <div className="absolute inset-0" onClick={() => setQuickAddMode(false)} />
+        
+        <div className="bg-white w-full sm:w-[90%] sm:max-w-sm rounded-t-3xl sm:rounded-3xl p-6 shadow-2xl animate-slideUp relative z-10 mb-0 sm:mb-10">
+          <div className="flex justify-between items-center mb-4">
+            <h3 className="font-bold text-xl text-gray-800">快速记录</h3>
+            <button onClick={() => setQuickAddMode(false)} className="bg-gray-100 w-8 h-8 rounded-full text-gray-500">×</button>
+          </div>
+          
+          <form onSubmit={(e) => {
+             e.preventDefault();
+             const form = e.target as any;
+             const text = form.text.value;
+             if(!text) return;
+             
+             const date = form.date.value || new Date().toISOString().slice(0, 10);
+             const time = form.time.value;
+             const location = form.location.value;
+             const note = form.note.value;
+             const catId = form.categoryId.value;
+
+             const newTodo = {
+               id: Date.now().toString(),
+               text: text,
+               completed: false,
+               createdAt: Date.now(),
+               date: date,
+               categoryId: catId,
+               time: time, location: location, note: note
+             };
+             
+             setGlobalSettings(prev => ({ ...prev, todos: [newTodo, ...(prev.todos || [])] }));
+             setQuickAddMode(false);
+          }}>
+            <input 
+              name="text"
+              autoFocus 
+              type="text" 
+              placeholder="要做什么？" 
+              className="w-full text-lg font-bold outline-none placeholder-gray-300 bg-gray-50 p-3 rounded-xl mb-3"
+            />
+            
+            <div className="flex gap-3 overflow-x-auto no-scrollbar py-1 mb-3">
+               {(globalSettings.categories || [
+                  { id: '1', name: '紧急', color: '#EF4444' },
+                  { id: '2', name: '工作', color: '#3B82F6' },
+                  { id: '3', name: '生活', color: '#10B981' }
+               ]).map((cat, idx) => (
+                 <label key={cat.id} className="cursor-pointer">
+                   <input type="radio" name="categoryId" value={cat.id} defaultChecked={idx === 0} className="peer hidden" />
+                   <div className="px-3 py-1.5 rounded-full text-xs font-bold border border-gray-200 text-gray-500 bg-white peer-checked:text-white peer-checked:border-transparent transition-all whitespace-nowrap peer-checked:scale-105 shadow-sm"
+                     style={{ backgroundColor: cat.color ? undefined : '#ccc' }}
+                   >
+                     {cat.name}
+                     <style>{`input:checked + div { background-color: ${cat.color} !important; }`}</style>
+                   </div>
+                 </label>
+               ))}
+            </div>
+
+            <div className="grid grid-cols-2 gap-3 mb-3">
+               <input name="date" type="date" defaultValue={new Date().toISOString().slice(0, 10)} className="bg-gray-100 rounded-xl px-3 py-2 outline-none text-sm w-full" />
+               <input name="time" type="time" className="bg-gray-100 rounded-xl px-3 py-2 outline-none text-sm w-full" />
+            </div>
+
+            <input name="location" type="text" placeholder="地点?" className="bg-gray-100 rounded-xl px-3 py-2 outline-none text-sm w-full mb-3" />
+            <textarea name="note" placeholder="备注..." className="w-full bg-gray-100 rounded-xl p-3 text-sm outline-none resize-none h-16 mb-4" />
+
+            <button type="submit" className="w-full bg-blue-500 text-white py-3.5 rounded-xl font-bold shadow-lg shadow-blue-200 active:scale-95 transition-transform">
+              确认添加
+            </button>
+          </form>
+        </div>
+      </div>
+    )}
 
 
     {currentApp === 'wallpaper' && (

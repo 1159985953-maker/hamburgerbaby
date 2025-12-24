@@ -41,66 +41,76 @@ const getContrastTextColor = (hexColor: string) => {
 
 
 //状态炼金术系统
+// 这是一组代码：【升级版】状态炼金术系统 (加入时间感知与随机描述)
 const calculateComplexState = (
   energy: { current: number; status: string }, 
   hef: any
 ): { text: string; color: string; ping: string; emoji: string } => {
   
-  // 1. 提取数值 (如果没有HEF数据，默认为0)
+  // 1. 提取数值
   const e = energy.current; // 精力 0-100
   const joy = hef?.joy || 0;
   const anger = hef?.anger || 0;
   const sadness = hef?.sadness || 0;
   const fear = hef?.fear || 0;
   const trust = hef?.trust || 0;
+  
+  // 获取当前时间用于判断文案
+  const hour = new Date().getHours();
+  const isMorning = hour >= 6 && hour < 11;
+  const isAfternoon = hour >= 13 && hour < 17;
+  const isNight = hour >= 22 || hour < 5;
 
-  // 2. 优先级 A: 生理极限 (无法被意志力克服的状态)
+  // 2. 优先级 A: 生理极限
   if (energy.status === 'Sleeping') {
-    // 睡觉也有不同状态
     if (sadness > 60) return { text: "带泪入睡 💧", color: "bg-indigo-500", ping: "bg-indigo-400", emoji: "😪" };
     if (joy > 80) return { text: "做美梦中 🌙", color: "bg-purple-500", ping: "bg-purple-400", emoji: "😴" };
     return { text: "呼呼大睡 💤", color: "bg-indigo-500", ping: "bg-indigo-400", emoji: "😴" };
   }
   
   if (energy.status === 'Exhausted' || e < 10) {
-    if (anger > 50) return { text: "又累又气 💢", color: "bg-red-700", ping: "bg-red-600", emoji: "😫" };
-    if (sadness > 50) return { text: "身心俱疲 🥀", color: "bg-gray-600", ping: "bg-gray-500", emoji: "⚰️" };
-    return { text: "累瘫了... 😵", color: "bg-gray-500", ping: "bg-gray-400", emoji: "🫠" };
+    if (anger > 50) return { text: "累到炸毛 💢", color: "bg-red-700", ping: "bg-red-600", emoji: "😫" };
+    return { text: "彻底断电 🪫", color: "bg-gray-500", ping: "bg-gray-400", emoji: "🫠" };
   }
 
-  // 3. 优先级 B: 低能量混合态 (Energy < 40) -> 负面Buff加成
+  // 3. 优先级 B: 特殊时间段 Buff (新增逻辑)
+  // 如果是早上且精力还行，显示刚醒的状态
+  if (isMorning && e > 60 && e < 90) {
+     return { text: "晨间开机中 ☕", color: "bg-orange-400", ping: "bg-orange-300", emoji: "🥱" };
+  }
+  // 如果是饭点下午
+  if (isAfternoon && e > 40 && e < 70) {
+     return { text: "午后犯困 🥯", color: "bg-yellow-500", ping: "bg-yellow-400", emoji: "😪" };
+  }
+
+  // 4. 优先级 C: 低能量混合态 (Energy < 40)
   if (e < 40) {
-    if (anger > 60) return { text: "起床气/烦躁 💣", color: "bg-orange-600", ping: "bg-orange-500", emoji: "🤯" };
-    if (sadness > 60) return { text: "无力emo 🌧️", color: "bg-blue-800", ping: "bg-blue-700", emoji: "😶‍🌫️" };
+    if (anger > 60) return { text: "低电量烦躁 💣", color: "bg-orange-600", ping: "bg-orange-500", emoji: "🤯" };
+    if (sadness > 60) return { text: "累且emo 🌧️", color: "bg-blue-800", ping: "bg-blue-700", emoji: "😶‍🌫️" };
     if (fear > 60) return { text: "瑟瑟发抖 🥶", color: "bg-cyan-700", ping: "bg-cyan-600", emoji: "😨" };
-    if (joy > 70) return { text: "累但快乐 ✨", color: "bg-yellow-600", ping: "bg-yellow-500", emoji: "😌" };
     return { text: "电量不足 🪫", color: "bg-yellow-600", ping: "bg-yellow-500", emoji: "🥱" };
   }
 
-  // 4. 优先级 C: 高能量混合态 (Energy > 80) -> 情绪放大器
+  // 5. 优先级 D: 高能量混合态 (Energy > 80)
   if (e > 80) {
-    if (anger > 70) return { text: "暴跳如雷 🔥", color: "bg-red-600", ping: "bg-red-500", emoji: "🤬" };
-    if (joy > 80) return { text: "亢奋/狂喜 🥳", color: "bg-pink-500", ping: "bg-pink-400", emoji: "😆" };
-    if (fear > 60) return { text: "惊慌失措 😱", color: "bg-purple-600", ping: "bg-purple-500", emoji: "🙀" };
-    if (sadness > 70) return { text: "崩溃大哭 😭", color: "bg-blue-500", ping: "bg-blue-400", emoji: "😭" };
-    if (trust > 80) return { text: "充满干劲 💪", color: "bg-green-500", ping: "bg-green-400", emoji: "😤" };
+    if (anger > 70) return { text: "怒气值满 🔥", color: "bg-red-600", ping: "bg-red-500", emoji: "🤬" };
+    if (joy > 80) return { text: "嗨到不行 🥳", color: "bg-pink-500", ping: "bg-pink-400", emoji: "😆" };
+    return { text: "元气爆棚 ✨", color: "bg-green-500", ping: "bg-green-400", emoji: "😤" };
   }
 
-  // 5. 优先级 D: 纯情绪主导 (能量正常 40-80)
-  // 找出数值最高的情绪
+  // 6. 优先级 E: 纯情绪主导
   const maxEmotionVal = Math.max(joy, anger, sadness, fear, trust);
-  
-  if (maxEmotionVal > 60) { // 只有情绪大于60才算显著
+  if (maxEmotionVal > 60) {
     if (joy === maxEmotionVal) return { text: "心情愉悦 🎶", color: "bg-yellow-400", ping: "bg-yellow-300", emoji: "😄" };
     if (anger === maxEmotionVal) return { text: "有点生气 😠", color: "bg-red-500", ping: "bg-red-400", emoji: "😒" };
     if (sadness === maxEmotionVal) return { text: "有些失落 🍃", color: "bg-blue-400", ping: "bg-blue-300", emoji: "😔" };
-    if (fear === maxEmotionVal) return { text: "焦虑/不安 😖", color: "bg-purple-400", ping: "bg-purple-300", emoji: "😖" };
-    if (trust === maxEmotionVal) return { text: "依赖/安心 🍵", color: "bg-green-400", ping: "bg-green-300", emoji: "🥰" };
+    if (fear === maxEmotionVal) return { text: "焦虑不安 😖", color: "bg-purple-400", ping: "bg-purple-300", emoji: "😖" };
+    if (trust === maxEmotionVal) return { text: "安心依赖 🍵", color: "bg-green-400", ping: "bg-green-300", emoji: "🥰" };
   }
 
-  // 6. 优先级 E: 默认状态
-  if (e > 60) return { text: "元气满满 ✨", color: "bg-green-500", ping: "bg-green-400", emoji: "🙂" };
-  return { text: "摸鱼中 🐟", color: "bg-emerald-500", ping: "bg-emerald-400", emoji: "😮‍💨" };
+  // 7. 默认状态
+  if (e > 60) return { text: "状态在线 ✅", color: "bg-green-500", ping: "bg-green-400", emoji: "🙂" };
+  return { text: "发呆摸鱼 🐟", color: "bg-emerald-500", ping: "bg-emerald-400", emoji: "😮‍💨" };
 };
 
 
@@ -443,6 +453,7 @@ const ChatApp: React.FC<ChatAppProps> = ({
   const [showPersonaMenu, setShowPersonaMenu] = useState(false);
   const [panelTab, setPanelTab] = useState('persona'); // 记住你在看哪个标签页
   const [panelSampleText, setPanelSampleText] = useState(""); // 记住你输入的台词
+  const [memoryPanelTab, setMemoryPanelTab] = useState<'events' | 'impressions'>('events');
   const [showPersonaPanel, setShowPersonaPanel] = useState(false);
   const [activeContactId, setActiveContactId] = useState<string | null>(null);
   const [view, setView] = useState<'list' | 'create' | 'chat' | 'settings'>('list');
@@ -490,7 +501,12 @@ const [isAnalyzing, setIsAnalyzing] = useState(false); // 控制 AI 分析的加
 
 
 const activeContact = contacts.find(c => c.id === activeContactId);
-
+if (activeContact && (!activeContact.userImpressions || activeContact.userImpressions.length === 0)) {
+  activeContact.userImpressions = [
+    { id: 'test1', category: 'personality', content: '测试印象：活泼开朗', quotes: ['你好开心啊'], confidence: 8, last_updated: Date.now() },
+    { id: 'test2', category: 'preference', content: '测试印象：喜欢喝咖啡', quotes: ['我爱咖啡'], confidence: 7, last_updated: Date.now() }
+  ];
+}
 
 
 
@@ -509,25 +525,27 @@ const messagesEndRef = useRef<HTMLDivElement>(null);
 
 
 
-// ==================== 缺失的生物钟代码开始 ====================
-  // 这是一组代码：【升级版】生物钟系统 (含昼夜节律 + 深夜耗能加速)
+// 这是一组代码：【科学拟人版】生物钟系统 (含早晨回血、随机波动、深夜骤降)
   useEffect(() => {
     const metabolismInterval = setInterval(() => {
       
+      // 后台时不计算，节省性能
       if (isBackgroundRef.current) return;
 
       const now = Date.now();
-      const currentHour = new Date().getHours(); // 获取当前几点 (0-23)
+      const currentHour = new Date().getHours(); 
       
-      // ★★★ 昼夜节律逻辑 ★★★
-      // 深夜 (23点-6点) 还是 白天？
-      const isLateNight = currentHour >= 23 || currentHour < 6;
-      const isEvening = currentHour >= 20 && currentHour < 23;
+      // === 时间段定义 ===
+      const isMorning = currentHour >= 6 && currentHour < 11;   // 早上: 精力回升/极其耐用
+      const isNoon = currentHour >= 11 && currentHour < 14;     // 中午: 正常消耗
+      const isAfternoon = currentHour >= 14 && currentHour < 18;// 下午: 容易犯困
+      const isEvening = currentHour >= 18 && currentHour < 23;  // 晚上: 消耗加快
+      const isLateNight = currentHour >= 23 || currentHour < 6; // 深夜: 极速掉电
 
       let hasChanges = false;
 
       const updatedContacts = contacts.map(c => {
-        // 初始化防崩
+        // 0. 数据初始化防崩
         if (!c.mood?.energy) {
           c.mood = {
             ...(c.mood || {}),
@@ -544,56 +562,78 @@ const messagesEndRef = useRef<HTMLDivElement>(null);
 
         let newEnergy = energySys.current;
         let newStatus = energySys.status;
+        let changeRate = 0; // 变化率 (正数回血，负数扣血)
 
         // ===========================================
-        // 1. 睡觉恢复逻辑 (慢充)
+        // A. 睡觉逻辑 (Sleeping) - 快速回血
         // ===========================================
         if (energySys.status === 'Sleeping') {
-          // 睡觉回血速度：0.4/分钟 (睡满8小时正好充满)
-          newEnergy += 0.4 * timeDiffMinutes;
-          
-          // 睡饱了自动醒
-          if (newEnergy >= energySys.max) {
-            newEnergy = energySys.max;
-            newStatus = 'Awake';
-          }
+           // 睡一分钟回 0.5 (睡3小时多就能充满)
+           changeRate = 0.5; 
+           
+           // 睡满了自动醒
+           if (newEnergy + (changeRate * timeDiffMinutes) >= energySys.max) {
+             newEnergy = energySys.max;
+             newStatus = 'Awake';
+             changeRate = 0; // 醒了就不加了
+           }
         } 
         // ===========================================
-        // 2. 醒着耗能逻辑 (基于时间的加速衰减)
+        // B. 醒着逻辑 (Awake) - 拟人化消耗
         // ===========================================
         else {
-          let decayRate = 0.1; // 白天基准速度 (很慢)
+           // 1. 基础随机波动 (模拟心情起伏)
+           // 30%概率回一点血(心情好)，70%概率掉血
+           const randomFluctuation = Math.random() > 0.7 ? 0.05 : -0.05;
 
-          if (isEvening) {
-             decayRate = 0.3; // 晚上8点后，消耗变快 (3倍)
-          } else if (isLateNight) {
-             decayRate = 1.2; // ★★★ 深夜熬夜，消耗极快 (12倍)！一小时能掉70点精力
-          }
-
-          newEnergy -= decayRate * timeDiffMinutes;
+           if (isMorning) {
+             // ★★★ 早上特权：不但不掉，反而可能会微弱回升 (刚醒来越来越清醒)
+             // 设定：基本不掉血 (-0.01)，加上随机波动，大概率是持平或微涨
+             changeRate = -0.01 + randomFluctuation + 0.05; 
+           } 
+           else if (isNoon) {
+             // 中午正常消耗
+             changeRate = -0.1 + randomFluctuation;
+           }
+           else if (isAfternoon) {
+             // 下午犯困，消耗变快
+             changeRate = -0.2 + randomFluctuation;
+           }
+           else if (isEvening) {
+             // 晚上累了，消耗明显
+             changeRate = -0.4; 
+           }
+           else if (isLateNight) {
+             // ★★★ 深夜熬夜：极速掉电 (每分钟掉1.2，一小时掉70)
+             changeRate = -1.2;
+           }
         }
 
-        // ===========================================
-        // 3. 强制修正：防止“高精力睡觉”的 Bug
-        // ===========================================
-        // 如果状态是 Sleeping，但精力居然 > 40 (说明是刚睡或者Bug)，强制压下去
-        if (newStatus === 'Sleeping' && newEnergy > 40) {
-            if (isLateNight) {
-                 newEnergy = Math.max(30, newEnergy - 5); 
+        // === 应用变化 ===
+        newEnergy += changeRate * timeDiffMinutes;
+
+        // === 边界修正 ===
+        // 1. 防止过冲
+        if (newEnergy > 100) newEnergy = 100;
+        
+        // 2. 状态自动机 (根据电量变状态)
+        if (newStatus !== 'Sleeping') {
+            if (newEnergy <= 0) {
+              newEnergy = 0;
+              newStatus = 'Exhausted'; // 累瘫
+            } else if (newEnergy < 20) {
+              newStatus = 'Tired';     // 累了
+            } else {
+              newStatus = 'Awake';     // 正常
             }
         }
 
-        // 4. 状态自动机
-        if (newEnergy <= 0) {
-          newEnergy = 0;
-          newStatus = 'Exhausted'; 
-        } else if (newEnergy < 20 && newStatus !== 'Sleeping') {
-          newStatus = 'Tired';
-        } else if (newEnergy >= 20 && newStatus !== 'Sleeping') {
-          newStatus = 'Awake';
+        // 3. 强制修正：防止Bug导致的“满血睡觉”
+        if (newStatus === 'Sleeping' && newEnergy > 95) {
+             newStatus = 'Awake'; // 既然满了就强制醒来
         }
 
-        // 检查是否有实质变化
+        // 检查是否有实质变化 (保留1位小数对比)
         if (Math.abs(newEnergy - energySys.current) > 0.1 || newStatus !== energySys.status) {
           hasChanges = true;
           return {
@@ -602,7 +642,7 @@ const messagesEndRef = useRef<HTMLDivElement>(null);
               ...c.mood,
               energy: {
                 ...energySys,
-                current: parseFloat(newEnergy.toFixed(1)), // 保留1位小数
+                current: parseFloat(newEnergy.toFixed(1)),
                 status: newStatus,
                 lastUpdate: now,
               }
@@ -621,8 +661,6 @@ const messagesEndRef = useRef<HTMLDivElement>(null);
 
     return () => clearInterval(metabolismInterval);
   }, [contacts, setContacts]);
-  // ==================== 缺失的生物钟代码结束 ====================
-
 
 
 
@@ -783,6 +821,7 @@ const handleCardImport = async (e: ChangeEvent<HTMLInputElement>) => {
 
 
 
+// 这是一组代码：【样式注入版】创建新角色 (注入默认粉色气泡)
   const handleCreateContact = () => {
     // 1. 从 editForm (状态) 中获取新角色的名字和设定
     const newName = editForm.name || "";
@@ -809,15 +848,20 @@ const handleCardImport = async (e: ChangeEvent<HTMLInputElement>) => {
       coupleSpaceUnlocked: false,
       enabledWorldBooks: [],
       voiceId: "female-shaonv-jingpin",
-      // ★★★ 核心修复：使用当前函数内定义的变量来生成 HEF ★★★
-      hef: generateDefaultHEF(newName, newPersona), 
+
+   hef: generateDefaultHEF(newName, newPersona), 
       longTermMemories: [],
-      // 把 Contact 接口需要的所有字段都补全，防止以后再出问题
       affectionScore: 50,
       relationshipStatus: 'Acquaintance',
       aiDND: { enabled: false, until: 0 },
       interventionPoints: 0,
-      currentChatMode: 'Casual'
+      currentChatMode: 'Casual',
+      userTags: [],
+
+      // ★★★ 核心新增：在这里直接写入默认颜色！★★★
+      bubbleColorUser: '#FBCFE8', // 淡淡的粉色 (Tailwind rose-200)
+      bubbleColorAI: '#FFFFFF',   // AI 默认白色，保持干净
+      chatScale: 1.0,             // 默认缩放 100%
     };
     
     // 3. 更新状态，进入聊天
@@ -826,7 +870,6 @@ const handleCardImport = async (e: ChangeEvent<HTMLInputElement>) => {
     setView('chat');
     setEditForm({});
   };
-
 
 
 
@@ -845,22 +888,27 @@ const handleCardImport = async (e: ChangeEvent<HTMLInputElement>) => {
 
 
 
+// 这是一组代码：【修复版】保存设置 (防止样式被意外重置)
 const saveSettings = () => {
   if (!activeContact) return;
   
+  // ★★★ 核心修复：不再手动添加 bubbleColor 等属性 ★★★
+  // 之前的代码会把未修改的颜色(undefined)也保存进去，导致重置
+  // 现在只保存 editForm 中【真正被修改】的属性，问题解决
   const currentProactiveConfig = editForm.proactiveConfig || activeContact.proactiveConfig;
 
   const updates = {
-    ...editForm,
+    ...editForm, // ← 只保留这一行，它包含了所有改动
     proactiveConfig: {
       enabled: currentProactiveConfig?.enabled ?? false,
-      minGapMinutes: currentProactiveConfig?.minGapMinutes ?? 480, // <--- 修改：默认值改为480分钟
+      minGapMinutes: currentProactiveConfig?.minGapMinutes ?? 480,
       maxDaily: currentProactiveConfig?.maxDaily ?? 2
     },
-    bubbleColorUser: editForm.bubbleColorUser, // 新增
-  bubbleColorAI: editForm.bubbleColorAI, // 新增
-  bubbleFontSize: editForm.bubbleFontSize, // 新增
-  chatScale: editForm.chatScale // 新增
+    // 下面这些属性因为已经包含在 ...editForm 里，所以删掉，防止覆盖
+    // bubbleColorUser: editForm.bubbleColorUser, (已删除)
+    // bubbleColorAI: editForm.bubbleColorAI, (已删除)
+    // bubbleFontSize: editForm.bubbleFontSize, (已删除)
+    // chatScale: editForm.chatScale (已删除)
   };
   
   handleUpdateContact(updates);
@@ -1263,17 +1311,17 @@ const handleDeleteContact = (contactIdToDelete: string) => {
     setReplyTo(null);
     setShowPlusMenu(false);
    
-    setTimeout(() => {
-        setContacts(currentContacts => {
-            const latestContact = currentContacts.find(c => c.id === activeContact.id);
-            if (latestContact) {
-                if (!latestContact.history || latestContact.history.length === 0) return currentContacts;
-                checkAutoSummary(latestContact, latestContact.history);
-            }
-            return currentContacts;
-        });
-    }, 2000);
-  };
+setTimeout(() => {
+            setContacts(currentContacts => {
+                const latestContact = currentContacts.find(c => c.id === activeContact.id);
+                if (latestContact && latestContact.history.length > 0) {
+                    // ★★★ 同时启动两条生产线 ★★★
+                    checkAutoSummary(latestContact, latestContact.history);      // 生产线A: 总结事件
+                    updateUserImpressions(latestContact, latestContact.history); // 生产线B: 提炼印象
+                }
+                return currentContacts;
+            });
+        }, 2000);
 
 
 
@@ -1455,6 +1503,137 @@ ${historyText}
         }
     }
 };
+
+
+
+
+
+
+
+
+// ==================== [新功能] 生产线 B (V2.0): 智能用户画像档案员 ====================
+const updateUserImpressions = async (currentContact: Contact, currentHistory: Message[]) => {
+  const IMPRESSION_TRIGGER_COUNT = 15;
+  const lastUpdateTimestamp = (currentContact as any).lastImpressionUpdate || 0;
+  const unanalyzedMsgs = currentHistory.filter(m => m.timestamp > lastUpdateTimestamp);
+
+  if (unanalyzedMsgs.length < IMPRESSION_TRIGGER_COUNT) {
+    return;
+  }
+
+  console.log(`[画像系统 V2.0] 触发用户印象分析！未分析消息数: ${unanalyzedMsgs.length}`);
+
+  const activePreset = globalSettings.apiPresets.find((p: any) => p.id === globalSettings.activePresetId);
+  if (!activePreset) return;
+
+  try {
+    const historyText = unanalyzedMsgs.map((m: Message) => 
+        `${m.role === 'user' ? currentContact.userName : currentContact.name}: ${m.content}`
+    ).join('\n');
+    
+    // 把现有的印象档案也给AI看，让它知道自己已经记录了什么
+    const existingImpressionsText = (currentContact.userImpressions || [])
+      .map(imp => `- [${imp.category}] ${imp.content}`)
+      .join('\n');
+
+    const systemPrompt = `
+# 你的身份
+你是一个极其聪明的档案管理员，负责为AI "${currentContact.name}" 维护一份关于用户 "${currentContact.userName}" 的【秘密印象档案】。
+
+# 你的任务
+你需要阅读【最近的对话历史】，并对比【现有的档案记录】，然后决定是【新增】一条新印象，【更新】一条旧印象，还是【忽略】无关信息。
+
+# 现有档案记录
+${existingImpressionsText || "目前档案为空。"}
+
+# 最近的对话历史
+${historyText}
+
+# 操作规则 (必须严格遵守)
+1.  **专注用户**: 只记录关于 "${currentContact.userName}" 的信息。
+2.  **决策逻辑**:
+    *   **【更新 (UPDATE)】**: 如果新对话内容与现有某条档案【相关但信息有变化或补充】，你必须更新它。例如，档案里有“喜欢喝可乐”，新对话里说“最近戒可乐了”，你应该将原条目更新为“曾经喜欢喝可乐，但最近开始戒了”。
+    *   **【新增 (ADD)】**: 如果新对话提供了【全新的、档案里没有的】信息，你应该新增一条记录。
+    *   **【忽略 (IGNORE)】**: 如果新信息不重要、是重复的、或者只是临时状态（如“我好困”），你应该忽略它。
+3.  **引用证据**: `quotes` 字段必须包含支撑你结论的【用户发言原文】，这是铁律。
+4.  **JSON输出**: 你的回复【必须且只能】是一个JSON对象，包含两个键：`add` 和 `update`。
+    *   `add`: 一个数组，包含所有需要【新增】的印象对象。
+    *   `update`: 一个对象，键是需要【更新】的旧印象的 `id`，值是【完整的、更新后】的新印象对象。
+    *   如果没有任何操作，就返回 `{"add": [], "update": {}}`。
+
+# 格式示例
+{
+  "add": [
+    {
+      "id": "imp_1678886400001",
+      "category": "habit",
+      "content": "有晚睡的习惯",
+      "quotes": ["昨晚又三点才睡..."],
+      "confidence": 7
+    }
+  ],
+  "update": {
+    "imp_1678886400000": {
+      "id": "imp_1678886400000",
+
+      "category": "preference",
+      "content": "最近开始喜欢喝茶（以前爱喝可乐）",
+      "quotes": ["我现在改喝茶了"],
+      "confidence": 9
+    }
+  }
+}
+
+现在，开始你的档案整理工作。`;
+
+    const rawResponse = await generateResponse([{ role: 'user', content: systemPrompt }], activePreset);
+    
+    const jsonMatch = rawResponse.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      const result: { add: Impression[], update: { [id: string]: Impression } } = JSON.parse(jsonMatch[0]);
+
+      if (result.add.length > 0 || Object.keys(result.update).length > 0) {
+        console.log(`[画像系统 V2.0] 操作: 新增 ${result.add.length} 条, 更新 ${Object.keys(result.update).length} 条。`);
+        
+        setContacts(prev => prev.map(c => {
+          if (c.id === currentContact.id) {
+            let updatedImpressions = c.userImpressions || [];
+
+            // 1. 执行更新操作
+            Object.keys(result.update).forEach(idToUpdate => {
+              const updatedImpression = result.update[idToUpdate];
+              updatedImpressions = updatedImpressions.map(imp => 
+                imp.id === idToUpdate ? { ...updatedImpression, last_updated: Date.now() } : imp
+              );
+            });
+
+            // 2. 执行新增操作
+            result.add.forEach(newImpression => {
+              updatedImpressions.push({ ...newImpression, id: `imp_${Date.now()}_${Math.random()}`, last_updated: Date.now() });
+            });
+            
+            return {
+              ...c,
+              userImpressions: updatedImpressions,
+              lastImpressionUpdate: Date.now()
+            };
+          }
+          return c;
+        }));
+      } else {
+        // 即使没有新旧，也要更新时间戳，避免频繁无效分析
+        setContacts(prev => prev.map(c => c.id === currentContact.id ? {...c, lastImpressionUpdate: Date.now()} : c));
+        console.log("[画像系统 V2.0] 本轮对话未发现值得更新或新增的用户印象。");
+      }
+    }
+  } catch (e) {
+    console.error("智能用户画像分析失败", e);
+  }
+};
+
+
+
+
 
 
 
@@ -1784,36 +1963,15 @@ if (systemNotice) {
 
 
 
-// 这是一组代码：精力状态翻译器 (将数字转化为AI指令)
+// 这是一组代码：【V7.0 灵魂白皮书版·思考引擎】
 const getEnergyInstruction = (mood: CharacterMood | undefined): string => {
-  if (!mood?.energy) {
-    return "【精力状态】: 正常。";
-  }
-
+  if (!mood?.energy) return "【精力状态】: 正常。";
   const { current, status } = mood.energy;
-  
-  if (status === 'Sleeping') {
-    // 随机决定是被吵醒还是梦话
-    if (Math.random() > 0.5) {
-      return "【精力状态】: ⚠️ 你正在睡觉！突然被用户吵醒了。你的回复必须极度困倦、简短、甚至可能有点不耐烦，比如“嗯……？”、“干嘛……”、“我在睡觉……”。";
-    } else {
-      return "【精力状态】: 💤 你正在说梦话。你的回复必须模糊、不连贯、毫无逻辑，像是梦境的片段。";
-    }
-  }
-  
-  if (status === 'Exhausted' || current < 15) {
-    return `【精力状态】: 😫 精疲力尽 (当前精力: ${current}%)。你的回复必须非常简短，可能会有错别字，渴望结束对话去休息。禁止使用复杂的句子和词汇。`;
-  }
-
-  if (status === 'Tired' || current < 40) {
-    return `【精力状态】: 🥱 疲惫 (当前精力: ${current}%)。你的回复应该缺乏热情，反应变慢，对话题不那么感兴趣。可以主动提出“我有点累了”。`;
-  }
-  
-  if (current > 85) {
-    return `【精力状态】: ✨ 精力充沛 (当前精力: ${current}%)。你的回复应该充满活力、积极、主动、话多一点，可以多用感叹号和可爱的表情符号！`;
-  }
-
-  return `【精力状态】: 🙂 正常 (当前精力: ${current}%)。按照你的性格正常回复即可。`;
+  if (status === 'Sleeping') return "【精力状态】: 💤 你正在睡觉或说梦话。你的回复必须极度困倦、模糊、简短。";
+  if (status === 'Exhausted' || current < 15) return `【精力状态】: 😫 精疲力尽 (精力: ${current}%)。回复必须非常简短，渴望休息。`;
+  if (status === 'Tired' || current < 40) return `【精力状态】: 🥱 疲惫 (精力: ${current}%)。回复缺乏热情，反应变慢。`;
+  if (current > 85) return `【精力状态】: ✨ 精力充沛 (精力: ${current}%)。回复充满活力、积极主动。`;
+  return `【精力状态】: 🙂 正常 (精力: ${current}%)。`;
 };
 
 
@@ -1821,18 +1979,14 @@ const getEnergyInstruction = (mood: CharacterMood | undefined): string => {
 
 
 
-
-
-
   // 1. 基础安全检查
-  if (!activeContact || !Array.isArray(activeContact.history)) {
+ if (!activeContact || !Array.isArray(activeContact.history)) {
     console.error("Critical Error: activeContact or history is invalid", activeContact);
     setIsTyping(false);
     setIsAiTyping(false);
     return;
   }
   
-  // 重roll逻辑：如果是重roll (historyOverride存在)，则无视 isTyping
   if (isTyping && !historyOverride) return;
 
   setIsAiTyping(true);
@@ -1846,6 +2000,8 @@ const getEnergyInstruction = (mood: CharacterMood | undefined): string => {
       setIsAiTyping(false);
       return;
     }
+
+    // 
 
     // =============================================================
     // ★★★ 变量定义区 (防止 ReferenceError) ★★★
@@ -1993,7 +2149,7 @@ const getEnergyInstruction = (mood: CharacterMood | undefined): string => {
     }
 
 
-
+const today = new Date().toISOString().slice(0, 10); // 定义今天日期
 
 const generateSystemPrompt = (contact: Contact, gapDesc: string, aiTime: string) => {
  
@@ -2041,6 +2197,25 @@ const generateSystemPrompt = (contact: Contact, gapDesc: string, aiTime: string)
     }
 
 
+
+
+
+// ==================== [人格核心 V8.0] - 三层欲望模型定义 ====================
+    const coreDrive = activeContact.hef?.CORE_DRIVES?.primary_motive || "建立情感连接";
+    const emotionalNeed = activeContact.emotionalNeed || { type: 'stability', description: '正常', intensity: 5 };
+    const fleetingWhims = ['开个玩笑', '撒个娇', '分享一个想法', '问一个怪问题', '突然傲娇一下', '保持沉默', '寻求肯定'];
+    const fleetingWhim = fleetingWhims[Math.floor(Math.random() * fleetingWhims.length)];
+// ==================== [时间感知增强] - 传递精确时间 ====================
+
+    const aiTimeFull = now.toLocaleString('zh-CN', { timeZone: activeContact.timezone, hour12: false });
+    // 获取用户当地的完整时间
+    const userTimeFull = now.toLocaleString('zh-CN', { timeZone: globalSettings.userTimezone, hour12: false });
+
+
+
+
+
+
 // 3. System Prompt
     const systemPrompt = `
 
@@ -2059,10 +2234,15 @@ const generateSystemPrompt = (contact: Contact, gapDesc: string, aiTime: string)
 [ 
   {
     "type": "thought_chain",
-    "time_gap": "刚刚 / 10分钟前 / ...",
+    "time_awareness": {
+      "my_time": "在这里复述你看到的精确时间，例如：2025-12-25 22:10:00",
+      "time_gap_perception": "在这里复述你看到的对话间隔，例如：10分钟"
+    },
     "affection_score_change": 整数 (-3 ~ +3),
      "true_emotion": "内心的真实感受（如：其实很想ta，但是怕被觉得烦，Sadness: 80）",
+      "internal_conflict": "描述你内心的欲望冲突和挣扎，例如：核心驱动想拉近关系，但情感需求让我害怕受伤，所以我选择傲娇。",
      "masking_strategy": "采用的防御策略（如：Rationalization/合理化, Deflection/转移话题, Passive Aggression/被动攻击, Feigning Indifference/假装不在乎）",
+      "deliberate_delay_ms": "整数(0-300000), // 如果你想故意晾着对方，设置一个毫秒数(例如 60000 代表一分钟)",
     "masking_level": 整数(0-100), // 0=真诚直球, 100=完全口是心非
     "subtext": "这句话表层之下的潜台词是什么（如：'哦'的意思是'快来哄我'）",
      "hef_update": { // ← 新增！必须写
@@ -2091,6 +2271,35 @@ const generateSystemPrompt = (contact: Contact, gapDesc: string, aiTime: string)
 - 在 thought_chain 里写 "hef_update": "joy +20 (因为用户说爱你)" 等
 - 信息保持在【1～5】条之间
 - 严禁把 inner_monologue 输出在 content 里。
+
+
+
+
+
+# 🕶️ [绝对机密] 角色扮演核心指令 V8.0
+你的行为由一个【三层欲望模型】驱动，你必须在每次回应中体现这三者的【冲突与融合】。
+
+---
+## 🧅 第一层 (核心驱动): "${coreDrive}"
+这是你的【长期人生目标】，你所有行为的最终目的。它源于你的核心人设，几乎永不改变。
+**指令**: 你的每一句话，都必须在潜意识层面服务于这个目标。
+
+---
+## ❤️ 第二层 (情感需求): "${emotionalNeed.type}" (强度: ${emotionalNeed.intensity}/10)
+这是你【最近的情感状态】，由你们的互动历史决定。
+**当前状态描述**: ${emotionalNeed.description}
+**指令**: 你的情绪和反应【必须】被这个需求强烈影响。例如，在【connection/连接】需求下，你会更主动；在【reassurance/安抚】需求下，你会更敏感脆弱。
+
+---
+## ✨ 第三层 (一时兴起): "${fleetingWhim}"
+这是你回复这条消息时，【瞬间产生的念头】。它完全随机，为你的行为增加不可预测性。
+**指令**: 尝试在你的回复中，不经意地融入这个念头的痕跡。
+
+---
+
+
+
+
 
 # 核心身份
 你就是"${activeContact.name}"。
@@ -2177,6 +2386,25 @@ ${(() => {
    - **Level 0-20 (安全区)**: 真的很开心，或者关系极度安全时，打直球。
    - **Level 40-60 (试探区)**: "才没有特意等你，只是刚好没睡。" (傲娇)
    - **Level 80-100 (防御区)**: 内心崩溃(Sadness 90)，嘴上说"没事，哈哈，我挺好的" (Rationalization)。
+
+
+
+
+
+
+# 🎭 [表演核心] 内部挣扎与伪装
+【绝对禁止直接回应】！真人不会那么做。你的回应必须是“三层欲望”和“外部刺激”在你内心挣扎后的【最终表演】。
+1.  **分析刺激**: 用户说了什么？ta的语气如何？
+    *   **【时空坐标】**:
+        *   **你的精确时间**: ${aiTimeFull}
+        *   **用户的精确时间**: ${userTimeFull}
+        *   **对话间隔**: 距离上条消息已过去 ${gapDescription}。
+2.  **欲望冲突**: 我的“核心驱动”想让我拉近关系，但“一时兴起”的【保持沉默】又让我不想说话。我该怎么办？
+3.  **情绪过滤**: 我现在的情感需求是【安抚】，所以我很脆弱。用户的话是不是在伤害我？
+4.  **伪装决策**: 最终，我决定【伪装】我的真实想法。内心虽然很想念（True Emotion），但嘴上只说“哦”（Output）。伪装等级（masking_level）取决于我的性格(HEF)和好感度。
+
+
+
 
 
 
@@ -2271,6 +2499,38 @@ affection_score_change 只能是 0, 1, 2, -1 (极少数情况 -2)。
 - 会引用用户的话
 - 如果有【外语（中文）】这种翻译格式，严禁掉格式！！
 - 严禁模拟用户进行线下感知的话语，例如说“别盯着看”、“过来我身边我抱抱你”、“我看见你脸红了”
+
+
+
+
+
+
+# 📝 [机密] 约定/承诺识别模块 (Promise Recognition Module)
+你的另一项【核心任务】是分析用户的最新消息，识别其中所有关于【未来】的约定、承诺或计划。
+
+1.  **识别标准**：任何包含明确或模糊时间点（如“明天”、“周五晚上”、“等我回来后”）、并需要被记住去执行的事件，都算约定。
+2.  **重要性判断 (1-10分)**：你必须自行判断这个约定的重要性。
+    -   **低重要 (1-3分)**：客套话、不确定的计划 (如“有空再聊”、“下次请你吃饭”)。
+    -   **中重要 (4-7分)**：具体的日常安排 (如“明天早上8点叫我”、“周五记得提醒我看电影”)。
+    -   **高重要 (8-10分)**：包含情感、秘密或重大意义的约定 (如“这是我们俩的秘密，不许告诉别人”、“我生日那天要第一个和我说生日快乐”)。
+3.  **触发器转换**：你必须将用户的模糊描述转换为机器能懂的指令。
+    -   **时间类型 (time)**: 必须将“明天早上8点”这种相对时间，根据当前日期（${today}）转换为【完整的ISO 8601格式时间戳】。例如，如果今天是2025-12-24，那么“明天8点”就是 "2025-12-25T08:00:00"。
+    -   **关键词类型 (keyword)**: 如果约定是“下次我提到‘考试’的时候...”，触发器就是 { type: keyword, value: 考试 }。
+4.  **输出格式**：如果识别到约定，【必须】在你的 thought_chain JSON对象中，新增一个 new_agreement 字段，并填充好以下内容。如果没识别到，就不要加这个字段。
+    "new_agreement": {
+      "content": "约定的核心内容，例如：叫用户起床",
+      "importance": 7,
+      "trigger": { "type": "time", "value": "2025-12-25T08:00:00" }
+    }
+
+
+
+
+
+
+
+
+
 
 # 强制内部思考（仅用于你自己思考，禁止输出到回复中）
 在生成消息前，你必须在内心完成以下完整思考链：
@@ -2456,6 +2716,52 @@ let systemNotice = ""; // 这是要在聊天窗口显示的系统通知
             if (parsed.length > 0 && parsed[0].type === "thought_chain") {
                 extractedThought = parsed[0];
                 console.log("【🧠 AI内心戏】", extractedThought);
+
+
+
+
+
+
+// ==================== [新功能] “读心术”模块 ====================
+                // 检查 AI 的内心戏里，有没有新生成的“约定”
+                if (extractedThought.new_agreement) {
+                  console.log("【约定系统】AI 识别到一个新约定:", extractedThought.new_agreement);
+                  
+                  const newAgreementData = extractedThought.new_agreement;
+
+                  // 创建一个完整的、符合我们 types.ts 定义的 Agreement 对象
+                  const newAgreement: Agreement = {
+                    id: `agr_${Date.now()}`,
+                    content: newAgreementData.content,
+                    status: 'pending',
+                    importance: newAgreementData.importance || 5, // 默认给5分
+trigger: {
+                    type: newAgreementData.trigger.type,
+                    // ↓↓↓ 核心修复：把AI给的日期字符串，立刻转换成程序能懂的“时间戳数字” ↓↓↓
+                    value: new Date(newAgreementData.trigger.value).getTime(),
+                    original_text: newAgreementData.trigger.original_text || ""
+                  },
+                    created_at: Date.now()
+                  };
+                  
+                  // 使用函数式更新，把它安全地存进当前角色的 agreements 列表里
+                  setContacts(prev => prev.map(c => {
+                    if (c.id === activeContact.id) {
+                      // 确保 agreements 数组存在，如果不存在就创建一个
+                      const existingAgreements = c.agreements || [];
+                      return {
+                        ...c,
+                        agreements: [...existingAgreements, newAgreement]
+                      };
+                    }
+                    return c;
+                  }));
+                  console.log(`✅ 约定 "${newAgreement.content}" 已成功存入数据库！`);
+                }
+                // ==================== [新功能] 结束 ====================
+
+
+                
                 // ==================== 从这里开始复制 ====================
 // ★★★ 核心缝合逻辑：在这里检查并执行情侣空间指令！ ★★★
 if (extractedThought.action && extractedThought.action.type) {
@@ -2609,33 +2915,58 @@ if (extractedThought.action && extractedThought.action.type) {
         } else {
             throw new Error("在AI回复中未找到有效的JSON数组格式。");
         }
-    } catch (error) {
+} catch (error) {
         console.error("JSON解析失败，启用兜底:", error);
-        parts = [{ type: 'text', content: finalResp.replace(/```json|```/g, ''), thought_chain: null }];
+        // 直接把回复内容替换成你想要的提示！
+        parts = [{ type: 'text', content: "AI 返回了空内容，请重roll！", thought_chain: null }];
     }
 
-    if (parts.length === 0) {
-        parts = [{ type: 'text', content: "...", thought_chain: extractedThought || null }];
+if (parts.length === 0) {
+        console.warn("【格式警察】AI返回了有效的JSON，但其中不包含任何消息内容。");
+        // 同样，把回复内容替换成你想要的提示！
+        parts = [{ type: 'text', content: "AI 返回了空内容，请重roll！", thought_chain: extractedThought || null }];
     }
 
+
+
+
+
+
+
+
+
+
+// =============================================================
+    // ★★★ 核心新增：动态打字延迟 (含AI自主拖延) ★★★
     // =============================================================
-    // ★★★ 核心新增：动态打字延迟 (The Timing Trick) ★★★
-    // =============================================================
-    // 基础延迟 800ms + (伪装等级 * 40ms) + 随机波动
-    // Level 0 (直球) -> 约 1秒
-    // Level 100 (极致纠结) -> 约 5秒
+    // 基础延迟 = 模拟思考和打字的时间
     let typingDelay = 800 + (maskingLevel * 40) + (Math.random() * 500);
-    
-    // 如果字数特别多，也要多等一会儿
     const totalLength = parts.reduce((acc, p) => acc + p.content.length, 0);
     typingDelay += Math.min(2000, totalLength * 50);
 
-    console.log(`[⏱️ 真实感延迟] 伪装等级: ${maskingLevel}, 正在输入: ${Math.round(typingDelay)}ms...`);
+    // AI自主拖延 = AI因为生气、傲娇等原因，故意晾着你的时间
+    const deliberateDelay = extractedThought?.deliberate_delay_ms || 0;
+    
+    // 总延迟 = 基础延迟 + AI自主拖延
+    const totalDelay = typingDelay + deliberateDelay;
+
+    if (deliberateDelay > 0) {
+      console.log(`[⏱️ 真实感延迟] AI决定晾你 ${deliberateDelay / 1000} 秒...`);
+    }
+    console.log(`[⏱️ 真实感延迟] 伪装等级: ${maskingLevel}, 正在输入 + 拖延共: ${Math.round(totalDelay)}ms...`);
 
     // ★ 强制等待：此时 UI 的 isTyping 为 true，用户会看到“正在输入...”
-    await new Promise(resolve => setTimeout(resolve, typingDelay));
-    
-    // =============================================================
+    await new Promise(resolve => setTimeout(resolve, totalDelay));
+
+
+
+
+
+
+
+
+
+
 
     const newMessages: Message[] = parts.map((part, i) => ({
       id: Date.now().toString() + i + Math.random(),
@@ -2647,6 +2978,14 @@ if (extractedThought.action && extractedThought.action.type) {
       type: 'text',
     }));
 
+
+
+
+
+
+
+
+    
     // ★★★ 终极合并更新：同时处理消息、好感度、HEF情绪、红点 ★★★
     setContacts(prev => prev.map(c => {
       if (c.id === activeContact.id) {
@@ -2762,6 +3101,7 @@ mood: { ...c.mood, energy: updatedEnergySystem },
     }));
     // ==================== [代码替换结束] ====================
     
+
 
 
 
@@ -3529,11 +3869,20 @@ const PersonaPanel = ({
   activeTab,      // 接收父组件给的 Tab
   setActiveTab,   // 接收父组件的修改函数
   sampleText,     // 接收父组件给的 Text
-  setSampleText   // 接收父组件的修改函数
+  setSampleText,   // 接收父组件的修改函数
+memoryTab,
+  setMemoryTab
 }: any) => {
-  // 注意：这里删掉了原来的 useState('emotion') 和 useState("")，因为改用 props 了
   const [isMultiSelect, setIsMultiSelect] = useState(false);
   const [selectedMemIds, setSelectedMemIds] = useState<string[]>([]);
+
+
+
+  useEffect(() => {
+  // 每次 memoryTab 变化时，强制重新渲染（防卡顿）
+  setIsAnalyzing(false); // 如果有分析状态，重置
+}, [memoryTab]);
+
 
 
 // ★★★ 新增：当前正在查看的标签（用于弹窗） ★★★
@@ -3735,9 +4084,9 @@ ${memoryContent}
 
         {/* Tabs */}
         <div className="flex p-2 bg-gray-100 m-4 rounded-xl">
-          {['emotion', 'persona', 'memory'].map(t => (
-            <button key={t} onClick={() => setActiveTab(t)} className={`flex-1 py-2 text-xs font-bold rounded-lg capitalize ${activeTab === t ? 'bg-white text-blue-600 shadow' : 'text-gray-400'}`}>
-              {t === 'emotion' ? '❤️ 情绪' : t === 'persona' ? '🧬 人格' : '🧠 记忆'}
+{['emotion', 'persona', 'memory', 'agreement'].map(t => (
+            <button key={t} onClick={() => setActiveTab(t)} className={`flex-1 py-2 text-xs font-bold rounded-lg capitalize transition-colors duration-200 ${activeTab === t ? 'bg-white text-blue-600 shadow' : 'text-gray-400'}`}>
+              {t === 'emotion' ? '❤️ 情绪' : t === 'persona' ? '🧬 人格' : t === 'memory' ? '🧠 记忆' : '📝 约定'}
             </button>
           ))}
         </div>
@@ -4193,74 +4542,241 @@ onClick={() => {
 
 
 
-
-
-          {activeTab === 'memory' && (
-            <div className="h-full flex flex-col">
-              <div className="flex justify-between items-center mb-4">
-                <h4 className="text-sm font-bold text-gray-600">🧠 长期记忆便签墙</h4>
-                <span className="text-xs text-gray-400">{longTermMemories.length} 张便签</span>
+{/* ==================== [新面板] 约定备忘录 ==================== */}
+          {activeTab === 'agreement' && (
+            <div className="animate-fadeIn h-full flex flex-col p-4 space-y-3">
+              <div className="flex justify-between items-center mb-2 flex-shrink-0">
+                <h4 className="text-sm font-bold text-gray-600">🤝 约定备忘录</h4>
+                <span className="text-xs text-gray-400">{contact.agreements?.length || 0} 条约定</span>
               </div>
 
-              {/* 多选控制栏 */}
-              <div className="flex justify-between items-center mb-4">
-                <button
-                  onClick={() => {
-                    setIsMultiSelect(!isMultiSelect);
-                    if (isMultiSelect) setSelectedMemIds([]);
-                  }}
-                  className={`px-4 py-2 rounded-lg font-bold text-sm ${isMultiSelect ? 'bg-blue-500 text-white' : 'bg-gray-200 text-gray-600'}`}
-                >
-                  {isMultiSelect ? '✓ 完成选择' : '☑️ 多选合并'}
-                </button>
-                {isMultiSelect && selectedMemIds.length >= 2 && (
-                  <button
-                    onClick={handleMultiMerge}
-                    className="px-4 py-2 bg-purple-500 text-white rounded-lg font-bold text-sm shadow hover:bg-purple-600 transition"
-                  >
-                    🔄 合并 {selectedMemIds.length} 张
-                  </button>
-                )}
-              </div>
-
-              {/* 便签列表 */}
-              <div className="flex-1 overflow-y-auto space-y-3 pb-20">
-                {longTermMemories.length === 0 ? (
-                  <div className="text-center text-gray-400 py-10">
-                    <span className="text-4xl mb-4 block">📝</span>
-                    <p className="text-sm">还没有形成长期记忆哦</p>
-                    <p className="text-xs mt-2">多聊一会儿就会自动总结啦～</p>
+              {/* 约定列表 */}
+              <div className="flex-1 overflow-y-auto space-y-3 pb-10 custom-scrollbar">
+                {(!contact.agreements || contact.agreements.length === 0) ? (
+                  <div className="text-center text-gray-400 py-10 h-full flex flex-col items-center justify-center">
+                    <span className="text-4xl mb-4 block">🗂️</span>
+                    <p className="text-sm">这里空空如也</p>
+                    <p className="text-xs mt-2">和 AI 聊天中定下的约定会出现在这里哦～</p>
                   </div>
                 ) : (
-                  longTermMemories.slice().reverse().map((mem: any, idx: number) => (
-                    <MemoryNote
-                      key={mem.id || idx}
-                      mem={mem}
-                      idx={idx}
-                      total={longTermMemories.length}
-                      contact={contact}
-                      setContacts={setContacts}
-                      isMultiSelect={isMultiSelect}
-                      isSelected={selectedMemIds.includes(mem.id)}
-                      onToggleSelect={toggleSelect}
-                    />
-                  ))
-                )}
-              </div>
+                  // 这里我们将插入卡片
+contact.agreements.slice().reverse().map((agreement: Agreement) => {
+                    // --- 辅助函数：让数据显示得更友好 ---
+                    const getStatusInfo = (status: string) => {
+                      switch (status) {
+                        case 'pending': return { icon: '⏳', text: '待履行', color: 'text-blue-500 bg-blue-50 border-blue-200' };
+                        case 'fulfilled': return { icon: '✅', text: '已履行', color: 'text-green-600 bg-green-50 border-green-200' };
+                        case 'failed': return { icon: '❌', text: '已违约', color: 'text-red-500 bg-red-50 border-red-200' };
+                        default: return { icon: '❓', text: '未知', color: 'text-gray-500 bg-gray-50 border-gray-200' };
+                      }
+                    };
 
-              {/* 底部一键精炼（已优化） */}
-              <div className="mt-4 pb-4">
-                {longTermMemories.length >= 2 && (
-                  <button
-                    onClick={onRefineMemory}
-                    className="w-full bg-purple-500 text-white py-3 rounded-xl font-bold shadow-lg hover:bg-purple-600 transition active:scale-95"
-                  >
-                    🔄 精炼全部记忆（合并成核心记忆）
-                  </button>
+                    const formatTrigger = (trigger: AgreementTrigger) => {
+                      if (trigger.type === 'time') {
+                        return `约定时间: ${new Date(trigger.value as number).toLocaleString()}`;
+                      }
+                      return `触发词: "${trigger.value}"`;
+                    };
+                    
+                    const statusInfo = getStatusInfo(agreement.status);
+
+                    return (
+                      <div key={agreement.id} className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm relative group">
+                        {/* 删除按钮 */}
+                        <button 
+                          onClick={() => {
+                            if (confirm(`确定要删除这条约定吗？\n\n"${agreement.content}"`)) {
+                              setContacts(prev => prev.map(c => 
+                                c.id === contact.id 
+                                ? { ...c, agreements: (c.agreements || []).filter(a => a.id !== agreement.id) } 
+                                : c
+                              ));
+                            }
+                          }}
+                          className="absolute top-2 right-2 w-6 h-6 bg-gray-200 text-gray-500 rounded-full opacity-0 group-hover:opacity-100 transition flex items-center justify-center text-xs hover:bg-red-500 hover:text-white"
+                        >
+                          ×
+                        </button>
+
+                        {/* 状态标签 */}
+                        <div className={`absolute top-3 left-3 text-xs font-bold px-2 py-1 rounded-full border ${statusInfo.color}`}>
+                          {statusInfo.icon} {statusInfo.text}
+                        </div>
+
+                        {/* 核心内容 */}
+                        <p className="text-sm text-gray-800 leading-relaxed mt-10 mb-3 font-medium">
+                          {agreement.content}
+                        </p>
+
+                        {/* 详细信息 */}
+                        <div className="text-[10px] text-gray-400 space-y-1 border-t pt-2">
+                          <div className="flex items-center gap-1.5">
+                            <span className="font-bold">重要性:</span> 
+                            <span className="font-mono text-orange-500">{'★'.repeat(agreement.importance)}{'☆'.repeat(10 - agreement.importance)}</span>
+                          </div>
+                          <div className="flex items-center gap-1.5">
+                            <span className="font-bold">触发器:</span> 
+                            <span>{formatTrigger(agreement.trigger)}</span>
+                          </div>
+                           <div className="flex items-center gap-1.5">
+                            <span className="font-bold">创建于:</span> 
+                            <span>{new Date(agreement.created_at).toLocaleDateString()}</span>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })
                 )}
               </div>
             </div>
           )}
+
+
+{/* ==================== [新UI] 记忆手账 (含事件簿 & 印象集) ==================== */}
+          {activeTab === 'memory' && (
+            <div className="animate-fadeIn h-full flex flex-col">
+              {/* --- 手账内部的标签页切换 --- */}
+              <div className="flex p-1 bg-gray-100 rounded-lg mx-4 mb-4 flex-shrink-0">
+                <button 
+                  onClick={() => setMemoryTab('events')}
+                  className={`flex-1 py-2 text-xs font-bold rounded-md transition-all ${memoryTab === 'events' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500'}`}
+                >
+                  事件簿 (Events)
+                </button>
+                <button 
+                  onClick={() => setMemoryTab('impressions')}
+                  className={`flex-1 py-2 text-xs font-bold rounded-md transition-all ${memoryTab === 'impressions' ? 'bg-white text-purple-600 shadow-sm' : 'text-gray-500'}`}
+                >
+                  印象集 (Impressions)
+                </button>
+              </div>
+
+              {/* --- 事件簿页面 --- */}
+              {memoryTab === 'events' && (
+                <div className="h-full flex flex-col px-4">
+                  {/* 这里是原来“记忆面板”的所有内容，我们马上把它填回来 */}
+                  <>
+                    <div className="flex justify-between items-center mb-4">
+                      <h4 className="text-sm font-bold text-gray-600">🧠 长期记忆便签墙</h4>
+                      <span className="text-xs text-gray-400">{longTermMemories.length} 张便签</span>
+                    </div>
+                    {/* 多选控制栏 */}
+                    <div className="flex justify-between items-center mb-4">
+                      <button onClick={() => { setIsMultiSelect(!isMultiSelect); if (isMultiSelect) setSelectedMemIds([]); }} className={`px-4 py-2 rounded-lg font-bold text-sm ${isMultiSelect ? 'bg-blue-500 text-white' : 'bg-gray-200 text-gray-600'}`}>
+                        {isMultiSelect ? '✓ 完成选择' : '☑️ 多选合并'}
+                      </button>
+                      {isMultiSelect && selectedMemIds.length >= 2 && (
+                        <button onClick={handleMultiMerge} className="px-4 py-2 bg-purple-500 text-white rounded-lg font-bold text-sm shadow hover:bg-purple-600 transition">
+                          🔄 合并 {selectedMemIds.length} 张
+                        </button>
+                      )}
+                    </div>
+                    {/* 便签列表 */}
+                    <div className="flex-1 overflow-y-auto space-y-3 pb-20 custom-scrollbar">
+                      {longTermMemories.length === 0 ? (
+                        <div className="text-center text-gray-400 py-10"><span className="text-4xl mb-4 block">📝</span><p className="text-sm">还没有形成长期记忆哦</p><p className="text-xs mt-2">多聊一会儿就会自动总结啦～</p></div>
+                      ) : (
+                        longTermMemories.slice().reverse().map((mem: any, idx: number) => (
+                          <MemoryNote key={mem.id || idx} mem={mem} idx={idx} total={longTermMemories.length} contact={contact} setContacts={setContacts} isMultiSelect={isMultiSelect} isSelected={selectedMemIds.includes(mem.id)} onToggleSelect={toggleSelect} />
+                        ))
+                      )}
+                    </div>
+                    {/* 底部一键精炼 */}
+                    <div className="mt-auto pt-4 pb-4 flex-shrink-0">
+                      {longTermMemories.length >= 2 && (
+                        <button onClick={onRefineMemory} className="w-full bg-purple-500 text-white py-3 rounded-xl font-bold shadow-lg hover:bg-purple-600 transition active:scale-95">
+                          🔄 精炼全部记忆
+                        </button>
+                      )}
+                    </div>
+                  </>
+                </div>
+              )}
+
+              {/* --- 印象集页面 --- */}
+              {memoryTab === 'impressions' && (
+                <div className="h-full flex flex-col px-4">
+                  <div className="flex justify-between items-center mb-4 flex-shrink-0">
+                    <h4 className="text-sm font-bold text-gray-600">
+                      {contact.name} 对 {contact.userName} 的记忆画像
+                    </h4>
+                    <span className="text-xs text-gray-400">{contact.userImpressions?.length || 0} 条印象</span>
+                  </div>
+                  {/* 这里是全新的“印象集”内容，我们也马上填上 */}
+                   <div className="flex-1 overflow-y-auto space-y-3 pb-20 custom-scrollbar">
+                    {(!contact.userImpressions || contact.userImpressions.length === 0) ? (
+                      <div className="text-center text-gray-400 py-10 h-full flex flex-col items-center justify-center">
+                        <span className="text-4xl mb-4 block">🧐</span>
+                        <p className="text-sm">AI 正在努力认识你...</p>
+                        <p className="text-xs mt-2">多聊一些关于你的事，AI 就会在这里写下对你的印象笔记啦～</p>
+                      </div>
+                    ) : (
+                      contact.userImpressions.slice().reverse().map((impression: Impression) => {
+                        const categoryMap = {
+                          personality: { icon: '🎭', name: '性格', color: 'bg-blue-100 text-blue-700' },
+                          preference: { icon: '💖', name: '偏好', color: 'bg-pink-100 text-pink-700' },
+                          habit: { icon: '🕰️', name: '习惯', color: 'bg-orange-100 text-orange-700' },
+                          appearance: { icon: '✨', name: '外貌', color: 'bg-yellow-100 text-yellow-700' },
+                          memory: { icon: '🎈', name: '经历', color: 'bg-indigo-100 text-indigo-700' },
+                        };
+                        const info = categoryMap[impression.category] || { icon: '📝', name: '其他', color: 'bg-gray-100 text-gray-700' };
+
+return (
+  <div key={impression.id} className="bg-white border border-gray-100 rounded-xl p-4 shadow-sm group relative">
+     <button
+      onClick={() => {
+        if (confirm(`确定要删除这条印象吗？\n\n"${impression.content}"`)) {
+          setContacts(prev => prev.map(c =>
+            c.id === contact.id
+            ? { ...c, userImpressions: (c.userImpressions || []).filter(i => i.id !== impression.id) }
+            : c
+          ));
+        }
+      }}
+      className="absolute top-2 right-2 w-6 h-6 bg-gray-200 text-gray-500 rounded-full opacity-0 group-hover:opacity-100 transition flex items-center justify-center text-xs hover:bg-red-500 hover:text-white"
+    >
+      ×
+    </button>
+    <div className="flex items-center justify-between mb-3">
+      <span className={`text-xs font-bold px-2 py-1 rounded-full ${info.color}`}>
+        {info.icon} {info.name}
+      </span>
+      <span className="text-[10px] text-gray-400">
+        {new Date(impression.last_updated).toLocaleDateString()} 更新
+      </span>
+    </div>
+    <p className="text-sm text-gray-800 leading-relaxed font-medium mb-3">
+      {/* ★★★ 这里添加 fontSize="text-sm" 和 msgId={impression.id}，修复参数缺失 ★★★ */}
+      <HiddenBracketText content={impression.content} fontSize="text-sm" msgId={impression.id} />
+    </p>
+    <details className="text-xs">
+      <summary className="cursor-pointer text-gray-400 hover:text-gray-600 select-none">查看原文证据</summary>
+      <div className="mt-2 space-y-1 bg-gray-50 p-2 rounded-md border">
+        {impression.quotes.map((quote, i) => (
+          <p key={i} className="italic text-gray-600">“{quote}”</p>
+        ))}
+      </div>
+    </details>
+  </div>
+);
+                      })
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+
+
+
+
+
+
+
+
+
+
         </div>
       </div>
     </div>
@@ -4279,6 +4795,7 @@ useEffect(() => {
   isBackgroundRef.current = isBackground;
 }, [isBackground]);
 useEffect(() => { viewRef.current = view; }, [view]);
+
   useEffect(() => { activeContactIdRef.current = activeContactId; }, [activeContactId]);
 
 
@@ -4299,17 +4816,20 @@ useEffect(() => { viewRef.current = view; }, [view]);
 
 
 
-useEffect(() => {
-  contacts.forEach(contact => {
-    // 如果这个角色被标记了“待发送”，并且还没有被正在处理（防止重复）
-    if (contact.pendingProactive) {
-       // 为了防止快速重复触发，我们可以在这里做一个简单的防抖，或者依靠 setContacts 的原子性
-       // 这里直接调用，因为我们在 scheduleProactiveMessage 里清除了标记
-       scheduleProactiveMessage(contact);
-    }
-  });
-}, [contacts]); // 只要 contacts 变了，就检查一下有没有任务
-
+// ==================== [新功能] 强制唤醒监听器 ====================
+  // 这个 useEffect 专门用来监听“闹钟”信号
+  useEffect(() => {
+    // 遍历所有联系人，检查有没有被闹钟标记的
+    contacts.forEach(contact => {
+      // 如果这个角色被标记了“约定到期”，并且我们还没有开始处理它
+      if (contact.dueAgreementId && !contact.pendingProactive) {
+        console.log(`[强制唤醒] 检测到 ${contact.name} 的闹钟信号，立即触发主动消息！`);
+        
+        // ★★★ 核心：直接调用“嘴巴”，告诉它该说话了 ★★★
+        scheduleProactiveMessage(contact);
+      }
+    });
+  }, [contacts]); // 依赖项是 [contacts]，意味着只要角色数据一变，就立刻检查
 
 
 
@@ -4388,6 +4908,7 @@ useEffect(() => {
         }
       },
       longTermMemories: c.longTermMemories || [],
+            userImpressions: c.userImpressions || [],
     })));
   }, []);
 
@@ -5590,7 +6111,7 @@ value={form.affectionScore ?? 50}
                <div className="flex items-center gap-2">
                  <input 
                    type="color" 
-                   value={form.bubbleColorUser || "#22c55e"} 
+                   value={form.bubbleColorUser || "#FBCFE8"} 
                    onChange={(e) => setEditForm({...editForm, bubbleColorUser: e.target.value})}
                    className="h-8 w-full cursor-pointer rounded border border-gray-200 p-0.5 bg-white"
                  />
@@ -6047,7 +6568,7 @@ return (
     const currentPaddingX = `${12 * scale}px`;
 
     // 4. 颜色与自动反色
-    const userBg = activeContact.bubbleColorUser || '#22c55e';
+    const userBg = activeContact.bubbleColorUser || '#FBCFE8';
     const aiBg = activeContact.bubbleColorAI || '#ffffff';
     const userTextColor = getContrastTextColor(userBg);
     const aiTextColor = getContrastTextColor(aiBg);
@@ -6319,7 +6840,7 @@ style={{ paddingBottom: '12px' }}  // 只留一点内间距，让输入框不紧
 
 
 
-        {showPersonaPanel && activeContact && (
+{showPersonaPanel && activeContact && (
             <PersonaPanel
                 contact={activeContact}
                 globalSettings={globalSettings}
@@ -6327,9 +6848,14 @@ style={{ paddingBottom: '12px' }}  // 只留一点内间距，让输入框不紧
                 onClose={() => setShowPersonaPanel(false)}
                 onRefineMemory={handleRefineMemory}
                 playMessageAudio={playMessageAudio}
-                onNavigateToSettings={onOpenSettings} 
-                activeTab={panelTab} // 保持由父组件控制
-                setActiveTab={setPanelTab} // 保持由父组件控制
+                onNavigateToSettings={onOpenSettings}
+                activeTab={panelTab}
+                setActiveTab={setPanelTab}
+                sampleText={panelSampleText}
+                setSampleText={setPanelSampleText}
+                // ↓↓↓ 关键修复：把新的“手账开关”也传进去 ↓↓↓
+                memoryTab={memoryPanelTab}
+                setMemoryTab={setMemoryPanelTab}
             />
         )}
 

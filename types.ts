@@ -189,6 +189,13 @@ export interface HEF {
     body_language: string;
     irrationalities: string[];
   };
+  // ★★★ 核心新增：人格内核强度 (对应 #11) ★★★
+    core_strength?: number; 
+    habits_quirks: string[];
+    speech_style: string;
+    body_language: string;
+    irrationalities: string[];
+  };
   RESOURCES_LIMITS: {
     skills: string[];
     assets: string[];
@@ -264,7 +271,93 @@ export interface Anniversary {
   type: 'custom' | 'system';
 }
 
+
+
+
+// ==================== 这是一个新代码块：约定/承诺系统 ====================
+// 这是“闹钟”的定义
+export interface AgreementTrigger {
+  type: 'time' | 'keyword' | 'event'; // 触发类型：时间、关键词、事件
+  value: number | string; // 如果是时间，这里是时间戳；如果是关键词，这里是那个词
+  original_text: string; // AI识别到的原文，比如“明天早上”
+}
+
+
+
+
+
+
+
+
+
+
+// ==================== [新功能] 用户印象画像系统 - 核心数据结构 ====================
+export type ImpressionCategory = 'personality' | 'preference' | 'habit' | 'appearance' | 'memory';
+
+// 定义“一条印象”的数据结构
+export interface Impression {
+  id: string; // 唯一ID
+  category: ImpressionCategory; // 分类：性格、偏好、习惯、外貌、记忆
+  content: string; // 印象内容，例如：“喜欢在深夜喝可乐”
+  quotes: string[]; // 支撑这条印象的原文引述，例如：“我超爱喝可乐的！”
+  last_updated: number; // 上次更新这条印象的时间
+  confidence: number; // AI对这条印象的信心度 (1-10)
+}
+// ==================== 新代码块结束 ====================
+
+
+
+
+
+
+
+
+
+
+
+
+// ==================== 这是一个新代码块：三层欲望模型 - 核心数据结构 ====================
+
+// 第二层：情感需求 (中期欲望)
+export interface EmotionalNeed {
+  // 需求类型：渴望连接、渴望安抚、渴望新奇、稳定/满足
+  type: 'connection' | 'reassurance' | 'novelty' | 'stability';
+  // 对AI的指令描述，解释当前需求的具体表现
+  description: string;
+  // 需求强度 (1-10)，强度越高，越能影响AI的行为
+  intensity: number;
+  // 触发这个需求的原因，用于调试和AI的自我认知
+  trigger_reason: string;
+  // 上次更新此需求的时间戳
+  updated_at: number;
+}
+
+// ==================== 新代码块结束 ====================
+
+
+
+
+
+// 这是“小账本”里每一条约定的定义
+export interface Agreement {
+  id: string; // 唯一ID
+  content: string; // 约定内容：“叫我起床”
+  status: 'pending' | 'fulfilled' | 'failed'; // 状态：待处理、已完成、已失败
+  importance: number; // AI判断的重要性 (1-10)
+  trigger: AgreementTrigger; // 触发器
+  created_at: number; // 创建时间
+}
+// ==================== 新代码块结束 ====================
+
+
+
+
+
+
+
 export interface Contact {
+
+
   userTags: UserTag[];
   isAffectionLocked?: boolean;
   bubbleColorUser?: string;
@@ -305,9 +398,11 @@ export interface Contact {
   proactiveLastSent?: { [date: string]: number; };
   pendingProactive?: boolean;
 
+ // ★★★ 核心修改：好感度 & 关系状态机 (对应 #9, #10) ★★★
   affectionScore: number;
-  relationshipStatus: 'Feud' | 'Conflict' | 'Acquaintance' | 'Friend' | 'Honeymoon' | 'Stable' | 'Close Friend' | 'Intimate' | 'Breaking' | 'Broken';
+  relationshipStatus: 'Feud' | 'Conflict' | 'Acquaintance' | 'Friend' | 'Honeymoon' | 'Stable' | 'Breaking' | 'Broken';
   
+  // ★★★ 核心修改：AI勿扰模式 (对应 #13) ★★★
   aiDND: {
     enabled: boolean;
     until: number;
@@ -317,23 +412,32 @@ export interface Contact {
   longTermMemories: {
     id: string;
     content: string;
-    importance: number;
+    importance: number; // 用户可调的优先级
     timestamp: number;
     meta?: any;
   }[];
 
+  // ★★★ 核心新增：干预点数 & 对话模式 (对应 #11, #8) ★★★
   interventionPoints: number;
   currentChatMode: 'Casual' | 'Probing' | 'Intimate' | 'Cooling';
-  hef: Partial<HEF>;
+  
+  // ★★★ 核心修改：HEF不再是可选的，而是必须的 ★★★
+  hef: HEF;
   
   diaries?: DiaryEntry[];
   questions?: QAEntry[];
   letters?: LoveLetter[];
-  anniversaries?: Anniversary[];
   summary?: string;
   
   voiceSampleText?: string;
   wallpaper?: string; 
+  dueAgreementId?: string; // 新增：到期的约定ID，用于强制唤醒
+  // ==================== 这是新加的一行：约定列表 ====================
+  agreements?: Agreement[];
+  // ==================== 这是新加的一行：当前欲望 ====================
+emotionalNeed?: EmotionalNeed; // 第二层欲望：情感需求
+// ==================== [新功能] AI对用户的印象画像 ====================
+  userImpressions?: Impression[];
 }
 
 export interface Widget {
