@@ -2,6 +2,11 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Contact, LoveLetter, QAEntry, Message, GlobalSettings } from '../types';
 import SafeAreaHeader from './SafeAreaHeader';
 import { generateResponse } from '../services/apiService'; 
+// 【RelationshipSpace.tsx】 文件最顶部
+import html2canvas from 'html2canvas';
+
+
+
 
 // ==================== 1. 定义部分 (花语 & 主题) ====================
 
@@ -164,6 +169,14 @@ const QACardStack: React.FC<{ questions: QAEntry[], theme: any, onAnswer: (id: s
     );
 };
 
+
+
+
+
+
+
+
+
 // 🧚‍♀️ 花朵精灵 (小分身)
 const FlowerChatWidget: React.FC<{ contact: Contact, seedInfo: any, onUpdate: (history: any[]) => void, globalSettings: any }> = ({ contact, seedInfo, onUpdate, globalSettings }) => {
   const [isOpen, setIsOpen] = useState(false);
@@ -246,236 +259,96 @@ User: ${input}`;
   );
 };
 
-// 🌱 秘密花园 (含影子AI行动反馈)
+
+
+
+
+
+
+
+
+
+
+// 【RelationshipSpace.tsx】 找到 GardenPage 子组件，用这个【兼容对齐版】完全覆盖它
+
+// 🌱 秘密花园 (兼容对齐版)
 const GardenPage: React.FC<{ contact: Contact, onUpdate: (c: Contact, sysMsg?: string, shareMsg?: any) => void, globalSettings: any }> = ({ contact, onUpdate, globalSettings }) => {
   const garden = contact.garden || { seed: '', level: 0, exp: 0, lastWaterDate: '', lastFertilizeDate: '' };
   
-  if (!garden.seed) {
-      return (
-          <div className="p-6 h-full flex flex-col items-center justify-center animate-fadeIn">
-              <h3 className="text-xl font-black text-gray-800 mb-2">选择一颗种子</h3>
-              <p className="text-sm text-gray-500 mb-6 text-center">一旦种下，就不能更换了哦。<br/>它将见证你们的关系生长。</p>
-              <div className="grid grid-cols-2 gap-4 w-full">
-                  {SEED_TYPES.map(seed => (
-                      <div key={seed.id} onClick={() => onUpdate({ ...contact, garden: { ...garden, seed: seed.id } })} className={`p-4 rounded-2xl border-2 cursor-pointer transition-all hover:scale-105 ${seed.bg} border-transparent hover:border-blue-300 flex flex-col items-center text-center shadow-sm`}>
-                          <span className="text-4xl mb-2">{seed.emoji}</span>
-                          <span className={`font-bold ${seed.color}`}>{seed.name}</span>
-                          <span className="text-[10px] text-gray-500 mt-1">{seed.desc}</span>
-                      </div>
-                  ))}
-              </div>
-          </div>
-      );
-  }
-
-  const seedInfo = SEED_TYPES.find(s => s.id === garden.seed) || SEED_TYPES[0];
-  const todayStr = new Date().toLocaleDateString();
-  const isWateredToday = garden.lastWaterDate === todayStr;
-  
-  // ★★★ 核心功能：检查是否是 AI 浇的水 ★★★
-  // 在 App.tsx 的 runShadowAI 里，如果 AI 浇水，会设置 aiWateredToday: true
-  const isAiWatered = isWateredToday && (garden as any).aiWateredToday;
-
-  const isFertilizedToday = garden.lastFertilizeDate === todayStr;
+  const [previewCardData, setPreviewCardData] = useState<any>(null);
+  const [isWatering, setIsWatering] = useState(false);
   const [showFertilizerInput, setShowFertilizerInput] = useState(false);
   const [fertilizerMsg, setFertilizerMsg] = useState("");
-  const [isWatering, setIsWatering] = useState(false);
 
-// ==================== [升级版] 智能浇水：回忆剪辑师 ====================
-  // ==================== [永不落空版] 智能浇水逻辑 ====================
-// ==================== [随机打捞版] 智能浇水逻辑 ====================
-  const handleWater = async () => {
-    if (isWateredToday) return;
-    
-    // 1. 筛选素材 (只看文本，不看系统消息)
-    const validMsgs = contact.history.filter(m => m.type === 'text' && m.role !== 'system' && m.content.length > 2);
-    
-    if (validMsgs.length < 5) return alert("才聊了几句呀，再多存点回忆再来吧~(至少5条)");
+  const cardToSaveRef = useRef<HTMLDivElement>(null); 
+  const [isSavingImage, setIsSavingImage] = useState(false);
 
-    setIsWatering(true);
+  if (!garden.seed) { /* ... 选择种子UI，保持不变 ... */ return ( <div className="p-6 h-full flex flex-col items-center justify-center animate-fadeIn"> <h3 className="text-xl font-black text-gray-800 mb-2">选择一颗种子</h3> <p className="text-sm text-gray-500 mb-6 text-center">一旦种下，就不能更换了哦。</p> <div className="grid grid-cols-2 gap-4 w-full"> {SEED_TYPES.map(seed => ( <div key={seed.id} onClick={() => onUpdate({ ...contact, garden: { ...garden, seed: seed.id } })} className={`p-4 rounded-2xl border-2 cursor-pointer transition-all hover:scale-105 ${seed.bg} border-transparent hover:border-blue-300 flex flex-col items-center text-center shadow-sm`}> <span className="text-4xl mb-2">{seed.emoji}</span> <span className={`font-bold ${seed.color}`}>{seed.name}</span> <span className="text-[10px] text-gray-500 mt-1">{seed.desc}</span> </div> ))} </div> </div> ); }
 
-    // 通用卡片生成器
-    const generateCard = (title: string, dialogue: any[], isBonus: boolean = false) => {
-        const payload = {
-            type: "memory_share_card",
-            title: title,
-            seedName: seedInfo.name,
-            level: garden.level,
-            timestamp: Date.now(),
-            messages: dialogue.map((d: any) => ({
-                role: d.role,
-                avatar: d.role === 'user' ? contact.userAvatar : contact.avatar,
-                content: d.content
-            }))
-        };
-        
-        setPreviewCardData(payload); // 弹窗预览
-
-        // 经验结算 (兜底给双倍)
-        const expGain = isBonus ? 20 : 10;
-        const newExp = garden.exp + expGain;
-        const finalLevel = newExp >= 100 ? garden.level + 1 : garden.level;
-        const finalExp = newExp >= 100 ? 0 : newExp;
-
-        onUpdate({
-            ...contact,
-            garden: { 
-                ...garden, 
-                lastWaterDate: todayStr, 
-                level: finalLevel, 
-                exp: finalExp 
-            }
-        });
-
-        if (isBonus) {
-            alert(`⚠️ AI 稍微走神了一下，但花朵精灵帮你随机打捞了一段回忆！\n🎁 补偿奖励：经验值翻倍 (+20)！`);
-        } else {
-            alert("💧 浇水成功！回忆卡片已生成，快去分享吧！");
-        }
-    };
-
-    try {
-        // 2. 尝试 AI 智能剪辑 (优先)
-        const recentChat = validMsgs.slice(-50).map(m => ({
-            role: m.role,
-            name: m.role === 'user' ? contact.userName : contact.name,
-            content: m.content
-        }));
-
-        const prompt = `
-你是一位回忆剪辑师。请从对话中截取一段连续的对话（3-5句）。
-必须返回JSON格式：{"title": "标题", "dialogue": [{"role": "user/assistant", "content": "..."}]}
-素材：${JSON.stringify(recentChat)}
-`;
-        
-        const activePreset = globalSettings.apiPresets.find((p: any) => p.id === globalSettings.activePresetId);
-        if (!activePreset) throw new Error("No API");
-
-        const res = await generateResponse([{ role: 'user', content: prompt }], activePreset);
-        const jsonMatch = res.match(/\{[\s\S]*\}/);
-        
-        if (jsonMatch) {
-            const result = JSON.parse(jsonMatch[0]);
-            generateCard(result.title || "珍贵回忆", result.dialogue, false);
-        } else {
-            throw new Error("Format Error");
-        }
-
-    } catch (e) {
-        console.warn("AI生成失败，启用随机打捞兜底", e);
-        
-        // 3. ★★★ 随机打捞逻辑 (Plan B) ★★★
-        // 既然 AI 挂了，那就在历史记录里随机切一段！
-        
-        const totalCount = validMsgs.length;
-        // 随机长度：3 到 5 句
-        const sliceLength = Math.floor(Math.random() * 3) + 3; 
-        // 随机起点：确保切片不越界
-        // 例如总共10条，长度3，起点只能是 0~7
-        const maxStartIndex = Math.max(0, totalCount - sliceLength);
-        const startIndex = Math.floor(Math.random() * (maxStartIndex + 1));
-        
-        const randomSlice = validMsgs.slice(startIndex, startIndex + sliceLength).map(m => ({
-            role: m.role,
-            content: m.content
-        }));
-
-        // 随机标题库
-        const randomTitles = ["偶然的瞬间", "时光碎片", "那时候...", "突然想起", "以前的我们"];
-        const randomTitle = randomTitles[Math.floor(Math.random() * randomTitles.length)];
-
-        // 生成卡片 (标记 isBonus = true)
-        generateCard(randomTitle, randomSlice, true);
-
-    } finally {
-        setIsWatering(false);
-    }
-  };
-
-
-
-
-
-
-
-
-
-  const handleFertilize = () => {
-      if (!fertilizerMsg.trim()) return;
-      const sysMsg = `[花园传信] 🌸 ${contact.userName} 给这朵花施了肥，并悄悄对你说：\n“${fertilizerMsg}”`;
-      onUpdate({ ...contact, garden: { ...garden, lastFertilizeDate: todayStr, exp: Math.min(100, garden.exp + 20) } }, sysMsg);
-      setFertilizerMsg(""); setShowFertilizerInput(false);
-      alert("📨 施肥成功！这句话已随着花香送到了 TA 的心里。");
-  };
+  const seedInfo = SEED_TYPES.find(s => s.id === garden.seed) || SEED_TYPES[0];
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const isWateredToday = garden.lastWaterDate === todayStr;
+  const isAiWatered = isWateredToday && (garden as any).aiWateredToday;
+  const isFertilizedToday = garden.lastFertilizeDate === todayStr;
+  
+  const handleSaveCardAsImage = async () => { if (!cardToSaveRef.current) return; setIsSavingImage(true); try { const canvas = await html2canvas(cardToSaveRef.current, { useCORS: true, backgroundColor: '#f1f5f9', scale: 2 }); const image = canvas.toDataURL('image/png'); const link = document.createElement('a'); link.href = image; link.download = `our-memory-${Date.now()}.png`; document.body.appendChild(link); link.click(); document.body.removeChild(link); } catch (error) { console.error('图片保存失败!', error); alert('图片保存失败'); } finally { setIsSavingImage(false); } };
+  const handleWater = async () => { if (isWateredToday) return; const validMsgs = contact.history.filter(m => m.type === 'text' && m.role !== 'system' && m.content.length > 2); if (validMsgs.length < 5) return alert("回忆不足5条，再聊聊吧~"); setIsWatering(true); const generateCard = (dialogue: any[], memoryTimestamp: number, isBonus: boolean = false) => { const payload = { type: "memory_share_card", title: "一段珍贵的回忆", seedName: seedInfo.name, level: garden.level, timestamp: memoryTimestamp, messages: dialogue.map((d: any) => ({ role: d.role, avatar: d.role === 'user' ? contact.userAvatar : contact.avatar, content: d.content })) }; setPreviewCardData(payload); const expGain = isBonus ? 20 : 10; const newExp = garden.exp + expGain; onUpdate({ ...contact, garden: { ...garden, lastWaterDate: todayStr, level: newExp >= 100 ? garden.level + 1 : garden.level, exp: newExp >= 100 ? 0 : newExp } }); if (isBonus) alert(`⚠️ AI 走神了，但精灵帮你随机打捞了一段回忆！\n🎁 补偿：经验+20！`); else alert("💧 浇水成功！回忆卡片已生成！"); }; try { const activePreset = globalSettings.apiPresets.find((p: any) => p.id === globalSettings.activePresetId); if (!activePreset) throw new Error("No API"); const recentChat = validMsgs.slice(-50).map(m => ({ role: m.role, name: m.role === 'user' ? contact.userName : contact.name, content: m.content })); const prompt = `你是一位回忆剪辑师。请从对话中截取一段【连续的对话】（3-5句）。必须返回纯JSON格式：{"dialogue": [{"role": "user/assistant", "content": "..."}]} 素材：${JSON.stringify(recentChat)}`; const res = await generateResponse([{ role: 'user', content: prompt }], activePreset); const jsonMatch = res.match(/\{[\s\S]*\}/); if (jsonMatch) { const result = JSON.parse(jsonMatch[0]); let memoryTimestamp = validMsgs[validMsgs.length - 1].timestamp; if (result.dialogue && result.dialogue.length > 0) { const firstAiContent = result.dialogue[0].content; for(let i = 0; i <= validMsgs.length - result.dialogue.length; i++) { if(validMsgs[i].content.includes(firstAiContent.slice(0,10))) { let isMatch = true; for(let j = 1; j < result.dialogue.length; j++) { if (validMsgs[i+j].role !== result.dialogue[j].role) { isMatch = false; break; } } if (isMatch) { memoryTimestamp = validMsgs[i + result.dialogue.length - 1].timestamp; break; } } } } generateCard(result.dialogue, memoryTimestamp, false); } else { throw new Error("Format Error"); } } catch (e) { console.warn("AI生成失败，启用随机打捞", e); const totalCount = validMsgs.length; const sliceLength = Math.floor(Math.random() * 3) + 3; const maxStartIndex = Math.max(0, totalCount - sliceLength); const startIndex = Math.floor(Math.random() * (maxStartIndex + 1)); const randomSlice = validMsgs.slice(startIndex, startIndex + sliceLength); const memoryTimestamp = randomSlice[randomSlice.length-1].timestamp; generateCard(randomSlice.map(m=>({role: m.role, content: m.content})), memoryTimestamp, true); } finally { setIsWatering(false); } };
+  const handleFertilize = () => { if (!fertilizerMsg.trim()) return; const sysMsg = `[花园传信] 🌸 ${contact.userName} 给花施肥并说：“${fertilizerMsg}”`; onUpdate({ ...contact, garden: { ...garden, lastFertilizeDate: todayStr, exp: Math.min(100, garden.exp + 20) } }, sysMsg); setFertilizerMsg(""); setShowFertilizerInput(false); alert("📨 施肥成功！"); };
 
   return (
     <div className="p-6 h-full flex flex-col items-center justify-center animate-fadeIn relative overflow-hidden">
         <FlowerChatWidget contact={contact} seedInfo={seedInfo} globalSettings={globalSettings} onUpdate={(newHistory) => onUpdate({ ...contact, garden: { ...contact.garden!, flowerHistory: newHistory } })} />
-
         <div className="bg-white/90 backdrop-blur-xl rounded-[2rem] p-8 shadow-xl border border-white w-full max-w-sm relative overflow-hidden z-10">
-            <div className="text-center mb-8">
-                <span className="text-xs font-bold text-gray-400 tracking-widest uppercase">Secret Garden</span>
-                <h3 className={`text-2xl font-black ${seedInfo.color} mt-1 flex items-center justify-center gap-2`}>{seedInfo.name} <span className="text-xs bg-black/5 px-2 py-1 rounded-full text-gray-500">Lv.{garden.level}</span></h3>
-                <p className="text-xs text-gray-400 mt-2 italic">{seedInfo.desc}</p>
-            </div>
-            <div className="h-48 flex items-center justify-center mb-8 relative transition-all duration-500">
-                <div className="filter drop-shadow-xl animate-bounce-slow cursor-pointer transform transition-transform hover:scale-110 active:scale-95" style={{ fontSize: `${4 + garden.level}rem` }} onClick={handleWater}>{seedInfo.emoji}</div>
-                {!isWateredToday && !isWatering && <div className="absolute -top-4 right-4 bg-blue-500 text-white text-[10px] px-2 py-1 rounded-full animate-bounce shadow-md">渴了...💧</div>}
-                
-                {/* ★★★ 影子AI行动反馈：如果AI浇过水，显示爱心 ★★★ */}
-                {isAiWatered && <div className="absolute -top-4 left-4 bg-pink-500 text-white text-[10px] px-2 py-1 rounded-full animate-pulse shadow-md">TA浇过啦❤️</div>}
-                
-                {isWatering && <div className="absolute top-0 text-2xl animate-pulse">🚿</div>}
-            </div>
+            {/* ... 省略花园UI内部代码，保持不变 ... */}
+            <div className="text-center mb-8"><span className="text-xs font-bold text-gray-400 tracking-widest uppercase">Secret Garden</span><h3 className={`text-2xl font-black ${seedInfo.color} mt-1 flex items-center justify-center gap-2`}>{seedInfo.name} <span className="text-xs bg-black/5 px-2 py-1 rounded-full text-gray-500">Lv.{garden.level}</span></h3><p className="text-xs text-gray-400 mt-2 italic">{seedInfo.desc}</p></div>
+            <div className="h-48 flex items-center justify-center mb-8 relative transition-all duration-500"><div className="filter drop-shadow-xl animate-bounce-slow cursor-pointer transform transition-transform hover:scale-110 active:scale-95" style={{ fontSize: `${4 + garden.level}rem` }} onClick={handleWater}>{seedInfo.emoji}</div>{!isWateredToday && !isWatering && <div className="absolute -top-4 right-4 bg-blue-500 text-white text-[10px] px-2 py-1 rounded-full animate-bounce shadow-md">渴了...💧</div>}{isAiWatered && <div className="absolute -top-4 left-4 bg-pink-500 text-white text-[10px] px-2 py-1 rounded-full animate-pulse shadow-md">TA浇过啦❤️</div>}{isWatering && <div className="absolute top-0 text-2xl animate-pulse">🚿</div>}</div>
             <div className="w-full h-3 bg-gray-100 rounded-full overflow-hidden mb-8 border border-gray-200"><div className={`h-full ${seedInfo.bg.replace('bg-', 'bg-')} ${seedInfo.color.replace('text-', 'bg-')} transition-all duration-1000`} style={{ width: `${garden.exp}%` }}></div></div>
-           <div className="grid grid-cols-2 gap-3">
-                {/* === 左边：浇水按钮 (蓝色 - 生成回忆卡片) === */}
-                <button 
-                    onClick={handleWater} 
-                    disabled={isWateredToday || isWatering} 
-                    className={`py-4 rounded-2xl font-bold text-sm shadow-md transition-all active:scale-95 flex flex-col items-center justify-center gap-1 ${isWateredToday ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-blue-500 text-white hover:bg-blue-600 shadow-blue-200'}`}
-                >
-                    <span className="text-2xl">{isWatering ? '⏳' : '💧'}</span>
-                    {/* 主标题 */}
-                    <span className="text-sm font-black">
-                        {isWatering ? '萃取中...' : (isWateredToday ? (isAiWatered ? 'TA已浇水' : '明日再来') : '浇水')}
-                    </span>
-                    {/* 副标题 */}
-                    <span className="text-[10px] opacity-80 font-normal">回忆掉落</span>
-                </button>
-
-                {/* === 右边：施肥按钮 (绿色 - 写语传情) === */}
-                <button 
-                    onClick={() => !isFertilizedToday && setShowFertilizerInput(true)} 
-                    disabled={isFertilizedToday} 
-                    className={`py-4 rounded-2xl font-bold text-sm shadow-md transition-all active:scale-95 flex flex-col items-center justify-center gap-1 ${isFertilizedToday ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-green-500 text-white hover:bg-green-600 shadow-green-200'}`}
-                >
-                    <span className="text-2xl">🧪</span> 
-                    {/* 主标题 */}
-                    <span className="text-sm font-black">{isFertilizedToday ? '养分充足' : '施肥'}</span>
-                    {/* 副标题 */}
-                    <span className="text-[10px] opacity-80 font-normal">写语传情</span>
-                </button>
-            </div>
-            <p className="text-[10px] text-gray-400 text-center mt-3">每天仅限一次 · 会自动创建聊天回忆</p>
+            <div className="grid grid-cols-2 gap-3"><button onClick={handleWater} disabled={isWateredToday || isWatering} className={`py-4 rounded-2xl font-bold text-sm shadow-md transition-all active:scale-95 flex flex-col items-center justify-center gap-1 ${isWateredToday ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-blue-500 text-white hover:bg-blue-600 shadow-blue-200'}`}><span className="text-2xl">{isWatering ? '⏳' : '💧'}</span><span className="text-sm font-black">{isWatering ? '萃取中...' : (isWateredToday ? (isAiWatered ? 'TA已浇水' : '明日再来') : '浇水')}</span><span className="text-[10px] opacity-80 font-normal">回忆掉落</span></button><button onClick={() => !isFertilizedToday && setShowFertilizerInput(true)} disabled={isFertilizedToday} className={`py-4 rounded-2xl font-bold text-sm shadow-md transition-all active:scale-95 flex flex-col items-center justify-center gap-1 ${isFertilizedToday ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-green-500 text-white hover:bg-green-600 shadow-green-200'}`}><span className="text-2xl">🧪</span> <span className="text-sm font-black">{isFertilizedToday ? '养分充足' : '施肥'}</span><span className="text-[10px] opacity-80 font-normal">写语传情</span></button></div>
         </div>
-
-        {showFertilizerInput && (
-            <div className="absolute inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-6 animate-fadeIn">
-                <div className="bg-white rounded-3xl p-6 w-full max-w-xs shadow-2xl animate-scaleIn">
-                    <h4 className="text-lg font-bold text-green-700 mb-2 text-center">施肥 · 写语传情</h4>
-                    <p className="text-xs text-gray-400 mb-4 text-center">写一句话作为养分，花朵精灵会帮你传达给 TA。</p>
-                    <textarea className="w-full h-24 bg-green-50 rounded-xl p-4 text-sm outline-none resize-none mb-4 border border-gray-200 focus:ring-2 focus:ring-green-200 transition-all" placeholder="写在这里..." value={fertilizerMsg} onChange={e => setFertilizerMsg(e.target.value)} autoFocus />
-                    <div className="flex gap-3">
-                        <button onClick={() => setShowFertilizerInput(false)} className="flex-1 py-3 bg-gray-100 rounded-xl font-bold text-gray-500">取消</button>
-                        <button onClick={handleFertilize} className="flex-1 py-3 bg-green-500 rounded-xl font-bold text-white shadow-lg shadow-green-200">确认施肥</button>
+        {showFertilizerInput && (<div className="absolute inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-6 animate-fadeIn"><div className="bg-white rounded-3xl p-6 w-full max-w-xs shadow-2xl animate-scaleIn"><h4 className="text-lg font-bold text-green-700 mb-2 text-center">施肥 · 写语传情</h4><p className="text-xs text-gray-400 mb-4 text-center">写一句话作为养分，花朵精灵会帮你传达给 TA。</p><textarea className="w-full h-24 bg-green-50 rounded-xl p-4 text-sm outline-none resize-none mb-4 border border-gray-200 focus:ring-2 focus:ring-green-200 transition-all" placeholder="写在这里..." value={fertilizerMsg} onChange={e => setFertilizerMsg(e.target.value)} autoFocus /><div className="flex gap-3"><button onClick={() => setShowFertilizerInput(false)} className="flex-1 py-3 bg-gray-100 rounded-xl font-bold text-gray-500">取消</button><button onClick={handleFertilize} className="flex-1 py-3 bg-green-500 rounded-xl font-bold text-white shadow-lg shadow-green-200">确认施肥</button></div></div></div>)}
+        
+        {previewCardData && (
+            <div className="absolute inset-0 bg-black/60 z-[70] flex items-center justify-center p-6 animate-fadeIn backdrop-blur-sm">
+                <div className="bg-white w-full max-w-sm rounded-3xl p-2 shadow-2xl animate-scaleIn flex flex-col items-center">
+                    <div ref={cardToSaveRef} className="w-full bg-slate-100 rounded-t-3xl rounded-b-xl p-4 mb-2 relative overflow-hidden">
+                        <h3 className="text-center font-bold text-gray-500 mb-2 text-xs uppercase tracking-widest">MEMORY GENERATED</h3>
+                        <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden text-xs">
+                            <div className="bg-blue-50 p-2 border-b border-gray-100 font-bold text-blue-600 flex justify-between"><span>💧 {previewCardData.seedName}的回忆</span><span>{new Date(previewCardData.timestamp).toLocaleDateString()}</span></div>
+                            <div className="p-3 space-y-3 bg-slate-50/50 max-h-[200px] overflow-y-auto custom-scrollbar">
+                                <div className="text-center"><span className="bg-white border px-2 py-0.5 rounded-full font-bold shadow-sm">“{previewCardData.title}”</span></div>
+                                {previewCardData.messages.map((m: any, i: number) => (
+                                    // ★★★ 核心修复：去掉 gap-2，改用 margin ★★★
+                                    <div key={i} className={`flex items-start ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                                        {/* AI 头像在左，并加上右边距 */}
+                                        {m.role !== 'user' && <img src={m.avatar} className="w-5 h-5 rounded-full border border-white mr-2" />}
+                                        
+                                        <div className={`px-2.5 py-1.5 rounded-lg max-w-[85%] ${m.role==='user'?'bg-blue-500 text-white rounded-br-sm':'bg-white border rounded-bl-sm'}`}>
+                                          {m.content}
+                                        </div>
+                                        
+                                        {/* 用户头像在右，并加上左边距 */}
+                                        {m.role === 'user' && <img src={m.avatar} className="w-5 h-5 rounded-full border border-white ml-2" />}
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
                     </div>
+                    <div className="flex gap-2 w-full px-2 pb-2">
+                        <button onClick={handleSaveCardAsImage} disabled={isSavingImage} className="flex-1 py-3 bg-gray-100 text-gray-600 rounded-2xl font-bold text-sm hover:bg-gray-200 transition disabled:opacity-50">{isSavingImage ? '保存中...' : '📥 保存图片'}</button>
+                        <button onClick={() => { onUpdate(contact, undefined, previewCardData); setPreviewCardData(null); alert("已分享给TA！"); }} className="flex-1 py-3 bg-blue-500 text-white rounded-2xl font-bold text-sm shadow-lg shadow-blue-200 hover:bg-blue-600 transition">📤 分享给TA</button>
+                    </div>
+                    <button onClick={() => setPreviewCardData(null)} className="mt-2 text-gray-400 text-xs hover:text-gray-600">关闭</button>
                 </div>
             </div>
         )}
     </div>
   );
 };
+
+
+
+
+
 
 
 
@@ -492,6 +365,12 @@ interface RelationshipSpaceProps {
   onRelationshipSpaceAction: (contactId: string, msg: string) => void;
   globalSettings: GlobalSettings;
 }
+
+
+
+
+
+
 
 const RelationshipSpace: React.FC<RelationshipSpaceProps> = ({ contacts, setContacts, onClose, onRelationshipSpaceAction, globalSettings }) => {
   // ★★★ 核心修复：View 状态定义 (防黑屏关键) ★★★

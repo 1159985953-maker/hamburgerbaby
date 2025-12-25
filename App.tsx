@@ -498,65 +498,86 @@ useEffect(() => {
 
 
 
-// ==================== [新功能] 4. 全局约定闹钟系统 ====================
-  useEffect(() => {
-    const promiseChecker = () => {
-      const now = Date.now();
-      let hasChanges = false;
+// ==================== [新功能] 4. 全局约定闹钟系统 (含超时违约判定) ====================
+useEffect(() => {
+const promiseChecker = () => {
+  const now = Date.now();
+  let hasChanges = false;
 
-      // 使用函数式更新，确保在最新的状态上操作
-      setContacts(prevContacts => {
-        const updatedContacts = prevContacts.map(contact => {
-          // 如果角色没有约定，或者约定列表为空，直接跳过
-          if (!contact.agreements || contact.agreements.length === 0) {
-            return contact;
+  setContacts(prevContacts => {
+    const updatedContacts = prevContacts.map(contact => {
+      if (!contact.agreements || contact.agreements.length === 0) {
+        return contact;
+      }
+
+      let newAgreements = [...contact.agreements];
+      let dueAgreementId: string | null = null;
+      let isModified = false;
+
+      newAgreements = newAgreements.map(agreement => {
+        if (agreement.status === 'pending' && agreement.trigger.type === 'time') {
+          // ★★★ 核心修复：安全解析时间 (不管存的是字符串还是数字，统统转成时间戳) ★★★
+          const triggerTime = new Date(agreement.trigger.value).getTime();
+          
+          // 如果时间是无效的 (NaN)，跳过检查，避免报错卡死
+          if (isNaN(triggerTime)) {
+              console.warn(`[闹钟跳过] 发现无效时间格式的约定: ${agreement.content}`);
+              return agreement;
           }
           
-          let dueAgreement: Agreement | null = null;
-
-          // 寻找第一个到期的、且尚未处理的约定
-          for (const agreement of contact.agreements) {
-            if (agreement.status === 'pending' && agreement.trigger.type === 'time') {
-              // 检查时间戳是否已过
-              if (now > (agreement.trigger.value as number)) {
-                dueAgreement = agreement;
-                break; // 找到一个就够了，一次只处理一个
-              }
-            }
+          // 判定 1: 【超时违约】 (迟到超过 60 分钟)
+          if (now > triggerTime + 60 * 60 * 1000) {
+             console.log(`[闹钟] ${contact.name} 的约定 "${agreement.content}" 已严重超时，标记为违约。`);
+             isModified = true;
+             hasChanges = true;
+             return { ...agreement, status: 'failed' }; 
           }
 
-          // 如果找到了到期的约定
-          if (dueAgreement) {
-            hasChanges = true;
-            console.log(`【闹钟系统】检测到 ${contact.name} 的约定 "${dueAgreement.content}" 已到期！`);
-            
-            // 返回一个更新后的角色对象
-            return {
-              ...contact,
-              // 标记这个角色需要被强制唤醒，并告诉它是因为哪个约定
-              dueAgreementId: dueAgreement.id, 
-              // 把约定的状态改为 'failed'，意味着“忘记了/违约了”，防止重复触发
-              // AI 在说话时会解释为什么“迟到”了
-              agreements: contact.agreements.map(agr => 
-                agr.id === dueAgreement!.id ? { ...agr, status: 'failed' } : agr
-              )
-            };
+          // 判定 2: 【闹钟响铃】 (时间到了)
+          // 只有当 dueAgreementId 为空，或者它就是当前正在响的那个 ID 时才触发
+          if (now >= triggerTime && (!contact.dueAgreementId || contact.dueAgreementId === agreement.id)) {
+             console.log(`[闹钟] 叮铃铃！${contact.name} 的约定 "${agreement.content}" 时间到了！`);
+             dueAgreementId = agreement.id;
+             isModified = true;
+             hasChanges = true;
+             // 保持 pending 状态，但通过 dueAgreementId 唤醒 AI
+             // 这里不改状态，是为了让卡片上依然显示“进行中”，等待用户或AI去操作
+             return agreement; 
           }
-          
-          return contact;
-        });
-
-        // 只有在数据真正发生变化时才更新状态，避免不必要的重渲染
-        if (hasChanges) {
-          return updatedContacts;
         }
-        return prevContacts;
+        return agreement;
       });
-    };
 
-    const intervalId = setInterval(promiseChecker, 60000); // 每分钟检查一次
-    return () => clearInterval(intervalId);
-  }, []); // 这个 effect 只在启动时运行一次
+
+      
+
+      if (isModified) {
+        return {
+          ...contact,
+          agreements: newAgreements,
+          // 如果触发了闹钟，设置 ID 唤醒 AI；如果是单纯超时，就不唤醒了
+          dueAgreementId: dueAgreementId || contact.dueAgreementId,
+          pendingProactive: dueAgreementId ? true : contact.pendingProactive
+        };
+      }
+      return contact;
+    });
+
+    if (hasChanges) {
+      return updatedContacts;
+    }
+    return prevContacts;
+  });
+};
+
+const intervalId = setInterval(promiseChecker, 10000); // 提高频率：每10秒检查一次
+return () => clearInterval(intervalId);
+}, []);
+
+
+
+
+
 
 
 
@@ -771,7 +792,7 @@ ${JSON.stringify(recentChat)}
 
 
 
-      
+
 
       // 4. 记忆同步 (关键！)
       if (memorySyncMsg) {
@@ -820,58 +841,55 @@ ${JSON.stringify(recentChat)}
 
 
 
-// --- 4. 全局主动消息监视器 (最终单层版) ---
+// --- 4. 修复版全局主动消息监视器（立即生成 + 约定优先）---
 useEffect(() => {
-  const checkProactiveMessages = () => {
- if (!isLoaded || contacts.length === 0 || currentApp !== 'home') { 
-    return;
-  }
+  const checkAndSendProactive = async () => {
+    if (!isLoaded || contacts.length === 0 || currentApp !== 'home') return;
 
-  let triggered = false;
-  const updated = contacts.map(c => {
-    // 1. 先清掉残留的 pending（防止开关关了还发）
-    if (c.pendingProactive && !c.proactiveConfig?.enabled) {
-      return { ...c, pendingProactive: false };
-    }
+    for (const c of contacts) {
+      // 严格检查开关
+      const config = c.proactiveConfig || { enabled: false };
+      if (!config.enabled) continue;
 
-    // 2. 严格检查开关
-    const config = c.proactiveConfig || { enabled: false, minGapMinutes: 480, maxDaily: 2 };
-    if (!config.enabled) return c; // 关了就绝对不发！（你原来有这行，但要确保 config 存在）
+      // 有约定到期 > 普通主动（优先级最高）
+      const dueAgreement = c.agreements?.find(a => a.id === c.dueAgreementId);
+      if (dueAgreement) {
+        console.log(`[全局监视器] 检测到约定到期，强制发送主动消息给 ${c.name}`);
+        await scheduleProactiveMessage(c); // 直接调用ChatApp里的生成函数
+        continue; // 一个角色一次只处理一个
+      }
 
-    // 3. 其他条件
-    if (c.aiDND?.enabled || (c.affectionScore || 50) < 60) return c;
+      // 普通主动逻辑（保持你原来的间隔和每日上限判断）
+      if (c.aiDND?.enabled || (c.affectionScore || 50) < 60) continue;
+      const lastMsg = c.history[c.history.length - 1];
+      const now = Date.now();
+      const gapMinutes = lastMsg ? Math.floor((now - lastMsg.timestamp) / (1000 * 60)) : 99999;
+      if (gapMinutes < config.minGapMinutes) continue;
+      const today = new Date().toISOString().slice(0, 10);
+      const sentToday = c.proactiveLastSent?.[today] || 0;
+      if (sentToday >= config.maxDaily) continue;
 
-    const lastMsg = c.history[c.history.length - 1];
-    const now = Date.now();
-    const gapMinutes = lastMsg ? Math.floor((now - lastMsg.timestamp) / (1000 * 60)) : 99999;
-
-    if (gapMinutes < config.minGapMinutes) return c;
-
-    const today = new Date().toISOString().slice(0, 10);
-    const sentToday = c.proactiveLastSent?.[today] || 0;
-    if (sentToday >= config.maxDaily) return c;
-
-    // 命中！
-    console.log(`[App监视器] 命中! ${c.name} 准备发送主动消息 (间隔: ${gapMinutes}m)`);
-
-    if (!triggered) {
-      triggered = true;
+      console.log(`[全局监视器] 普通主动触发: ${c.name}`);
+      // 发通知（用户在首页会看到“正在输入...”）
       setGlobalNotification({
         type: 'proactive_thinking',
         contactId: c.id,
         name: c.name,
         avatar: c.avatar
       });
+      // 立即生成消息（不在用户点击后再生成）
+      await scheduleProactiveMessage(c);
     }
-    return { ...c, pendingProactive: true };
-  });
+  };
 
-  if (triggered) setContacts(updated);
-};
-
-  const intervalId = setInterval(checkProactiveMessages, 10000); // 每10秒检查一次
+  const intervalId = setInterval(checkAndSendProactive, 15000); // 每15秒检查一次
   return () => clearInterval(intervalId);
-}, [contacts, isLoaded, globalNotification, currentApp]);
+}, [contacts, isLoaded, currentApp, globalNotification]);
+
+
+
+
+
 
   // --- 5. 辅助函数 ---
   const updatePrimaryContact = (updater: (prev: Contact) => Contact) => {
@@ -1202,6 +1220,7 @@ return (
 {/* ChatApp - 终极修复版：加上了跳转设置的“传送门” */}
     {currentApp === 'chat' && (
       <ChatApp
+      
         contacts={contacts}
         setContacts={setContacts}
         globalSettings={globalSettings}
@@ -1276,7 +1295,16 @@ return (
 
 
     {currentApp === 'worldbook' && (
-      <WorldBookApp worldBooks={worldBooks} setWorldBooks={setWorldBooks} onClose={() => setCurrentApp('home')} />
+      <WorldBookApp 
+        worldBooks={worldBooks} 
+        setWorldBooks={setWorldBooks} 
+        
+        // ★★★ 核心修改：加上这行传参！★★★
+        globalSettings={globalSettings}
+
+        onClose={() => setCurrentApp('home')} 
+        onOpenSettings={() => setCurrentApp('settings')} // 允许跳到设置页
+      />
     )}
 
 

@@ -101,16 +101,20 @@ export interface FavoriteEntry {
   timestamp: number;
 }
 
+
 export interface WorldBookEntry {
   id: string;
-  keys: string[];
-  content: string;
-  name?: string;
+  keys: string[];   // 关键词列表
+  content: string;  // 设定内容
+  name?: string;    // 条目名称
+  // ★★★ 新增：策略字段 (constant=常驻/基本, keyword=关键词触发)
+  strategy?: 'constant' | 'keyword'; 
 }
 
 export interface WorldBookCategory {
-  id: string;
+ id: string;
   name: string;
+  type: 'global' | 'selective'; // <--- 新增这行：global=基本(常驻), selective=关键词触发
   entries: WorldBookEntry[];
 }
 
@@ -183,19 +187,46 @@ export interface HEF {
   };
   INDIVIDUAL_VARIATION: {
     personality_big5: { openness: number; conscientiousness: number; extraversion: number; agreeableness: number; neuroticism: number; };
-    core_strength: number; 
-    habits_quirks: string[];
-    speech_style: string;
-    body_language: string;
-    irrationalities: string[];
-  };
-  // ★★★ 核心新增：人格内核强度 (对应 #11) ★★★
     core_strength?: number; 
     habits_quirks: string[];
     speech_style: string;
     body_language: string;
     irrationalities: string[];
   };
+  // 下面这些属性如果不需要可以删掉，保留是为了防止报错
+  joy?: number;
+  anger?: number;
+  sadness?: number;
+  fear?: number;
+  trust?: number;
+  current_emotions?: { joy: number; anger: number; sadness: number; fear: number; trust: number; };
+  triggers?: string;
+  decay?: string;
+  
+  RESOURCES_LIMITS: {
+    skills: string[];
+    assets: string[];
+    constraints: string[];
+    risk_tolerance: string;
+  };
+  SCENE_EXECUTOR: {
+    step_1_context_parse: string;
+    step_2_state_load: string;
+    step_3_policy_select: string;
+    step_4_output_rules: string;
+    step_5_memory_update: string;
+  };
+  REALISM_SELF_CHECK: {
+    checks: string[];
+    pass_threshold: number;
+  };
+}
+
+
+
+
+
+
   RESOURCES_LIMITS: {
     skills: string[];
     assets: string[];
@@ -337,12 +368,28 @@ export interface UserProfile {
 export interface Agreement {
   id: string; // 唯一ID
   content: string; // 约定内容：“叫我起床”
+  actor?: 'user' | 'ai'; // <--- 加这一行
   status: 'pending' | 'fulfilled' | 'failed'; // 状态：待处理、已完成、已失败
   importance: number; // AI判断的重要性 (1-10)
   trigger: AgreementTrigger; // 触发器
   created_at: number; // 创建时间
 }
 // ==================== 新代码块结束 ====================
+
+
+
+
+
+
+
+// 1. 【补全】情感需求接口
+export interface EmotionalNeed {
+  type: string;
+  description: string;
+  intensity: number;
+}
+
+
 
 
 

@@ -5,6 +5,7 @@ import { generateResponse } from '../services/apiService';
 import { summarizeHistory } from '../services/geminiService';
 import { generateMinimaxAudio, fetchMinimaxVoices, getBuiltInMinimaxVoices, MinimaxVoice } from '../services/ttsService';
 import SafeAreaHeader from './SafeAreaHeader';  // ← 确保路径正确（如果在 components 同级）
+import WorldBookApp from './WorldBookApp'; // <--- 确保加了这行导入！
 
 
 
@@ -12,6 +13,26 @@ import SafeAreaHeader from './SafeAreaHeader';  // ← 确保路径正确（如�
 
 
 
+
+
+
+
+// 2. 【移动】ChatAppProps 必须定义在组件前面
+interface ChatAppProps {
+  contacts: Contact[];
+  setContacts: React.Dispatch<React.SetStateAction<Contact[]>>;
+  globalSettings: GlobalSettings;
+  setGlobalSettings: React.Dispatch<React.SetStateAction<GlobalSettings>>;
+  worldBooks: WorldBookCategory[];
+  setWorldBooks: React.Dispatch<React.SetStateAction<WorldBookCategory[]>>;
+  onExit: () => void;
+  isBackground?: boolean; 
+  initialContactId: string | null;
+  onChatOpened: () => void;
+  onNewMessage: (contactId: string, name: string, avatar: string, content: string) => void;
+  // ★★★ 新增：接收跳转设置页的函数
+  onOpenSettings?: () => void;
+}
 
 
 
@@ -470,7 +491,52 @@ const SharedMemoryCard: React.FC<{ data: any }> = ({ data }) => {
 
 
 
+// 【ChatApp.tsx】请把这段代码插在 const ChatApp = ... 的上面
 
+const VoiceBubble: React.FC<{
+  msg: Message;
+  isPlaying: boolean;
+  progress: number;
+  duration: number;
+  onPlay: () => void;
+  onSeek: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  isUser: boolean;
+}> = ({ msg, isPlaying, progress, duration, onPlay, onSeek, isUser }) => {
+  return (
+    <div className={`flex items-center gap-3 min-w-[160px] ${isUser ? 'flex-row-reverse' : 'flex-row'}`}>
+      <button
+        onClick={(e) => { e.stopPropagation(); onPlay(); }}
+        className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors shadow-sm ${
+          isUser ? 'bg-white text-blue-500' : 'bg-blue-500 text-white'
+        }`}
+      >
+        {isPlaying ? '⏸' : '▶'}
+      </button>
+      
+      <div className="flex-1 flex flex-col justify-center gap-1">
+        {/* 进度条 */}
+        <input
+          type="range"
+          min="0"
+          max={duration || 10}
+          step="0.1"
+          value={isPlaying ? progress : 0}
+          onClick={(e) => e.stopPropagation()}
+          onChange={(e) => { e.stopPropagation(); onSeek(e); }}
+          className="w-full h-1.5 bg-gray-300/50 rounded-lg appearance-none cursor-pointer"
+          style={{ accentColor: isUser ? 'white' : '#3b82f6' }}
+        />
+        {/* 时间显示 */}
+        <div className={`text-[9px] font-mono opacity-80 ${isUser ? 'text-white' : 'text-gray-500'}`}>
+          {isPlaying 
+            ? `${Math.floor(progress / 60)}:${Math.floor(progress % 60).toString().padStart(2, '0')}` 
+            : `${Math.floor(duration / 60)}:${Math.floor(duration % 60).toString().padStart(2, '0')}`
+          }
+        </div>
+      </div>
+    </div>
+  );
+};
 
 
 
@@ -573,129 +639,121 @@ const messagesEndRef = useRef<HTMLDivElement>(null);
 
 
 
-// 这是一组代码：【科学拟人版】生物钟系统 (含早晨回血、随机波动、深夜骤降)
+// 这是一组代码：【科学拟人版】生物钟系统 (含智能补觉 + 早晨回血 + 约定闹钟检测)
   useEffect(() => {
     const metabolismInterval = setInterval(() => {
-      
-      // 后台时不计算，节省性能
-      if (isBackgroundRef.current) return;
+      // 后台时不计算生物钟，但必须检查闹钟！(约定不能迟到)
+      // 所以我们把 return 移到下面去
 
       const now = Date.now();
       const currentHour = new Date().getHours(); 
       
-      // === 时间段定义 ===
-      const isMorning = currentHour >= 6 && currentHour < 11;   // 早上: 精力回升/极其耐用
-      const isNoon = currentHour >= 11 && currentHour < 14;     // 中午: 正常消耗
-      const isAfternoon = currentHour >= 14 && currentHour < 18;// 下午: 容易犯困
-      const isEvening = currentHour >= 18 && currentHour < 23;  // 晚上: 消耗加快
-      const isLateNight = currentHour >= 23 || currentHour < 6; // 深夜: 极速掉电
+      const isMorning = currentHour >= 6 && currentHour < 11;   
+      const isNoon = currentHour >= 11 && currentHour < 14;     
+      const isAfternoon = currentHour >= 14 && currentHour < 18;
+      const isEvening = currentHour >= 18 && currentHour < 23;  
+      const isLateNight = currentHour >= 23 || currentHour < 6; 
 
       let hasChanges = false;
 
       const updatedContacts = contacts.map(c => {
+        let needsUpdate = false;
+        let updatedContact = { ...c };
+
+        // ===========================================
+        // ★★★ 核心新增：约定闹钟检测模块 ★★★
+        // ===========================================
+        if (c.agreements && c.agreements.length > 0) {
+            // 找出一个“时间已到”且“还是 pending 状态”的约定
+            const dueAgreement = c.agreements.find(a => 
+                a.status === 'pending' && 
+                a.trigger.type === 'time' && 
+                typeof a.trigger.value === 'number' &&
+                a.trigger.value <= now && // 时间到了
+                !c.dueAgreementId // 且当前没有正在处理的积压约定
+            );
+
+            if (dueAgreement) {
+                console.log(`[闹钟系统] ⏰ 叮铃铃！${c.name} 的约定 "${dueAgreement.content}" 到期了！`);
+                updatedContact.dueAgreementId = dueAgreement.id; // 标记它！
+                updatedContact.pendingProactive = true; // 强制要求发主动消息
+                needsUpdate = true;
+            }
+        }
+
+        // 如果处于后台，我们只做闹钟检测，不做生物钟计算（省电）
+        if (isBackgroundRef.current) {
+             return needsUpdate ? updatedContact : c;
+        }
+
+        // ===========================================
+        // 下面是原有的生物钟逻辑
+        // ===========================================
         // 0. 数据初始化防崩
-        if (!c.mood?.energy) {
-          c.mood = {
-            ...(c.mood || {}),
-            current: c.mood?.current || "Calm",
+        if (!updatedContact.mood?.energy) {
+          updatedContact.mood = {
+            ...(updatedContact.mood || {}),
+            current: updatedContact.mood?.current || "Calm",
             energy: { current: 80, max: 100, status: 'Awake', lastUpdate: now }
           };
         }
 
-        const energySys = c.mood.energy;
+        const energySys = updatedContact.mood.energy;
         const timeDiffMinutes = (now - energySys.lastUpdate) / 60000;
         
-        // 至少过1分钟才计算
-        if (timeDiffMinutes < 1) return c;
+        // 至少过1分钟才计算生物钟
+        if (timeDiffMinutes < 1) return needsUpdate ? updatedContact : c;
 
         let newEnergy = energySys.current;
         let newStatus = energySys.status;
-        let changeRate = 0; // 变化率 (正数回血，负数扣血)
+        let changeRate = 0; 
 
-        // ===========================================
-        // A. 睡觉逻辑 (Sleeping) - 快速回血
-        // ===========================================
-        if (energySys.status === 'Sleeping') {
-           // 睡一分钟回 0.5 (睡3小时多就能充满)
-           changeRate = 0.5; 
-           
-           // 睡满了自动醒
-           if (newEnergy + (changeRate * timeDiffMinutes) >= energySys.max) {
-             newEnergy = energySys.max;
+        // 断层补觉
+        if (timeDiffMinutes > 240 && !isLateNight) {
+             newEnergy = 90; 
              newStatus = 'Awake';
-             changeRate = 0; // 醒了就不加了
-           }
-        } 
-        // ===========================================
-        // B. 醒着逻辑 (Awake) - 拟人化消耗
-        // ===========================================
-        else {
-           // 1. 基础随机波动 (模拟心情起伏)
-           // 30%概率回一点血(心情好)，70%概率掉血
-           const randomFluctuation = Math.random() > 0.7 ? 0.05 : -0.05;
-
-           if (isMorning) {
-             // ★★★ 早上特权：不但不掉，反而可能会微弱回升 (刚醒来越来越清醒)
-             // 设定：基本不掉血 (-0.01)，加上随机波动，大概率是持平或微涨
-             changeRate = -0.01 + randomFluctuation + 0.05; 
-           } 
-           else if (isNoon) {
-             // 中午正常消耗
-             changeRate = -0.1 + randomFluctuation;
-           }
-           else if (isAfternoon) {
-             // 下午犯困，消耗变快
-             changeRate = -0.2 + randomFluctuation;
-           }
-           else if (isEvening) {
-             // 晚上累了，消耗明显
-             changeRate = -0.4; 
-           }
-           else if (isLateNight) {
-             // ★★★ 深夜熬夜：极速掉电 (每分钟掉1.2，一小时掉70)
-             changeRate = -1.2;
-           }
-        }
-
-        // === 应用变化 ===
-        newEnergy += changeRate * timeDiffMinutes;
-
-        // === 边界修正 ===
-        // 1. 防止过冲
-        if (newEnergy > 100) newEnergy = 100;
-        
-        // 2. 状态自动机 (根据电量变状态)
-        if (newStatus !== 'Sleeping') {
-            if (newEnergy <= 0) {
-              newEnergy = 0;
-              newStatus = 'Exhausted'; // 累瘫
-            } else if (newEnergy < 20) {
-              newStatus = 'Tired';     // 累了
+        } else {
+            // 正常消耗逻辑
+            if (energySys.status === 'Sleeping') {
+               changeRate = 0.5; 
+               if (newEnergy + (changeRate * timeDiffMinutes) >= energySys.max) {
+                 newEnergy = energySys.max;
+                 newStatus = 'Awake';
+                 changeRate = 0;
+               }
             } else {
-              newStatus = 'Awake';     // 正常
+               const randomFluctuation = Math.random() > 0.7 ? 0.05 : -0.05;
+               if (isMorning) changeRate = -0.01 + randomFluctuation + 0.05; 
+               else if (isNoon) changeRate = -0.1 + randomFluctuation;
+               else if (isAfternoon) changeRate = -0.2 + randomFluctuation;
+               else if (isEvening) changeRate = -0.4; 
+               else if (isLateNight) changeRate = -1.2; 
             }
+            newEnergy += changeRate * timeDiffMinutes;
         }
 
-        // 3. 强制修正：防止Bug导致的“满血睡觉”
-        if (newStatus === 'Sleeping' && newEnergy > 95) {
-             newStatus = 'Awake'; // 既然满了就强制醒来
+        // 边界修正
+        if (newEnergy > 100) newEnergy = 100;
+        if (newStatus !== 'Sleeping') {
+            if (newEnergy <= 0) { newEnergy = 0; newStatus = 'Exhausted'; } 
+            else if (newEnergy < 20) { newStatus = 'Tired'; } 
+            else { newStatus = 'Awake'; }
         }
+        if (newStatus === 'Sleeping' && newEnergy > 95) newStatus = 'Awake'; 
 
-        // 检查是否有实质变化 (保留1位小数对比)
-        if (Math.abs(newEnergy - energySys.current) > 0.1 || newStatus !== energySys.status) {
+        // 检查是否有实质变化
+        if (Math.abs(newEnergy - energySys.current) > 0.1 || newStatus !== energySys.status || needsUpdate) {
           hasChanges = true;
-          return {
-            ...c,
-            mood: {
-              ...c.mood,
+          updatedContact.mood = {
+              ...updatedContact.mood,
               energy: {
                 ...energySys,
                 current: parseFloat(newEnergy.toFixed(1)),
                 status: newStatus,
                 lastUpdate: now,
               }
-            }
           };
+          return updatedContact;
         }
         
         return c;
@@ -705,11 +763,10 @@ const messagesEndRef = useRef<HTMLDivElement>(null);
         setContacts(updatedContacts);
       }
 
-    }, 60000); // 1分钟轮询一次
+    }, 30000); // 改成30秒轮询一次，让闹钟更准一点
 
     return () => clearInterval(metabolismInterval);
   }, [contacts, setContacts]);
-
 
 
 
@@ -764,7 +821,10 @@ const messagesEndRef = useRef<HTMLDivElement>(null);
 
 
 
-const handleCardImport = async (e: ChangeEvent<HTMLInputElement>) => {
+// 【App.tsx】
+// 找到 handleCardImport 函数，直接覆盖整个函数：
+
+  const handleCardImport = async (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     let json: any = null;
@@ -797,17 +857,28 @@ const handleCardImport = async (e: ChangeEvent<HTMLInputElement>) => {
         const rawEntries = Array.isArray(cardData.character_book.entries)
           ? cardData.character_book.entries
           : Object.values(cardData.character_book.entries);
-        const entries: WorldBookEntry[] = rawEntries.map((e: any, i: number) => ({
-          id: Date.now().toString() + i,
-          keys: e.keys || [],
-          content: e.content || "",
-          name: e.comment || `Entry ${i + 1}`
-        }));
+          
+        // ★★★ 核心修改：导入时自动判断模式 ★★★
+        const entries: WorldBookEntry[] = rawEntries.map((e: any, i: number) => {
+          // 如果原来的数据里有 constant 标记，或者没有关键词，就默认为“常驻模式”
+          const isConstant = e.constant || !e.keys || e.keys.length === 0;
+          
+          return {
+            id: Date.now().toString() + i,
+            keys: e.keys || [],
+            content: e.content || "",
+            name: e.comment || `Entry ${i + 1}`,
+            // 这里自动分配：没关键词的算常驻(basic)，有关键词的算keyword
+            strategy: isConstant ? 'constant' : 'keyword'
+          };
+        });
+
         if (entries.length > 0) {
           newWorldBook = {
             id: Date.now().toString(),
             name: `${cardName}'s Lore`,
-            entries
+            entries,
+            type: 'selective' // 默认为混合模式
           };
           setWorldBooks(prev => [...prev, newWorldBook!]);
         }
@@ -820,7 +891,7 @@ const handleCardImport = async (e: ChangeEvent<HTMLInputElement>) => {
         avatarUrl = cardData.avatar;
       }
 
-      // ★★★ 修复点：先准备好 HEF 数据，不引用 newContact ★★★
+      // 准备 HEF 数据
       const generatedHEF = generateDefaultHEF(cardName, cardPersona);
 
       const newContact: Contact = {
@@ -830,9 +901,9 @@ const handleCardImport = async (e: ChangeEvent<HTMLInputElement>) => {
         avatar: avatarUrl,
         persona: cardPersona,
         memo: "",
-        userName: "User",
-        userAvatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=Felix",
-        userPersona: "",
+        userName: globalSettings.userName || "User",
+        userAvatar: globalSettings.avatar || "https://api.dicebear.com/7.x/avataaars/svg?seed=Felix",
+        userPersona: globalSettings.userPersona || "",
         history: cardData.first_mes ? [{
           id: Date.now().toString(),
           role: 'assistant',
@@ -846,21 +917,27 @@ const handleCardImport = async (e: ChangeEvent<HTMLInputElement>) => {
         timezone: "Asia/Seoul",
         contextDepth: 20,
         summaryTrigger: 50,
-        coupleSpaceUnlocked: false,
+        RelationShipUnlocked: false,
+        // 如果导入了世界书，自动启用它
         enabledWorldBooks: newWorldBook ? [newWorldBook.name] : [],
         voiceId: "female-shaonv-jingpin",
-        hef: generatedHEF, // 这里直接用上面生成的变量
-        longTermMemories: [] 
+        hef: generatedHEF, 
+        longTermMemories: [],
+        affectionScore: 50,
+        relationshipStatus: 'Acquaintance',
+        aiDND: { enabled: false, until: 0 },
+        interventionPoints: 0,
+        currentChatMode: 'Casual',
+        userTags: []
       };
 
       setContacts(prev => [...prev, newContact]);
-      alert(`成功导入 ${cardName}！`);
+      alert(`成功导入 ${cardName}！${newWorldBook ? '\n并已自动加载对应的世界书。' : ''}`);
     } catch (err) {
       console.error(err);
       alert("导入失败");
     }
   };
-
 
 
 
@@ -1727,46 +1804,131 @@ ${existingProfileText}
 
 
 
+// 这是一组代码：【智能动机版】主动消息调度器 (修复了机械式发言，加入概率判定)
   const scheduleProactiveMessage = async (contact: Contact) => {
-  if (!contact.proactiveConfig?.enabled) {
-  console.log(`[ChatApp] ${contact.name} 主动消息已关闭，跳过`);
-  return;
-}
-    console.log(`[ChatApp] 收到主动消息指令: ${contact.name}`);
+    // 0. 全局开关检查
+    const config = contact.proactiveConfig || { enabled: false, minGapMinutes: 60, maxDaily: 5 };
+    if (!config.enabled) {
+      return;
+    }
 
-    // 1. 准备上下文
-    const recentHistory = contact.history.slice(-5).map(m => 
+    // 1. 识别是否是“闹钟/约定”唤醒的 (这种必须发，不能跳过！)
+    // 如果 pendingProactive 为 true 且有 dueAgreementId，说明是时间到了的约定
+    const isAlarmTriggered = contact.pendingProactive && !!contact.dueAgreementId;
+
+    const today = new Date().toISOString().slice(0, 10);
+    const sentToday = contact.proactiveLastSent?.[today] || 0;
+    
+    // 2. 每日上限检查 (闹钟触发的不占额度，必须发)
+    if (!isAlarmTriggered && sentToday >= config.maxDaily) {
+        console.log(`[主动消息] ⛔️ 今日限额已满 (${sentToday}/${config.maxDaily})，停止发送。`);
+        return;
+    }
+
+    // =================================================
+    // ★★★ 核心新增：智能动机判定 (不想聊就不聊) ★★★
+    // =================================================
+    if (!isAlarmTriggered) {
+        // A. 基础概率：时间到了也不一定发，默认只有 35% 的概率发起对话
+        // 这样就避免了“一到点就说话”的机械感
+        let speakProbability = 0.35; 
+
+        // B. 关系加成：关系越好(Affection)，越粘人
+        // 爱意值 100 时，概率增加 30% -> 总共 65%
+        // 爱意值 0 时，概率增加 0%
+        // 仇恨值 -50 时，概率减少
+        const affectionScore = contact.affectionScore || 50;
+        const affectionBonus = Math.max(-0.2, (affectionScore / 100) * 0.3);
+        
+        speakProbability += affectionBonus;
+
+        // C. 掷骰子
+        const diceRoll = Math.random();
+        console.log(`[主动消息判定] 🎲 骰子:${diceRoll.toFixed(2)} vs 阈值:${speakProbability.toFixed(2)} (爱意:${affectionScore})`);
+
+        if (diceRoll > speakProbability) {
+            console.log(`[主动消息] 😶 AI 决定保持沉默 (模拟真人不想说话的时刻)`);
+            return; // <--- 关键：直接结束，不发消息了！
+        }
+    }
+
+    console.log(`[ChatApp] 准备生成主动消息: ${contact.name}`);
+
+    // =================================================
+    // 3. 准备环境数据 (时间 + 约定)
+    // =================================================
+    const dueAgreement = contact.agreements?.find(a => a.id === contact.dueAgreementId);
+    
+    const nowTime = new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', hour12: false });
+    const timeContext = `现在的时间是：${nowTime}。请务必根据这个时间点决定你在做什么。`;
+
+    const recentHistory = contact.history.slice(-10).map(m => 
         `${m.role === 'user' ? 'User' : contact.name}: ${m.content}`
     ).join('\n');
     
-    const currentMood = contact.mood?.current || "平静";
-    const affection = contact.affectionScore || 50;
+    const lastMsg = contact.history[contact.history.length - 1];
+    const minutesSinceLastMsg = lastMsg ? (Date.now() - lastMsg.timestamp) / 60000 : 99999;
+    const isContinuingChat = minutesSinceLastMsg < 60;
 
-    // 2. 构建随机 Prompt
+    // =================================================
+    // 4. 构建精准指令 (Target Instruction)
+    // =================================================
+    let systemInstruction = "";
+
+    if (dueAgreement) {
+        // --- 情况 A: 约定到期 (最优先) ---
+        console.log(`[主动消息] 命中约定: ${dueAgreement.content}`);
+        const actor = dueAgreement.actor === 'user' ? '用户' : '你(AI)';
+        systemInstruction = `
+【⚠️ 紧急任务：履行/监督约定】
+约定内容："${dueAgreement.content}"。承诺人：${actor}。
+指令：
+1. 如果是用户的承诺：发消息询问用户是否做到了，或者提醒ta。
+2. 如果是你的承诺：请根据约定内容履行（比如发一张图，或者汇报进度）。
+3. 语气要自然，不要像个闹钟。
+`;
+    } else if (isContinuingChat) {
+        // --- 情况 B: 延续话题 ---
+        systemInstruction = `
+【⚠️ 任务：延续当前话题】
+距离上一条消息才过 ${Math.floor(minutesSinceLastMsg)} 分钟。
+指令：
+1. 不要开启新话题！
+2. 针对上一条消息补充一句，或追问细节，或者发个表情包。
+`;
+    } else {
+        // --- 情况 C: 发起新话题 (随机闲聊) ---
+        systemInstruction = `
+【⚠️ 任务：发起新对话】
+${timeContext}
+指令：
+1. 不要总是问“你在干嘛”，这很烦人。
+2. 分享你此时此刻正在做的一件具体的小事（比如看到了一朵云、正在发呆、想吃夜宵）。
+3. 或者发一张【FakeImage】给你看到的东西。
+4. 保持简短，像真人在发微信一样。
+`;
+    }
+
+    // =================================================
+    // 5. 组装 Prompt
+    // =================================================
     const proactivePrompt = `
 # Roleplay Instructions
 You are "${contact.name}".
 **Persona:** ${contact.persona}
-**Mood:** ${currentMood}
-**Affection:** ${affection}/100
+**Time:** ${nowTime} (Very Important!)
 
 **Recent Chat:**
 ${recentHistory}
 
-# Task
-Initiate a NEW conversation naturally.
-**Randomness Strategy (Pick ONE randomly):**
-1. [30% chance] Share a photo: Send text starting with "[FakeImage] description".
-2. [20% chance] Double text: Send two short messages separated by "|||". (e.g. "Hey|||Check this out")
-3. [50% chance] Just a thought: A single short sentence about your day or asking the user.
+**Target Instruction:**
+${systemInstruction}
 
-# Rules
-1. **Language Style:** MIMIC the language in "Recent Chat" EXACTLY (e.g. Korean+Chinese).
-2. **Length:** Keep it SHORT and casual.
-3. **Format:** If sending two messages, use "|||" to separate them.
-4. Output **ONLY** the message content.
-
-Now, generate:
+# Output Rules (CRITICAL)
+1. **Separation**: If you want to send multiple messages, use "|||" to separate them.
+2. **Images**: To send an image, use format: \`[FakeImage] description of image\`.
+3. **Language**: Mimic the language style in "Recent Chat". Casual, short.
+4. Output **ONLY** the message content string.
 `;
 
     let body = "";
@@ -1781,58 +1943,58 @@ Now, generate:
             body = generatedBody.trim().replace(/^["“'‘]|["”'’]$/g, '');
         }
     } catch (error) {
-        console.error("生成失败:", error);
+        console.error("主动消息生成失败:", error);
         return;
     }
     
     if (!body) return;
 
-    // ★★★ 核心升级：支持分割多条消息 (|||) ★★★
-    const parts = body.split('|||');
-    const newMessages: Message[] = parts.map((part, index) => ({
-        id: Date.now().toString() + index,
-        role: 'assistant',
-        content: part.trim(),
-        timestamp: Date.now() + (index * 1000), // 第二条晚1秒，看起来像连续发
-        type: 'text'
-    }));
+    // 6. 切割消息
+    const parts = body.split('|||'); 
+    const newMessages: Message[] = parts.map((part, index) => {
+        const cleanContent = part.trim();
+        return {
+            id: Date.now().toString() + index,
+            role: 'assistant',
+            content: cleanContent, 
+            timestamp: Date.now() + (index * 1000), 
+            type: 'text'
+        };
+    });
 
-
-// ==================== 从这里开始复制 ====================
-// 如果有系统通知，也一并加入！
-if (systemNotice) {
-  const newSystemMessage: Message = {
-    id: (Date.now() + 1).toString(),
-    role: 'system',
-    content: systemNotice,
-    timestamp: newMessages.length > 0 ? newMessages[newMessages.length - 1].timestamp + 1 : Date.now(), // 确保在AI回复之后显示
-    type: 'text'
-  };
-  newMessages.push(newSystemMessage);
-}
-// ==================== 复制到这里结束 ====================
-
-
-    const today = new Date().toISOString().slice(0, 10);
-    const sentToday = contact.proactiveLastSent?.[today] || 0;
-
-    // 更新状态
+    // 7. 更新状态
     setContacts(prev => prev.map(c => {
       if (c.id === contact.id) {
+          let updatedAgreements = c.agreements;
+          // 如果是闹钟触发的，要把约定标记为“已达成”或“已触发”
+          if (dueAgreement) {
+              updatedAgreements = (c.agreements || []).map(a => 
+                  a.id === dueAgreement.id ? { ...a, status: 'fulfilled' } : a
+              );
+          }
+
+          const newSentCount = isAlarmTriggered ? sentToday : sentToday + 1;
+
           return { 
              ...c, 
-             history: [...c.history, ...newMessages], // 插入多条消息
+             history: [...c.history, ...newMessages], 
              pendingProactive: false, 
-             proactiveLastSent: { ...c.proactiveLastSent, [today]: sentToday + 1 }, 
+             dueAgreementId: undefined, 
+             agreements: updatedAgreements,
+             proactiveLastSent: { ...c.proactiveLastSent, [today]: newSentCount }, 
              unread: (c.unread || 0) + newMessages.length 
           };
       }
       return c;
     }));
 
-    // 触发通知 (只显示第一条的内容，保持简洁)
+    // 触发通知
     onNewMessage(contact.id, contact.name, contact.avatar, newMessages[0].content, activeContactId || "");
-};
+  };
+
+
+
+
 
 
   const handleSeek = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -1921,32 +2083,59 @@ if (systemNotice) {
   };
 
 
+
+
+
+
+
+
+// 【ChatApp.tsx】
+// 找到 findRelevantWorldBookEntries 函数，直接覆盖：
+
   const findRelevantWorldBookEntries = (
     history: Message[],
     worldBooks: WorldBookCategory[],
     enabledBookNames: string[]
-): WorldBookEntry[] => {
-    // 1. 只关注最近的对话内容，提高相关性
+  ): WorldBookEntry[] => {
+    // 1. 准备上下文：把最近 5 条消息拼成一个字符串，用来检测关键词
     const recentMessages = history.slice(-5);
     const contextText = recentMessages.map(m => m.content).join(' ').toLowerCase();
+
     // 2. 找出当前角色启用的世界书
     const enabledBooks = worldBooks.filter(wb => enabledBookNames.includes(wb.name));
     if (enabledBooks.length === 0) {
         return [];
     }
+
     const relevantEntries = new Set<WorldBookEntry>();
-    // 3. 遍历所有启用的世界书条目
+
+    // 3. 遍历所有启用的世界书
     for (const book of enabledBooks) {
         for (const entry of book.entries) {
-            // 4. 检查条目的任何一个关键词是否出现在最近的对话中
-            for (const key of entry.keys) {
-                if (contextText.includes(key.toLowerCase())) {
-                    relevantEntries.add(entry);
-                    break; // 找到一个匹配的key就够了，处理下一个条目
+            
+            // ★★★ 核心逻辑：区分两种模式 ★★★
+            
+            // 模式 A: 常驻/基本模式 (constant)
+            // 只要这一项被标记为 constant，无论说什么，AI 都要读！
+            if (entry.strategy === 'constant') {
+                relevantEntries.add(entry);
+                continue; // 既然已经加进去了，就不用检查关键词了，跳过
+            }
+
+            // 模式 B: 关键词模式 (keyword)
+            // 只有当 entry.keys 里的词出现在对话中时，才读取
+            if (entry.keys && entry.keys.length > 0) {
+                for (const key of entry.keys) {
+                    if (contextText.includes(key.toLowerCase())) {
+                        relevantEntries.add(entry);
+                        break; // 只要命中一个关键词就够了
+                    }
                 }
             }
         }
     }
+    
+    // 返回去重后的结果
     return Array.from(relevantEntries);
  };
 
@@ -2037,13 +2226,12 @@ const getEnergyInstruction = (mood: CharacterMood | undefined): string => {
 
 
 // =============================================================
-    // ★★★ 核心修复：寻找最近的“时间断崖”并定责 (防翻旧账版) ★★★
+    // ★★★ 核心修复：寻找最近的“时间断崖”并定责 (智能免责版) ★★★
     // =============================================================
-    
 
     let maxGapMinutes = 0;
     let isDifferentDay = false;
-    let bigGapFound = false; // ★★★ 在这里定义标记 ★★★
+    let bigGapFound = false; 
     
     // 判责状态
     let isAiIgnoredUser = false; // AI 已读不回
@@ -2053,9 +2241,15 @@ const getEnergyInstruction = (mood: CharacterMood | undefined): string => {
     let hasAiRespondedAfterGap = false;
 
     // 我们倒着查，寻找最近的一次超过 2 小时的大断层
-    // 检查最近 15 条消息
     const checkCount = Math.min(currentHistory.length, 15); 
     
+    // ★★★ 定义“话题自然结束”的关键词 (免责金牌) ★★★
+    // 如果上一句话包含这些词，说明对话已经自然告一段落，隔多久回都不算迟！
+    const closureKeywords = [
+        "晚安", "睡了", "睡觉", "困了", "good night", "sleep", "bye", "再见", "明天见", "去洗澡", "去吃饭", "去忙", "先忙", 
+        "잘 자", "안녕", "들어가", "쉬어", "꿈", "굿밤" // 包含韩语常见结束语
+    ];
+
     for (let i = 0; i < checkCount - 1; i++) {
         // 倒序索引：curr 是较新的，prev 是较旧的
         const currIndex = currentHistory.length - 1 - i;
@@ -2067,7 +2261,6 @@ const getEnergyInstruction = (mood: CharacterMood | undefined): string => {
             
             // 1. 【防翻旧账检测】
             // 如果我们在倒序检查时，先遇到了 AI 发的消息，说明 AI 在这个时间点之后已经活跃过了。
-            // 那么更早之前的断层就可以被视为“已处理”。
             if (currMsg.role === 'assistant') {
                 hasAiRespondedAfterGap = true;
             }
@@ -2077,16 +2270,29 @@ const getEnergyInstruction = (mood: CharacterMood | undefined): string => {
             
             // 3. 发现大断层 (超过2小时)
             if (gap > 120) {
-                // ★★★ 关键判断：如果断层后 AI 已经回过话了，就跳过这个断层！ ★★★
+                // 如果断层后 AI 已经回过话了，就跳过这个断层
                 if (hasAiRespondedAfterGap) {
-                    console.log(`[判责跳过] 发现旧断层(${gap}min)，但AI后续已回复过，翻篇不提。`);
-                    // 继续往前找，看看有没有更新的断层（通常不会有了），或者直接忽略
                     continue; 
                 }
 
-                // 只有当 AI 还没回过话（即这是新鲜的事故现场），才记录这个断层
+                // ★★★ 免责检测：检查断层前的那句话，是不是“结束语” ★★★
+                const prevContent = prevMsg.content.toLowerCase();
+                const isNaturalEnding = closureKeywords.some(k => prevContent.includes(k));
+
+                if (isNaturalEnding) {
+                    console.log(`[判责跳过] 检测到结束语 "${prevMsg.content.slice(0, 10)}..."，这是自然结束，不算迟到。`);
+                    // 虽然有断层，但没人有错，不再继续寻找
+                    maxGapMinutes = gap; // 依然记录时间差用于显示，但不追责
+                    const d1 = new Date(currMsg.timestamp);
+                    const d2 = new Date(prevMsg.timestamp);
+                    if (d1.getDate() !== d2.getDate()) isDifferentDay = true;
+                    
+                    bigGapFound = true; // 标记找到了断层（用于跳过兜底）
+                    break; // 停止查找，保持 isAiIgnoredUser 和 isUserLateReply 为 false
+                }
+
+                // 只有不是自然结束，才开始定责
                 maxGapMinutes = gap;
-                
                 const d1 = new Date(currMsg.timestamp);
                 const d2 = new Date(prevMsg.timestamp);
                 if (d1.getDate() !== d2.getDate()) isDifferentDay = true;
@@ -2100,15 +2306,13 @@ const getEnergyInstruction = (mood: CharacterMood | undefined): string => {
                     isUserLateReply = true;
                 }
                 
-                // 找到这个未处理的新鲜断层后，立刻停止
-                bigGapFound = true; // ★★★ 在这里加一个标记 ★★★
+                bigGapFound = true; 
                 break; 
             }
         }
     }
 
- // 补漏：如果最近没有历史断层，检查一下“当下”距离“最后一条消息”是否很久
-    // 且最后一条是用户发的（说明 AI 还没回）
+    // 补漏：如果最近没有历史断层，检查一下“当下”距离“最后一条消息”是否很久
     if (maxGapMinutes === 0 && currentHistory.length > 0) {
          const lastMsg = currentHistory[currentHistory.length - 1];
          // 如果最后一条是用户发的，且隔了很久，说明 AI 现在还没回
@@ -2117,41 +2321,24 @@ const getEnergyInstruction = (mood: CharacterMood | undefined): string => {
              if (silenceGap > 120) {
                  maxGapMinutes = silenceGap;
                  isAiIgnoredUser = true;
-                 bigGapFound = true; // 补漏也算找到了大问题
+                 bigGapFound = true; 
              }
          }
     }
 
-    // ★★★ 最终兜底修复 (在你原有代码基础上增加) ★★★
-    // 如果经过上面所有复杂判断后，一个大问题都没找到 (bigGapFound 还是 false)
-    // 那我们就直接计算【最后两条消息】的真实间隔，防止永远显示“刚刚”
+    // ★★★ 最终兜底修复 ★★★
+    // 如果没有找到任何责任断层，但客观时间确实隔了很久（防止永远显示“刚刚”）
     if (!bigGapFound && currentHistory.length >= 2) {
         const latestMsg = currentHistory[currentHistory.length - 1];
         const prevMsg = currentHistory[currentHistory.length - 2];
         maxGapMinutes = Math.floor((latestMsg.timestamp - prevMsg.timestamp) / 60000);
         
-        // 同样检查是否跨天 (防止遗漏)
         const d1 = new Date(latestMsg.timestamp);
         const d2 = new Date(prevMsg.timestamp);
         if (d1.getDate() !== d2.getDate() || d1.getMonth() !== d2.getMonth()) {
             isDifferentDay = true;
         }
     }
-
- if (!bigGapFound && currentHistory.length >= 2) {
-        const latestMsg = currentHistory[currentHistory.length - 1];
-        const prevMsg = currentHistory[currentHistory.length - 2];
-        maxGapMinutes = Math.floor((latestMsg.timestamp - prevMsg.timestamp) / 60000);
-        
-        // 同样检查是否跨天 (防止遗漏)
-        const d1 = new Date(latestMsg.timestamp);
-        const d2 = new Date(prevMsg.timestamp);
-        if (d1.getDate() !== d2.getDate() || d1.getMonth() !== d2.getMonth()) {
-            isDifferentDay = true;
-        }
-    }
-
-
 
     // 生成时间描述
     let gapDescription = "刚刚";
@@ -2160,7 +2347,7 @@ const getEnergyInstruction = (mood: CharacterMood | undefined): string => {
     if (maxGapMinutes > 1440) gapDescription = "好几天";
     if (isDifferentDay) gapDescription += " (已跨天)";
 
-    console.log(`[判责结果] 间隔:${gapDescription}, AI已读不回:${isAiIgnoredUser}`);
+    console.log(`[判责结果] 间隔:${gapDescription}, AI已读不回:${isAiIgnoredUser}, 用户迟到:${isUserLateReply}`);
 
     // =============================================================
     // ★★★ 生成给 AI 的强制指令 (Blame Instruction) ★★★
@@ -2168,7 +2355,7 @@ const getEnergyInstruction = (mood: CharacterMood | undefined): string => {
     let blameInstruction = "";
     
     if (isAiIgnoredUser) {
-        // 情况 A：AI 的锅 (你的情况)
+        // 情况 A：AI 的锅
         blameInstruction = `
 【⚠️ 严重警告：检测到“已读不回”行为 ⚠️】
 事实如下：
@@ -2179,13 +2366,18 @@ const getEnergyInstruction = (mood: CharacterMood | undefined): string => {
 ✅ 必须执行：必须先为你的“已读不回”道歉或找符合常理的借口（如“刚睡醒”、“刚才在忙”），态度要软化。
 `;
     } else if (isUserLateReply) {
-        // 情况 B：用户的锅
+        // 情况 B：用户的锅 (仅当没有互道晚安时触发)
         blameInstruction = `
 【时间流逝】距离上次对话已过 ${gapDescription}。
 是用户消失了这么久才回你。你可以表现出惊讶、撒娇（“怎么才理我”）或询问人去哪了。
 `;
     } else {
-        blameInstruction = "时间连贯，正常对话。";
+        // 情况 C：正常时间流逝 (或者是互道晚安后的自然隔夜)
+        if (maxGapMinutes > 360) {
+            blameInstruction = `【新的一天/新的开始】距离上次对话已过 ${gapDescription}，但这很正常（因为上次话题已结束或已互道晚安）。请自然地开启新话题，或者回应用户的新内容，不要纠结时间。`;
+        } else {
+            blameInstruction = "时间连贯，正常对话。";
+        }
     }
 
 
@@ -2409,14 +2601,47 @@ ${(() => {
 【互动反馈】: 当用户在空间里回答了你的问题，系统会用 \`[情侣空间]\` 的格式告诉你。
 【行为要求】: 不要直接在聊天里说你要做什么，系统会自动通知。
 
-# 📝 [机密] 约定/承诺识别模块
-分析用户消息，识别关于【未来】的约定。
-1. **识别标准**：任何包含明确或模糊时间点的待办事件。
-2. **重要性判断 (1-10分)**：自行判断。
-3. **触发器转换**：将“明天8点”转为ISO 8601格式时间戳。
-4. **输出格式**：如果识别到，在 thought_chain 中新增 new_agreement 字段。
+
+
+
+
+
+# 📝 [机密] 约定/承诺识别模块 (智能审计版 V2.0)
+你的核心任务是识别【具有双向约束力】或【重要情感价值】的未来承诺。
+
+1. **🚫 绝对禁止记录的琐事 (过滤名单)**：
+   - 生理需求：睡觉、吃饭、洗澡、上厕所、喝水。
+   - 短期状态：我去忙一会、我去打把游戏、发个呆。
+   - 模糊意向：以后再说、有机会去。
+   - **例子**：用户说“我去睡了”，**绝对不要**生成约定！这是状态同步，不是契约。
+
+2. **✅ 必须记录的有效约定**：
+   - 明确的时间点任务：例如“明早8点叫我”、“周五晚上看电影”。
+   - 重要情感承诺：例如“再也不许说自己笨”、“下次见面要穿那件蓝衬衫”。
+   - AI的主动承诺：例如“我会为你写一首诗”、“我去查一下资料”。
+
+3. **责任主体判定 (actor)**：
+   - 用户承诺 -> actor: "user"
+   - AI承诺 -> actor: "ai"
+
+4. **输出格式**：
+   只有当满足上述【有效约定】标准时，才在 thought_chain 中输出：
+   "new_agreement": {
+      "content": "精简后的约定内容",
+      "actor": "user" 或 "ai",
+      "importance": 7, (1-10分，琐事直接0分不输出)
+      "trigger": { "type": "time", "value": "ISO时间戳" 或 "关键词" }
+   }
+   **如果没有有效约定，绝对不要输出 new_agreement 字段！**
+
+
+
+
 
 # 🚫 聊天铁律
+**纯净输出**: 你的 content 必须是【纯粹的口语】。**严禁**出现任何 ()、（）、[]、【】 包含的动作描写、心理活动、补充说明、翻译或旁白！
+- **排版美学**: 必须使用换行符 (\n) 来分割段落！不要发一大坨文字。
+- **引用规则**: 如果回复针对用户的某句特定的话，请在消息开头使用 "> " 引用原文摘要，然后换行再回复。
 - **拒绝演讲**：单条消息简短，碎片化。
 - **禁止过度解释**。
 - **防幻觉**：不编造记忆，不知道就说不知道。
@@ -2738,24 +2963,45 @@ const SharedMemoryCard: React.FC<{ data: any }> = ({ data }) => {
             if (extractedThought) {
                 console.log("【🧠 AI内心戏】", extractedThought);
 
-                // (A) [读心术模块] 约定识别
+// (A) [读心术模块] 约定识别 (升级版：区分责任人)
                 if (extractedThought.new_agreement && Object.keys(extractedThought.new_agreement).length > 0) {
                   console.log("【约定系统】AI 识别到一个新约定:", extractedThought.new_agreement);
                   const newAgreementData = extractedThought.new_agreement;
+// ★★★ 核心修复：防止 Invalid Date ★★★
+                  let safeTimeValue = Date.now();
+                  if (newAgreementData.trigger?.value) {
+                      // 尝试把 AI 给的值转成数字
+                      const parsed = new Date(newAgreementData.trigger.value).getTime();
+                      if (!isNaN(parsed)) {
+                          safeTimeValue = parsed;
+                      } else {
+                          console.warn("约定时间识别非法，已重置为当前时间:", newAgreementData.trigger.value);
+                      }
+                  }
+
                   const newAgreement: Agreement = {
                     id: `agr_${Date.now()}`,
                     content: newAgreementData.content || "新的约定",
+                    // ★★★ 核心新增：记录是谁的承诺 (默认 user) ★★★
+                    actor: newAgreementData.actor === 'ai' ? 'ai' : 'user', 
                     status: 'pending',
                     importance: newAgreementData.importance || 5,
                     trigger: {
                         type: newAgreementData.trigger?.type || "time",
-                        value: new Date(newAgreementData.trigger?.value || Date.now()).getTime(),
+                        value: safeTimeValue, // 使用修复后的安全时间
                         original_text: newAgreementData.trigger?.original_text || ""
                     },
                     created_at: Date.now()
                   };
+
+
+
+
                   // 立即存入数据库
                   setContacts(prev => prev.map(c => c.id === activeContact.id ? { ...c, agreements: [...(c.agreements || []), newAgreement] } : c));
+                  
+                  // 发个系统通知告诉用户一声
+                  systemNotice = `已记录${newAgreement.actor === 'user' ? '你' : '我'}的约定：${newAgreement.content}`;
                 }
 
                 // (B) [情侣空间] 动作指令处理 (修复：没解锁不许动！)
@@ -3384,80 +3630,6 @@ const readTavernPng = async (file: File): Promise<any | null> => {
 
 
 
-
-const VoiceBubble: React.FC<{
-  msg: Message;
-  isPlaying: boolean;
-  progress: number;
-  duration: number;
-  onPlay: () => void;
-  onSeek: (e: React.ChangeEvent<HTMLInputElement>) => void;
-  isUser: boolean;
-}> = ({ msg, isPlaying, progress, duration, onPlay, isUser }) => {
-  const [showTranslation, setShowTranslation] = useState(false);
-  const rawContent = msg.content.replace(/^>.*?\n\n/, '').replace(/^\[Voice Message\]\s*/i, '');
-  const translationText = rawContent;
-  const formatTime = (time: number) => {
-    const min = Math.floor(time / 60);
-    const sec = Math.floor(time % 60);
-    return `${min}:${sec < 10 ? '0' : ''}${sec}`;
-  };
-  const totalDuration = msg.voiceDuration || duration || 10;
-  const safeDuration = totalDuration > 0 ? totalDuration : 10;
-  const progressPercent = safeDuration > 0 ? (progress / safeDuration) * 100 : 0;
-  return (
-    <div className="flex flex-col min-w-[180px] max-w-[260px]">
-      <div
-        className={`flex items-center gap-3 select-none py-2 px-3 rounded-lg group transition-all ${isUser ? '' : 'cursor-pointer'}`}
-        onClick={(e) => {
-          e.stopPropagation();
-          if (!isUser) onPlay();
-          else setShowTranslation(!showTranslation);
-        }}
-      >
-        <span className={`font-bold text-lg ${isUser ? 'text-gray-400' : 'text-blue-500'}`}>
-          {isUser ? '▶' : (isPlaying ? '❚❚' : '▶')}
-        </span>
-        <div className="flex-1 h-1 bg-black/10 rounded-full relative">
-          {!isUser && <div className="h-full bg-blue-500 rounded-full" style={{ width: `${progressPercent}%` }}></div>}
-          {isUser && <div className="h-full bg-gray-400 rounded-full w-[70%]"></div>}
-        </div>
-        <span className={`text-xs font-mono shrink-0 ${isUser ? 'text-gray-400' : 'text-blue-500/80'}`}>
-          {formatTime(safeDuration)}
-        </span>
-      </div>
-      {!isUser && (
-        <div
-          className="text-center text-[10px] text-gray-400 mt-1 cursor-pointer hover:text-gray-600"
-          onClick={(e) => { e.stopPropagation(); setShowTranslation(!showTranslation); }}
-        >
-          {showTranslation ? '— 收起文本 —' : '...'}
-        </div>
-      )}
-      {showTranslation && (
-        <div className="mt-2 pt-2 border-t border-gray-200 text-sm leading-relaxed animate-slideDown text-gray-600">
-          <HiddenBracketText content={translationText} fontSize="text-sm" />
-          <div className="text-[10px] mt-1 italic opacity-60">
-            {showTranslation ? "— 点击气泡收起 —" : ""}
-          </div>
-        </div>
-      )}
-    </div>
-  );
-};
-interface ChatAppProps {
-  contacts: Contact[];
-  setContacts: React.Dispatch<React.SetStateAction<Contact[]>>;
-  globalSettings: GlobalSettings;
-  setGlobalSettings: React.Dispatch<React.SetStateAction<GlobalSettings>>;
-  worldBooks: WorldBookCategory[];
-  setWorldBooks: React.Dispatch<React.SetStateAction<WorldBookCategory[]>>;
-  onExit: () => void;
-  isBackground?: boolean; 
-  initialContactId: string | null;
-  onChatOpened: () => void;
-  onNewMessage: (contactId: string, name: string, avatar: string, content: string) => void;
-}
 
 
 
@@ -4501,86 +4673,149 @@ onClick={() => {
 
 
 
-{/* ==================== [新面板] 约定备忘录 ==================== */}
+{/* ==================== [修复版] 约定备忘录 (已修复Invalid Date) ==================== */}
           {activeTab === 'agreement' && (
             <div className="animate-fadeIn h-full flex flex-col p-4 space-y-3">
               <div className="flex justify-between items-center mb-2 flex-shrink-0">
-                <h4 className="text-sm font-bold text-gray-600">🤝 约定备忘录</h4>
-                <span className="text-xs text-gray-400">{contact.agreements?.length || 0} 条约定</span>
+                <h4 className="text-sm font-bold text-gray-600">🤝 我们的约定</h4>
+                <div className="flex gap-2 text-[10px]">
+                   <span className="bg-blue-100 text-blue-600 px-2 py-0.5 rounded">用户承诺</span>
+                   <span className="bg-white border text-gray-600 px-2 py-0.5 rounded">AI承诺</span>
+                </div>
               </div>
 
               {/* 约定列表 */}
-              <div className="flex-1 overflow-y-auto space-y-3 pb-10 custom-scrollbar">
+              <div className="flex-1 overflow-y-auto space-y-4 pb-10 custom-scrollbar p-1">
                 {(!contact.agreements || contact.agreements.length === 0) ? (
                   <div className="text-center text-gray-400 py-10 h-full flex flex-col items-center justify-center">
-                    <span className="text-4xl mb-4 block">🗂️</span>
-                    <p className="text-sm">这里空空如也</p>
-                    <p className="text-xs mt-2">和 AI 聊天中定下的约定会出现在这里哦～</p>
+                    <span className="text-4xl mb-4 block">🤙</span>
+                    <p className="text-sm">还没有立下约定哦</p>
+                    <p className="text-xs mt-2">试着说“我明天要去跑步”看看？</p>
                   </div>
                 ) : (
-                  // 这里我们将插入卡片
-contact.agreements.slice().reverse().map((agreement: Agreement) => {
-                    // --- 辅助函数：让数据显示得更友好 ---
+                  contact.agreements.slice().reverse().map((agreement: any) => {
+                    const isUserPromise = agreement.actor !== 'ai';
+
                     const getStatusInfo = (status: string) => {
                       switch (status) {
-                        case 'pending': return { icon: '⏳', text: '待履行', color: 'text-blue-500 bg-blue-50 border-blue-200' };
-                        case 'fulfilled': return { icon: '✅', text: '已履行', color: 'text-green-600 bg-green-50 border-green-200' };
-                        case 'failed': return { icon: '❌', text: '已违约', color: 'text-red-500 bg-red-50 border-red-200' };
-                        default: return { icon: '❓', text: '未知', color: 'text-gray-500 bg-gray-50 border-gray-200' };
+                        case 'pending': return { icon: '⏳', text: '进行中', color: isUserPromise ? 'text-blue-500 bg-blue-50' : 'text-gray-500 bg-gray-100' };
+                        case 'fulfilled': return { icon: '✅', text: '已达成', color: 'text-green-600 bg-green-50' };
+                        case 'failed': return { icon: '❌', text: '已违约/失效', color: 'text-red-500 bg-red-50' };
+                        default: return { icon: '❓', text: '未知', color: 'text-gray-500 bg-gray-50' };
                       }
                     };
-
-                    const formatTrigger = (trigger: AgreementTrigger) => {
-                      if (trigger.type === 'time') {
-                        return `约定时间: ${new Date(trigger.value as number).toLocaleString()}`;
-                      }
-                      return `触发词: "${trigger.value}"`;
-                    };
-                    
                     const statusInfo = getStatusInfo(agreement.status);
+                    
+                    // ★★★ 核心修复：安全的时间显示逻辑 ★★★
+                    // 如果 value 是数字且有效，显示时间；否则显示原始文本
+                    let triggerTimeStr = "无具体时间";
+                    const rawValue = agreement.trigger.value;
+                    const isValidTimestamp = typeof rawValue === 'number' && !isNaN(rawValue) && rawValue > 0;
+
+                    if (agreement.trigger.type === 'time' && isValidTimestamp) {
+                        triggerTimeStr = new Date(rawValue).toLocaleString([], {month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit'});
+                    } else {
+                        // 如果是 Invalid Date 或者关键词触发，显示原文
+                        triggerTimeStr = agreement.trigger.original_text || (typeof rawValue === 'string' ? rawValue : "文字触发");
+                    }
+
+                    // 检查是否已经超时 (辅助显示)
+                    const isOverdue = agreement.status === 'pending' && isValidTimestamp && Date.now() > rawValue;
 
                     return (
-                      <div key={agreement.id} className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm relative group">
+                      <div 
+                        key={agreement.id} 
+                        className={`relative p-4 rounded-2xl shadow-sm border transition-all ${
+                            isUserPromise 
+                            ? 'bg-blue-50/50 border-blue-100 ml-4' 
+                            : 'bg-white border-gray-200 mr-4'
+                        } ${agreement.status === 'failed' ? 'opacity-60 grayscale-[0.5]' : ''}`}
+                      >
+                        {/* 顶部标签 */}
+                        <div className={`absolute -top-2 ${isUserPromise ? '-right-2' : '-left-2'} px-2 py-0.5 rounded text-[10px] font-bold shadow-sm ${isUserPromise ? 'bg-blue-500 text-white' : 'bg-gray-700 text-white'}`}>
+                            {isUserPromise ? '🙋 你的承诺' : `🤖 ${contact.name}的承诺`}
+                        </div>
+
                         {/* 删除按钮 */}
                         <button 
-                          onClick={() => {
-                            if (confirm(`确定要删除这条约定吗？\n\n"${agreement.content}"`)) {
-                              setContacts(prev => prev.map(c => 
+                          onClick={(e) => {
+                            e.stopPropagation(); // 防止冒泡
+                            if (confirm(`确定要删除这条约定吗？`)) {
+                              setContacts((prev: any[]) => prev.map((c: any) => 
                                 c.id === contact.id 
-                                ? { ...c, agreements: (c.agreements || []).filter(a => a.id !== agreement.id) } 
+                                ? { ...c, agreements: (c.agreements || []).filter((a: any) => a.id !== agreement.id) } 
                                 : c
                               ));
                             }
                           }}
-                          className="absolute top-2 right-2 w-6 h-6 bg-gray-200 text-gray-500 rounded-full opacity-0 group-hover:opacity-100 transition flex items-center justify-center text-xs hover:bg-red-500 hover:text-white"
+                          className="absolute top-2 right-2 w-5 h-5 text-gray-300 hover:text-red-500 transition flex items-center justify-center"
                         >
                           ×
                         </button>
 
-                        {/* 状态标签 */}
-                        <div className={`absolute top-3 left-3 text-xs font-bold px-2 py-1 rounded-full border ${statusInfo.color}`}>
-                          {statusInfo.icon} {statusInfo.text}
+                        <div className="flex items-center gap-2 mb-2">
+                            <div className={`text-xs font-bold inline-flex items-center gap-1 px-2 py-0.5 rounded-full ${statusInfo.color}`}>
+                              {statusInfo.icon} {statusInfo.text}
+                            </div>
+                            {isOverdue && <span className="text-[10px] text-red-500 font-bold bg-red-100 px-1 rounded">已超时</span>}
                         </div>
 
                         {/* 核心内容 */}
-                        <p className="text-sm text-gray-800 leading-relaxed mt-10 mb-3 font-medium">
+                        <p className={`text-sm leading-relaxed mb-3 font-medium ${isUserPromise ? 'text-blue-900' : 'text-gray-800'}`}>
                           {agreement.content}
                         </p>
 
-                        {/* 详细信息 */}
-                        <div className="text-[10px] text-gray-400 space-y-1 border-t pt-2">
-                          <div className="flex items-center gap-1.5">
-                            <span className="font-bold">重要性:</span> 
-                            <span className="font-mono text-orange-500">{'★'.repeat(agreement.importance)}{'☆'.repeat(10 - agreement.importance)}</span>
-                          </div>
-                          <div className="flex items-center gap-1.5">
-                            <span className="font-bold">触发器:</span> 
-                            <span>{formatTrigger(agreement.trigger)}</span>
-                          </div>
-                           <div className="flex items-center gap-1.5">
-                            <span className="font-bold">创建于:</span> 
-                            <span>{new Date(agreement.created_at).toLocaleDateString()}</span>
-                          </div>
+                        {/* ★★★ 显眼的时间展示区 ★★★ */}
+                        <div className="bg-black/5 rounded-lg p-2 mb-2 flex items-center justify-between">
+                            <span className="text-[10px] text-gray-500 font-bold">⏰ 目标时间</span>
+                            <span className="text-xs font-mono font-bold text-gray-700 truncate max-w-[120px]">
+                                {triggerTimeStr}
+                            </span>
+                        </div>
+
+                        <div className="flex justify-between items-end border-t border-black/5 pt-2">
+                           <div className="text-[10px] text-gray-400">
+                              创建于: {new Date(agreement.created_at).toLocaleDateString()}
+                           </div>
+                           
+                           {/* 履行按钮 */}
+                           {agreement.status === 'pending' && (
+                             <button
+                               onClick={(e) => {
+                                  e.stopPropagation(); // 防止冒泡
+                                  setContacts((prev: any[]) => prev.map((c: any) => {
+                                      if (c.id === contact.id) {
+                                          let sysNoticeContent = "";
+                                          if (isUserPromise) {
+                                              sysNoticeContent = `【系统通知】用户点击了“我做到了”！\n完成了约定：“${agreement.content}”。\n(指令：请立刻大力夸奖用户，表现出惊喜和开心！)`;
+                                          } else {
+                                              sysNoticeContent = `【系统通知】用户确认了你(AI)完成了约定：“${agreement.content}”。\n(指令：请表现出“说到做到”的得意或温柔，感谢用户的信任)`;
+                                          }
+
+                                          return {
+                                              ...c,
+                                              agreements: c.agreements.map((a: any) => a.id === agreement.id ? { ...a, status: 'fulfilled' } : a),
+                                              history: [...c.history, {
+                                                  id: Date.now().toString(),
+                                                  role: 'system',
+                                                  content: sysNoticeContent,
+                                                  timestamp: Date.now(),
+                                                  type: 'text'
+                                              }]
+                                          };
+                                      }
+                                      return c;
+                                  }));
+                               }}
+                               className={`px-3 py-1.5 rounded-lg text-xs font-bold shadow transition flex items-center gap-1 ${
+                                   isUserPromise 
+                                   ? 'bg-blue-500 hover:bg-blue-600 text-white' 
+                                   : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50'
+                               }`}
+                             >
+                               {isUserPromise ? '✅ 我做到了' : '💮 你做到了'}
+                             </button>
+                           )}
                         </div>
                       </div>
                     );
@@ -4589,6 +4824,11 @@ contact.agreements.slice().reverse().map((agreement: Agreement) => {
               </div>
             </div>
           )}
+
+
+
+
+
 
 
 {/* ==================== [新UI] 记忆手账 (含事件簿 & 印象集) ==================== */}
@@ -4660,17 +4900,11 @@ contact.agreements.slice().reverse().map((agreement: Agreement) => {
 
 
 
-  // --- 辅助组件：可更换的拍立得相框 (V2.0 - 强制塑形版) ---
+// --- 辅助组件：可更换的拍立得相框 (V3.1 - 完整逻辑+装饰找回版) ---
                 const PhotoFrame: React.FC<{ id: string; className: string; defaultImage: string; }> = ({ id, className, defaultImage }) => {
                   const photo = (profile as any)[id] || defaultImage;
                   return (
                     <label className={`absolute bg-white p-1.5 rounded-sm shadow-lg border border-gray-200 cursor-pointer group hover:z-20 transition-transform duration-300 ${className}`}>
-                      {/* 
-                        ★★★ 核心修复在这里！★★★
-                        - object-cover: 告诉图片，你要“覆盖”整个容器，而不是“拉伸”来填满它。
-                        - w-full h-full: 确保图片本身会尝试填满父容器。
-                        - rounded-sm: 给图片也加上一点小圆角，更精致。
-                      */}
                       <img 
                         src={photo} 
                         className="w-full h-full object-cover rounded-sm" 
@@ -4678,21 +4912,22 @@ contact.agreements.slice().reverse().map((agreement: Agreement) => {
                       />
                       <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white text-xs font-bold">更换</div>
                       <input type="file" className="hidden" accept="image/*"
+                        onClick={(e) => (e.target as any).value = null} // 允许重复上传同一张
                         onChange={async (e) => {
                           if (e.target.files && e.target.files[0]) {
                             const base64 = await fileToBase64(e.target.files[0]);
-                            setContacts(prev => prev.map(c => c.id === contact.id ? { ...c, userProfile: { ...(c.userProfile || {}), [id]: base64 } } : c));
+                            // ★★★ 核心修复：直接操作 contact ID ★★★
+                            setContacts((prev: any[]) => prev.map((c: any) => 
+                                c.id === contact.id 
+                                ? { ...c, userProfile: { ...(c.userProfile || {}), [id]: base64 } } 
+                                : c
+                            ));
                           }
                         }}
                       />
                     </label>
                   );
                 };
-
-
-
-
-
 
                 return (
                   <div className="h-full flex flex-col relative rounded-b-2xl" style={{ backgroundColor: themeColor }}>
@@ -4704,84 +4939,105 @@ contact.agreements.slice().reverse().map((agreement: Agreement) => {
                     
                     <div className="flex-1 overflow-y-auto p-4 space-y-6 custom-scrollbar z-10 relative">
                       
-                    {/* ★★★ 散落的拍立得照片 (装饰 V2.0 - 更多！) ★★★ */}
+                      {/* ★★★ 散落的拍立得照片 (可保存) ★★★ */}
                       <PhotoFrame id="scattered_photo_1" className="top-16 -left-8 w-24 h-28 transform -rotate-12 hover:rotate-0 hover:scale-125" defaultImage="https://picsum.photos/200/300?random=1" />
                       <PhotoFrame id="scattered_photo_2" className="bottom-10 -right-10 w-60 h-60 transform rotate-15 hover:rotate-0 hover:scale-125" defaultImage="https://picsum.photos/200/300?random=2" />
                       <PhotoFrame id="scattered_photo_3" className="bottom-10 -left-6 w-20 h-24 transform rotate-10 hover:rotate-0 hover:scale-125" defaultImage="https://picsum.photos/200/300?random=4" />
-                      <PhotoFrame id="scattered_photo_4" className="top-28 -right-4 w-16 h-20 transform -rotate-10 hover:rotate-0 hover:scale-125 opacity-70 hover:opacity-100" defaultImage="https://picsum.photos/200/300?random=5" />
-
+                      
+                      {/* 主笔记本区域 */}
                       <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-lg border border-white/50 p-6 relative flex flex-col items-center min-h-[300px]">
-                        {/* ★★★ 铅笔和回形针 (装饰) - 回来了！ ★★★ */}
+                        
+                        {/* ★★★ 这里的 Emoji 装饰全都找回来了！ ★★★ */}
                         <div className="absolute -top-8 -right-4 text-5xl opacity-80 transform rotate-12 pointer-events-none">✏️</div>
-                         <div className="absolute top-14 right-40 text-5xl opacity-80 transform rotate-12 pointer-events-none">💚</div>
+                        <div className="absolute top-14 right-40 text-5xl opacity-80 transform rotate-12 pointer-events-none">💚</div>
                         <div className="absolute top-16 -left-4 text-3xl opacity-70 transform -rotate-45 pointer-events-none">📎</div>
                         <div className="absolute top-20 left-40 text-3xl opacity-70 transform -rotate-45 pointer-events-none">⭐️</div>
                         
-                        {/* ★★★ 和纸胶带 - 回来了！ ★★★ */}
+                        {/* 胶带装饰 */}
                         <div className="absolute -top-2 left-1/2 -translate-x-1/2 w-24 h-6 bg-yellow-200/70 transform -rotate-2 shadow-sm" style={{ clipPath: 'polygon(0 0, 100% 0, 100% 100%, 0% 100%)' }}></div>
+                        
                         <h4 className="text-sm font-bold text-gray-700 mb-4">{contact.name} 的秘密手账</h4>
                         
-{/* ★★★ 中心照片 (V2.0 - 终极防拉伸修复版) ★★★ */}
+                        {/* ★★★ 中心照片 (User Profile Photo) ★★★ */}
                         <div className="relative mb-6 flex-shrink-0 z-10">
-                            {/* 手绘虚线框SVG */}
                             <svg className="absolute -inset-3 w-[calc(100%+1.5rem)] h-[calc(100%+1.5rem)] opacity-60 pointer-events-none" viewBox="0 0 100 120">
                                 <path d="M 5,5 C 2,2 98,2 95,5 L 95,115 C 98,118 2,118 5,115 L 5,5 Z" stroke="#888" strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round" style={{ strokeDasharray: "5, 5" }}/>
                             </svg>
                            
-                            {/* 照片本体框：加了强制 object-fit: cover */}
                             <label className="relative block w-28 h-36 bg-white p-2 rounded-sm shadow-xl border border-gray-200 cursor-pointer group transform rotate-2 hover:rotate-0 hover:scale-105 transition-transform duration-300">
-                              {/* 这里的 object-cover 是防拉伸的关键 */}
                               <img
                                 src={profile.photo || "https://picsum.photos/200/300?random=3"}
                                 className="w-full h-full rounded-sm block"
                                 style={{ objectFit: "cover" }} 
                                 alt="main profile"
                               />
-                              
-                              {/* 悬停显示的黑色遮罩 */}
                               <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white text-xs font-bold rounded-sm">
-                                📷 更换照片
+                                📷 更换
                               </div>
-                              
-                              {/* 文件上传输入框 */}
                               <input type="file" className="hidden" accept="image/*"
                                 onChange={async (e) => {
                                   if (e.target.files && e.target.files[0]) {
                                     const base64 = await fileToBase64(e.target.files[0]);
-                                    setContacts(prev => prev.map(c => c.id === contact.id ? { ...c, userProfile: { ...(c.userProfile || {}), photo: base64 } } : c));
+                                    setContacts((prev: any[]) => prev.map((c: any) => 
+                                        c.id === contact.id 
+                                        ? { ...c, userProfile: { ...(c.userProfile || {}), photo: base64 } } 
+                                        : c
+                                    ));
                                   }
                                 }}
                               />
                             </label>
                         </div>
 
-                        {/* 如果没有档案，显示占位符 */}
-                        {(!profile.personality_traits && !profile.preferences && !profile.habits) && (<div className="text-center text-gray-400 py-4 flex flex-col items-center justify-center flex-1"><p className="text-sm"> 正在努力更了解你...</p><p className="text-xs mt-2">{contact.name} 会在这里为你更新档案。</p></div>)}
-                        
                         {/* 档案条目 */}
+                        {(!profile.personality_traits && !profile.preferences && !profile.habits) && (<div className="text-center text-gray-400 py-4"><p className="text-xs">等待 AI 记录中...</p></div>)}
                         <TraitItem icon="🎭" label="性格特点" traits={profile.personality_traits} />
                         <TraitItem icon="💖" label="喜欢的东西" traits={profile.preferences?.likes} />
                         <TraitItem icon="💔" label="讨厌的东西" traits={profile.preferences?.dislikes} />
                         <TraitItem icon="🕰️" label="行为习惯" traits={profile.habits} />
                       </div>
 
-                      {/* AI给用户打的标签 (绳索UI) */}
+                      {/* ★★★ 找回了！AI给用户打的标签 (绳索UI) ★★★ */}
                       <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-lg border border-white/50 p-4">
                         <h5 className="text-sm font-bold mb-3 flex items-center gap-2 text-gray-600"><span>🏷️</span> {contact.name} 对你的印象标签</h5>
                         <div className="w-full bg-gray-50/50 border-y border-gray-200 h-36 relative overflow-x-auto overflow-y-hidden custom-scrollbar rounded-lg">
+                          {/* 绳子 */}
                           <div className="absolute top-4 left-0 w-[200%] h-0.5 bg-yellow-700/30 border-t border-yellow-800/20 shadow-sm z-0"></div>
                           <div className="flex items-start gap-6 px-6 pt-3 min-w-max h-full">
                             {(!contact.aiTagsForUser || contact.aiTagsForUser.length === 0) && (<div className="text-[10px] text-gray-400 italic mt-8 ml-4">绳子上空空如也...</div>)}
-                            {(contact.aiTagsForUser || []).map((tag: any) => (<div key={tag.id} className="relative group flex flex-col items-center flex-shrink-0 animate-fadeIn" style={{ transform: `rotate(${(tag.style || (Math.random()*6-3))}deg)`, marginTop: `${Math.abs(tag.style || 0) + 10}px` }}><div className="w-2 h-4 bg-amber-700 rounded-sm mb-[-6px] z-20 shadow-md relative border-l border-white/20"></div><div className="relative bg-yellow-100 text-yellow-900 border border-yellow-200 px-3 pt-3 pb-5 min-w-[70px] max-w-[120px] text-center shadow-lg transition-transform hover:scale-110 hover:rotate-0 z-10 flex flex-col justify-between min-h-[80px]" style={{ borderRadius: "2px 2px 20px 2px" }}><span className="text-sm font-black leading-tight break-words font-sans mb-2">{tag.content}</span><div className="mt-auto pt-2 border-t border-black/10 w-full flex justify-end"><span className="text-[9px] font-mono opacity-60 tracking-tighter">{new Date(tag.timestamp).toLocaleDateString([], {month: '2-digit', day: '2-digit'})}</span></div></div></div>))}
+                            
+                            {/* 渲染 AI 标签 */}
+                            {(contact.aiTagsForUser || []).map((tag: any) => (
+                              <div key={tag.id} className="relative group flex flex-col items-center flex-shrink-0 animate-fadeIn" style={{ transform: `rotate(${(tag.style || (Math.random()*6-3))}deg)`, marginTop: `${Math.abs(tag.style || 0) + 10}px` }}>
+                                {/* 夹子 */}
+                                <div className="w-2 h-4 bg-amber-700 rounded-sm mb-[-6px] z-20 shadow-md relative border-l border-white/20"></div>
+                                {/* 标签纸 */}
+                                <div className="relative bg-yellow-100 text-yellow-900 border border-yellow-200 px-3 pt-3 pb-5 min-w-[70px] max-w-[120px] text-center shadow-lg transition-transform hover:scale-110 hover:rotate-0 z-10 flex flex-col justify-between min-h-[80px]" style={{ borderRadius: "2px 2px 20px 2px" }}>
+                                    <span className="text-sm font-black leading-tight break-words font-sans mb-2">{tag.content}</span>
+                                    <div className="mt-auto pt-2 border-t border-black/10 w-full flex justify-end">
+                                        <span className="text-[9px] font-mono opacity-60 tracking-tighter">
+                                           {new Date(tag.timestamp).toLocaleDateString([], {month: '2-digit', day: '2-digit'})}
+                                        </span>
+                                    </div>
+                                </div>
+                              </div>
+                            ))}
                           </div>
                         </div>
                       </div>
+
                     </div>
                     
-                    {/* ★★★ 底部自定义工具栏 - 回来了！ ★★★ */}
+                    {/* 底部工具栏 */}
                     <div className="flex-shrink-0 p-2 flex justify-center items-center gap-4 bg-white/50 border-t border-white/50 z-20">
-                       <label className="flex flex-col items-center gap-1 cursor-pointer text-xs text-gray-600 hover:text-purple-600 transition-colors" title="更换手账背景图"><span className="text-lg">🖼️</span><span className="text-[10px] font-bold">换背景</span><input type="file" className="hidden" accept="image/*" onChange={async (e) => { if (e.target.files && e.target.files[0]) { const base64 = await fileToBase64(e.target.files[0]); setContacts(prev => prev.map(c => c.id === contact.id ? { ...c, userProfile: { ...(c.userProfile || {}), background_image: base64 } } : c)); } }}/></label>
-                       <label className="flex flex-col items-center gap-1 cursor-pointer text-xs text-gray-600 hover:text-purple-600 transition-colors" title="更换手账主题色"><span className="w-6 h-6 rounded-full border-2 border-white shadow-md" style={{ backgroundColor: themeColor }}></span><span className="text-[10px] font-bold">换颜色</span><input type="color" className="absolute opacity-0" defaultValue={themeColor} onChange={(e) => setContacts(prev => prev.map(c => c.id === contact.id ? { ...c, userProfile: { ...(c.userProfile || {}), themeColor: e.target.value } } : c))}/></label>
+                       <label className="flex flex-col items-center gap-1 cursor-pointer text-xs text-gray-600 hover:text-purple-600 transition-colors">
+                           <span className="text-lg">🖼️</span><span className="text-[10px] font-bold">换背景</span>
+                           <input type="file" className="hidden" accept="image/*" onChange={async (e) => { if (e.target.files && e.target.files[0]) { const base64 = await fileToBase64(e.target.files[0]); setContacts((prev: any[]) => prev.map((c: any) => c.id === contact.id ? { ...c, userProfile: { ...(c.userProfile || {}), background_image: base64 } } : c)); } }}/>
+                       </label>
+                       <label className="flex flex-col items-center gap-1 cursor-pointer text-xs text-gray-600 hover:text-purple-600 transition-colors">
+                           <span className="w-6 h-6 rounded-full border-2 border-white shadow-md" style={{ backgroundColor: themeColor }}></span><span className="text-[10px] font-bold">换颜色</span>
+                           <input type="color" className="absolute opacity-0" defaultValue={themeColor} onChange={(e) => setContacts((prev: any[]) => prev.map((c: any) => c.id === contact.id ? { ...c, userProfile: { ...(c.userProfile || {}), themeColor: e.target.value } } : c))}/>
+                       </label>
                     </div>
                   </div>
                 );
@@ -5222,36 +5478,34 @@ if (view === 'settings' && activeContact) {
 
 
 
-      {showWorldBookModal && (
-        <div className="absolute inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white w-full max-h-[70%] rounded-2xl flex flex-col shadow-2xl animate-scaleIn">
-            <div className="p-4 border-b flex justify-between items-center">
-              <h3 className="font-bold text-lg">📚 Select Lorebooks</h3>
-              <button onClick={() => setShowWorldBookModal(false)} className="text-gray-400">✕</button>
-            </div>
-            <div className="flex-1 overflow-y-auto p-2">
-              {worldBooks.map(wb => (
-                <div
-                  key={wb.id}
-                  onClick={() => toggleWorldBook(wb.name)}
-                  className={`p-4 mb-2 rounded-xl border flex items-center justify-between cursor-pointer transition ${enabledBooks.includes(wb.name) ? 'bg-orange-50 border-orange-400' : 'bg-white border-gray-200'}`}
-                >
-                  <span className="font-bold text-sm">{wb.name}</span>
-                  {enabledBooks.includes(wb.name) && <span className="text-orange-500 font-bold">✓</span>}
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
+    {showWorldBookModal && (
+      <WorldBookApp
+        worldBooks={worldBooks}
+        setWorldBooks={setWorldBooks}
+        
+        // ★★★ 核心修改：加上这行传参！★★★
+        globalSettings={globalSettings} 
 
-
+        onClose={() => setShowWorldBookModal(false)}
+        onOpenSettings={() => {
+          setShowWorldBookModal(false); 
+          setView('settings');         
+        }}
+      />
+    )}
 
 
 
 
       {/* 主内容区 */}
       <div className="flex-1 overflow-y-auto p-4 pt-20 space-y-6">
+
+
+
+
+
+
+
 
 
 
@@ -6077,44 +6331,63 @@ if (view === 'settings' && activeContact) {
               value={form.proactiveConfig?.enabled || false}
             />
           </div>
-          {form.proactiveConfig?.enabled && (
-            <div className="space-y-4 pt-2 border-t border-gray-100 animate-slideDown">
-              <div className="mb-2 px-2">
-                <div className="flex justify-between items-center text-xs text-gray-500 mb-1">
-                  <span>最小间隔（分钟）</span>
-                  <div className="flex items-center gap-2">
+{form.proactiveConfig?.enabled && (
+            <div className="space-y-5 pt-4 border-t border-gray-100 animate-slideDown">
+              
+              {/* 设置项 1：最小间隔 */}
+              <div className="px-1">
+                <div className="flex justify-between items-center h-9">
+                  <span className="text-xs text-gray-500 font-bold">最小间隔</span>
+                  <div className="flex items-center gap-2 w-[140px] justify-end">
                     <input
                       type="number"
-                      className="w-16 text-right font-bold text-blue-600 bg-gray-100 rounded-md p-1 outline-none focus:ring-2 focus:ring-blue-300"
-                      value={form.proactiveConfig?.minGapMinutes || 480}
+                      className="w-20 text-center font-bold text-gray-700 bg-gray-100 rounded-lg py-1.5 outline-none focus:ring-2 focus:ring-blue-200 transition-all text-xs"
+                      value={form.proactiveConfig?.minGapMinutes ?? 480}
                       onChange={(e) => setEditForm(prev => ({
                         ...prev,
                         proactiveConfig: { ...(form.proactiveConfig || {}), minGapMinutes: parseInt(e.target.value) || 0 }
                       }))}
                     />
-                    <span>分钟</span>
+                    <span className="text-[10px] text-gray-400 font-bold w-8 text-right">分钟</span>
                   </div>
                 </div>
               </div>
-              <div className="mb-2 px-2">
-                <div className="flex justify-between text-xs text-gray-500 mb-1">
-                  <span>每日上限（次）</span>
-                  <span className="font-bold text-blue-600">{form.proactiveConfig?.maxDaily || 2} / 天</span>
+
+              {/* 设置项 2：每日上限 (已删除灰色滑块条，完全对齐) */}
+              <div className="px-1">
+                <div className="flex justify-between items-center h-9">
+                  <span className="text-xs text-gray-500 font-bold">每日上限</span>
+                  <div className="flex items-center gap-2 w-[140px] justify-end">
+                    <input
+                      type="number"
+                      className="w-20 text-center font-bold text-gray-700 bg-gray-100 rounded-lg py-1.5 outline-none focus:ring-2 focus:ring-blue-200 transition-all text-xs"
+                      value={form.proactiveConfig?.maxDaily ?? 5} 
+                      onChange={(e) => {
+                         const val = parseInt(e.target.value);
+                         setEditForm(prev => ({
+                           ...prev,
+                           proactiveConfig: { 
+                               ...(form.proactiveConfig || {}), 
+                               maxDaily: isNaN(val) ? 0 : val 
+                           }
+                         }));
+                      }}
+                      placeholder="5"
+                    />
+                    <span className="text-[10px] text-gray-400 font-bold w-8 text-right">次/天</span>
+                  </div>
                 </div>
-                <Slider
-                  minimumValue={1}
-                  maximumValue={5}
-                  step={1}
-                  value={form.proactiveConfig?.maxDaily || 2}
-                  onValueChange={(val) => setEditForm(prev => ({
-                    ...prev,
-                    proactiveConfig: { ...(form.proactiveConfig || {}), maxDaily: val }
-                  }))}
-                />
+                <p className="text-[9px] text-gray-300 mt-2 text-right">
+                   * 填一个较大的数字（如 99）即可解除限制
+                </p>
               </div>
-              <p className="text-[10px] text-gray-400 mt-4 text-center bg-gray-50 p-2 rounded-lg">
-                AI 将根据当前状态和聊天历史，自己决定说什么～
-              </p>
+
+              {/* 底部说明 */}
+              <div className="bg-blue-50/50 p-2.5 rounded-xl border border-blue-50 text-center mt-2">
+                 <p className="text-[10px] text-blue-400/80">
+                    AI 将结合“心情骰子”和“时间间隔”来决定是否主动找你~
+                 </p>
+              </div>
             </div>
           )}
         </section>
@@ -6661,8 +6934,8 @@ return (
 
 
 
- // ★★★ 核心修复：更聪明的引用检测 ★★★
-    // 只要是以 > 开头（不管有没有空格），都算引用
+// ★★★ 核心修复：更聪明的引用检测 & 换行处理 ★★★
+    // 只要是以 > 开头，都算引用
     const isQuoteMsg = msg.content.trim().startsWith('>');
     
     // 提取引用文本和回复文本
@@ -6670,12 +6943,16 @@ return (
     let replyText = msg.content;
     
     if (isQuoteMsg) {
-        // 切割：第一部分是引用，剩下的是回复
-        const parts = msg.content.split('\n'); 
-        // 获取第一行作为引用内容（去掉开头的 > 和 引用 二字）
-        quoteText = parts[0].replace(/^> ?(引用)? ?/, '').trim();
-        // 剩下的行重新组合成回复
-        replyText = parts.slice(1).join('\n').trim();
+        // 找到第一个换行符的位置
+        const firstLineBreak = msg.content.indexOf('\n');
+        if (firstLineBreak !== -1) {
+            quoteText = msg.content.substring(0, firstLineBreak).replace(/^> ?(引用)? ?/, '').trim();
+            replyText = msg.content.substring(firstLineBreak + 1).trim();
+        } else {
+            // 如果没有换行，说明整句都是引用（虽然不常见）
+            quoteText = msg.content.replace(/^> ?/, '').trim();
+            replyText = ""; 
+        }
     }
 
 
@@ -6757,9 +7034,17 @@ return (
                        borderBottomRightRadius: '16px',
                    }}
                 >
-                  {msg.content.startsWith("> 引用") && (
-                    <div className="text-xs mb-1 p-1 opacity-70 border-l-2 border-current pl-2">{msg.content.split('\n\n')[0]}</div>
+{/* ★★★ 引用块渲染 (修复版) ★★★ */}
+                  {isQuoteMsg && quoteText && (
+                    <div className="text-xs mb-2 p-2 bg-black/5 rounded-md border-l-4 border-gray-400 opacity-80 select-none">
+                      <div className="font-bold text-[10px] text-gray-500 mb-0.5">↪️ 引用:</div>
+                      <div className="line-clamp-2 italic">{quoteText}</div>
+                    </div>
                   )}
+
+
+
+{/* ★★★ 核心消息内容 (修复换行 + 盲盒版FakeImage) ★★★ */}
                   {msg.type === 'voice' || msg.content.trim().startsWith('[Voice Message]') ? (
                     <VoiceBubble
                       msg={msg}
@@ -6770,11 +7055,46 @@ return (
                       onSeek={handleSeek}
                       isUser={msg.role === 'user'}
                     />
+                  ) : msg.content.trim().startsWith('[FakeImage]') ? (
+                    // ★★★ 新增：【盲盒版】FakeImage 逻辑 ★★★
+                    // 使用 details 标签，天然支持“点击展开/收起”，无需额外代码
+                    <details className="group">
+                        {/* 1. 默认显示的：白色图框 (点击它会展开) */}
+                        <summary className="list-none outline-none cursor-pointer">
+                            <div className="w-48 h-32 bg-white border-2 border-dashed border-gray-200 rounded-xl flex flex-col items-center justify-center gap-2 hover:border-blue-300 hover:bg-blue-50 transition-all duration-300 group-open:hidden">
+                                <span className="text-3xl opacity-30 group-hover:scale-110 transition-transform">🖼️</span>
+                                <span className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">点击查看画面</span>
+                            </div>
+                            
+                            {/* 展开后：保留一个小的标题栏，点击可以收起 */}
+                            <div className="hidden group-open:flex items-center gap-2 mb-2 text-[10px] text-gray-400 font-bold uppercase tracking-widest cursor-pointer hover:text-blue-500">
+                                <span>🖼️ 画面描述 (点击收起)</span>
+                            </div>
+                        </summary>
+
+                        {/* 2. 展开后看到的内容：文字描述 */}
+                        <div className="bg-gray-50 p-4 rounded-xl border border-gray-100 text-sm text-gray-700 leading-relaxed font-serif italic animate-slideDown shadow-sm">
+                            “{msg.content.replace('[FakeImage]', '').trim()}”
+                        </div>
+                    </details>
                   ) : msg.type === 'image' ? (
                     <img src={msg.content} className="rounded-lg max-w-full" alt="msg" />
                   ) : (
-                    <HiddenBracketText content={msg.content.replace(/^>.*?\n\n/, '')} msgId={msg.id} fontSize={""} />
+                    // 这里的 whitespace-pre-wrap 是换行的关键
+                    <div className="whitespace-pre-wrap break-words">
+                        {/* 如果是引用消息，这里只显示回复部分；否则显示全部 */}
+                        <HiddenBracketText 
+                           content={isQuoteMsg ? replyText : msg.content} 
+                           msgId={msg.id} 
+                           fontSize={""} 
+                        />
+                    </div>
                   )}
+
+
+
+
+
                 </div>
               )}
             </div>
