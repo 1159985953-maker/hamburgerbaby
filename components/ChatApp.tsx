@@ -5403,7 +5403,7 @@ right={
             </div>
           )}
 
-{/* ==================== ⭐ 收藏夹：真·聊天记录卡片版 ==================== */}
+{/* ==================== ⭐ 收藏夹：真·聊天记录卡片版 (最终修复) ==================== */}
           {navTab === 'favorites' && (
             <div className="flex flex-col min-h-full bg-gray-50">
               {/* 顶部标签栏 */}
@@ -5422,22 +5422,24 @@ right={
                 ))}
               </div>
 
-              {/* 列表内容 */}
+              {/* 列表内容区 */}
               <div className="flex-1 p-4 space-y-6 pb-20">
                 {favorites.filter(f => activeFavCategory === "全部" || f.category === activeFavCategory).map((item) => {
-                  // 1. 尝试找到对应的角色（为了获取准确的头像和气泡颜色）
-                  const targetContact = contacts.find(c => c.id === item.contactId || c.name === item.contactName);
-                  // 2. 准备数据
-                  const msgs = item.isPackage ? item.messages : [item.msg];
-                  // 3. 获取气泡颜色
-                  const userBg = targetContact?.bubbleColorUser || '#FBCFE8';
-                  const aiBg = targetContact?.bubbleColorAI || '#ffffff';
+                  // 1. 获取对应的角色信息 (用来拿头像和气泡颜色)
+                  const contact = contacts.find(c => c.id === item.contactId || c.name === item.contactName);
+                  
+                  // 2. 获取正确的颜色配置 (如果没有找到角色，就用默认粉色/白色)
+                  const bubbleUser = contact?.bubbleColorUser || '#FBCFE8';
+                  const bubbleAI = contact?.bubbleColorAI || '#FFFFFF';
+                  
+                  // 3. 准备要显示的消息列表
+                  const displayMessages = item.isPackage ? item.messages : [item.msg];
 
                   return (
                     <div
                       key={item.id}
-                      // ★★★ 长按检测逻辑 (加了 preventDefault 防止系统菜单干扰) ★★★
-                      onTouchStart={(e) => {
+                      // ★★★ 长按检测 (onTouchStart + onMouseDown) ★★★
+                      onTouchStart={() => {
                         isLongPress.current = false;
                         longPressTimer.current = setTimeout(() => {
                           isLongPress.current = true;
@@ -5449,75 +5451,82 @@ right={
                       onTouchEnd={() => { if (longPressTimer.current) clearTimeout(longPressTimer.current); }}
                       onMouseDown={() => { longPressTimer.current = setTimeout(() => { setSelectedFav(item); setShowFavMenu(true); }, 600); }}
                       onMouseUp={() => { if (longPressTimer.current) clearTimeout(longPressTimer.current); }}
-                      onContextMenu={(e) => e.preventDefault()} // 禁止右键菜单/系统长按菜单
+                      onContextMenu={(e) => e.preventDefault()} // 禁止浏览器默认菜单
                       
-                      // 点击逻辑 (如果没触发长按，就什么都不做，或者你可以加预览)
-                      onClick={() => { if (isLongPress.current) isLongPress.current = false; }}
-                      
-                      className="bg-white rounded-3xl shadow-md border border-gray-100 overflow-hidden relative group active:scale-98 transition-transform duration-200 select-none"
+                      // 视觉容器：白色圆角卡片
+                      className="bg-white rounded-3xl shadow-[0_4px_20px_rgba(0,0,0,0.05)] border border-gray-100 overflow-hidden relative group active:scale-98 transition-transform duration-200 select-none"
                     >
-                      {/* --- 卡片头部：信息 --- */}
+                      {/* --- 卡片头部：来源信息 --- */}
                       <div className="bg-gray-50/80 px-4 py-3 border-b border-gray-100 flex justify-between items-center backdrop-blur-sm">
                         <div className="flex items-center gap-2">
-                          <span className="text-lg">⭐</span>
+                          {/* 顶部小头像 */}
+                          <img src={contact?.avatar || item.avatar} className="w-6 h-6 rounded-full border border-white shadow-sm object-cover" />
                           <div>
                             <div className="font-bold text-xs text-gray-800">{item.contactName} 的回忆</div>
                             <div className="text-[9px] text-gray-400 font-mono">{new Date(item.timestamp).toLocaleDateString()}</div>
                           </div>
                         </div>
-                        <span className="bg-blue-100 text-blue-600 text-[10px] px-2 py-1 rounded-lg font-bold">
+                        <span className="bg-blue-50 text-blue-500 text-[10px] px-2 py-1 rounded-lg font-bold border border-blue-100">
                           #{item.category}
                         </span>
                       </div>
 
-                      {/* --- 卡片内容：完全模拟聊天窗口 --- */}
+                      {/* --- 卡片内容：模拟聊天窗口 (核心修改区) --- */}
                       <div className="p-4 space-y-3 bg-gray-50/30">
-                        {msgs?.filter(Boolean).map((m, i) => {
+                        {displayMessages?.filter(Boolean).map((m, i) => {
                           const isMe = m.role === 'user';
-                          const avatar = isMe ? (targetContact?.userAvatar || globalSettings.avatar) : (targetContact?.avatar || item.avatar);
-                          
+                          // 头像逻辑：如果是用户，尝试取当前用户的头像；如果是AI，取角色头像
+                          const currentAvatar = isMe 
+                            ? (contact?.userAvatar || "https://api.dicebear.com/7.x/avataaars/svg?seed=User") 
+                            : (contact?.avatar || item.avatar);
+
                           return (
                             <div key={i} className={`flex items-start gap-2 ${isMe ? 'justify-end' : 'justify-start'}`}>
-                              {/* AI 头像 */}
-                              {!isMe && <img src={avatar} className="w-8 h-8 rounded-full border border-white shadow-sm flex-shrink-0 object-cover" />}
+                              
+                              {/* AI 头像 (在左边) */}
+                              {!isMe && (
+                                <img src={currentAvatar} className="w-8 h-8 rounded-full border border-white shadow-sm flex-shrink-0 object-cover" />
+                              )}
                               
                               {/* 气泡本体 */}
-                              <div className="flex flex-col max-w-[80%]">
+                              <div className="flex flex-col max-w-[75%]">
                                 <div 
                                   className={`px-3 py-2 text-xs leading-relaxed shadow-sm break-words relative
                                     ${isMe ? 'rounded-2xl rounded-tr-sm' : 'rounded-2xl rounded-tl-sm'}
                                   `}
                                   style={{ 
-                                    backgroundColor: isMe ? userBg : aiBg,
-                                    // 自动计算文字颜色 (黑/白)
-                                    color: isMe ? getContrastTextColor(userBg) : getContrastTextColor(aiBg)
+                                    backgroundColor: isMe ? bubbleUser : bubbleAI,
+                                    color: getContrastTextColor(isMe ? bubbleUser : bubbleAI),
+                                    border: '1px solid rgba(0,0,0,0.05)'
                                   }}
                                 >
+                                  {/* 内容渲染：图片/语音/文字 */}
                                   {m.type === 'image' || (m.content && m.content.startsWith('data:image')) ? (
                                     <img src={m.content} className="rounded-lg max-w-full" alt="img" />
                                   ) : m.type === 'voice' ? (
                                     <div className="flex items-center gap-1 opacity-80"><span>🔊</span> 语音消息</div>
                                   ) : (
-                                    // 普通文本
-                                    m.content?.replace(/\[.*?\]/g, '') || '...'
+                                    <span>{m.content?.replace(/\[.*?\]/g, '') || '...'}</span>
                                   )}
                                 </div>
                               </div>
 
-                              {/* 用户头像 */}
-                              {isMe && <img src={avatar} className="w-8 h-8 rounded-full border border-white shadow-sm flex-shrink-0 object-cover" />}
+                              {/* 用户 头像 (在右边) */}
+                              {isMe && (
+                                <img src={currentAvatar} className="w-8 h-8 rounded-full border border-white shadow-sm flex-shrink-0 object-cover" />
+                              )}
                             </div>
                           );
                         })}
-                        
-                        {/* 遮罩层 (暗示还可以长按) */}
-                        <div className="absolute inset-0 bg-transparent z-10" />
                       </div>
 
-                      {/* 底部提示 */}
-                      <div className="bg-white p-2 border-t border-gray-50 text-center">
-                         <p className="text-[9px] text-gray-300 font-bold tracking-widest uppercase">长按操作 • LOONG PRESS</p>
+                      {/* 底部提示条 */}
+                      <div className="bg-white p-1.5 border-t border-gray-50 text-center">
+                         <p className="text-[8px] text-gray-300 font-bold tracking-widest uppercase scale-90">长按跳转 • LONG PRESS TO JUMP</p>
                       </div>
+                      
+                      {/* 长按遮罩 (防止直接点到图片) */}
+                      <div className="absolute inset-0 z-20 bg-transparent" />
                     </div>
                   );
                 })}
@@ -5544,6 +5553,46 @@ right={
             <span className="text-[10px] font-bold">收藏</span>
           </button>
         </div>
+
+
+
+  
+{/* ★★★ 收藏夹长按菜单 ★★★ */}
+        {showFavMenu && selectedFav && (
+          <div className="absolute inset-0 z-50 flex items-end justify-center bg-black/40 animate-fadeIn" onClick={() => setShowFavMenu(false)}>
+            <div className="bg-white w-full rounded-t-2xl p-4 animate-slideUp" onClick={e => e.stopPropagation()}>
+              <div className="text-center text-gray-400 text-xs mb-4">收藏选项</div>
+              
+              {/* 跳转按钮 */}
+              <button 
+                onClick={handleJumpToFav} 
+                className="w-full py-3 mb-2 bg-blue-50 text-blue-600 rounded-xl font-bold flex items-center justify-center gap-2"
+              >
+                <span>🚀</span> 跳转到消息原文
+              </button>
+
+              {/* 删除按钮 */}
+              <button 
+                onClick={() => {
+                   if(confirm("确定删除这条收藏吗？")) {
+                       setFavorites(prev => prev.filter(f => f.id !== selectedFav.id));
+                       setShowFavMenu(false);
+                   }
+                }} 
+                className="w-full py-3 text-red-500 font-bold border-b"
+              >
+                🗑️ 删除收藏
+              </button>
+              
+              <div className="h-2 bg-gray-100 -mx-4 mt-2"></div>
+              <button onClick={() => setShowFavMenu(false)} className="w-full py-3 text-gray-500 font-bold">取消</button>
+            </div>
+          </div>
+        )}
+
+
+
+
       </div>
     );
   }
@@ -6907,39 +6956,6 @@ return (
 
 
 
-  
-{/* ★★★ 收藏夹长按菜单 ★★★ */}
-        {showFavMenu && selectedFav && (
-          <div className="absolute inset-0 z-50 flex items-end justify-center bg-black/40 animate-fadeIn" onClick={() => setShowFavMenu(false)}>
-            <div className="bg-white w-full rounded-t-2xl p-4 animate-slideUp" onClick={e => e.stopPropagation()}>
-              <div className="text-center text-gray-400 text-xs mb-4">收藏选项</div>
-              
-              {/* 跳转按钮 */}
-              <button 
-                onClick={handleJumpToFav} 
-                className="w-full py-3 mb-2 bg-blue-50 text-blue-600 rounded-xl font-bold flex items-center justify-center gap-2"
-              >
-                <span>🚀</span> 跳转到消息原文
-              </button>
-
-              {/* 删除按钮 */}
-              <button 
-                onClick={() => {
-                   if(confirm("确定删除这条收藏吗？")) {
-                       setFavorites(prev => prev.filter(f => f.id !== selectedFav.id));
-                       setShowFavMenu(false);
-                   }
-                }} 
-                className="w-full py-3 text-red-500 font-bold border-b"
-              >
-                🗑️ 删除收藏
-              </button>
-              
-              <div className="h-2 bg-gray-100 -mx-4 mt-2"></div>
-              <button onClick={() => setShowFavMenu(false)} className="w-full py-3 text-gray-500 font-bold">取消</button>
-            </div>
-          </div>
-        )}
 
 
 
