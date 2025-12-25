@@ -206,6 +206,7 @@ lifeAIHistory?: {role: 'user'|'assistant', content: string}[];
 const [homePageIndex, setHomePageIndex] = useState(0); // 0 代表第一页, 1 代表第二页
 // =======================================================
   const [jumpToContactId, setJumpToContactId] = useState<string | null>(null);
+   const [jumpToTimestamp, setJumpToTimestamp] = useState<number | null>(null);
   const [currentApp, setCurrentApp] = useState<'home' | 'chat' | 'RelationShip' | 'settings' | 'worldbook' | 'wallpaper'>('home');
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [isLoaded, setIsLoaded] = useState(false);
@@ -1215,12 +1216,9 @@ return (
 
 
 
-
-
-{/* ChatApp - 终极修复版：加上了跳转设置的“传送门” */}
-    {currentApp === 'chat' && (
+{/* ChatApp - 简单传参版 */}
+{currentApp === 'chat' && (
       <ChatApp
-      
         contacts={contacts}
         setContacts={setContacts}
         globalSettings={globalSettings}
@@ -1230,21 +1228,30 @@ return (
         onExit={() => setCurrentApp('home')}
         isBackground={false}
         initialContactId={jumpToContactId}
-        onChatOpened={() => setJumpToContactId(null)}
+        jumpToTimestamp={jumpToTimestamp} 
+        
+        onChatOpened={() => {
+            setJumpToContactId(null);
+            setTimeout(() => {
+              setJumpToTimestamp(null); 
+            }, 2000);
+        }}
         onNewMessage={(contactId, name, avatar, content) => {
           setGlobalNotification({ type: 'new_message', contactId, name, avatar, content });
           setTimeout(() => setGlobalNotification(null), 5000);
         }}
-        // ★★★★★ 核心修复：这就是传送门开关！ ★★★★★
         onOpenSettings={() => setCurrentApp('settings')} 
+        
+        // ★★★ 新增：接收收藏夹的跳转请求 ★★★
+        onJumpToMessage={(contactId, timestamp) => {
+            setJumpToContactId(contactId); // 设置要跳的人
+            setJumpToTimestamp(timestamp); // 设置要跳的时间
+            // 虽然已经在 chat 界面，但状态更新会触发 ChatApp 内部的 useEffect 重新执行跳转
+        }}
       />
     )}
 
 
-
-
-
-    {/* 其他 App (逻辑不变) */}
 
 {/* ==================== 🔧 修复：关系空间 (加了白色背景防黑屏) ==================== */}
  {(currentApp === 'RelationShip' || currentApp === 'RelationshipSpace') && (
@@ -1254,6 +1261,12 @@ return (
           setContacts={setContacts}
           globalSettings={globalSettings}
           onClose={() => setCurrentApp('home')}
+          // ★★★ 新增：接收跳转请求，设置ID和时间戳，然后切换到聊天
+          onJumpToMessage={(contactId, timestamp) => {
+              setJumpToContactId(contactId);
+              setJumpToTimestamp(timestamp);
+              setCurrentApp('chat');
+          }}
           onRelationshipSpaceAction={(contactId, systemMessage) => {
             // 处理空间发回来的消息
             const newMessage: Message = {
@@ -1274,7 +1287,6 @@ return (
         />
       </div>
     )}
-
 
 
 

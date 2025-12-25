@@ -4,8 +4,7 @@ import SafeAreaHeader from './SafeAreaHeader';
 import { generateResponse } from '../services/apiService'; 
 // 【RelationshipSpace.tsx】 文件最顶部
 // 这是一组导入 html-to-image 的代码（请完全替换原来的 html2canvas 导入行）
-// 这是一组导入 dom-to-image 的代码（请完全替换原来的 html-to-image 导入行）
-import domtoimage from 'dom-to-image';
+import * as htmlToImage from 'html-to-image';
 
 
 
@@ -278,8 +277,13 @@ User: ${input}`;
 
 
 
-// 🌱 秘密花园 (兼容对齐版)
-const GardenPage: React.FC<{ contact: Contact, onUpdate: (c: Contact, sysMsg?: string, shareMsg?: any) => void, globalSettings: any }> = ({ contact, onUpdate, globalSettings }) => {
+// 🌱 秘密花园 (头像强制兜底生成 + Div背景图渲染 + 底部高亮条)
+const GardenPage: React.FC<{ 
+    contact: Contact, 
+    onUpdate: (c: Contact, sysMsg?: string, shareMsg?: any) => void, 
+    globalSettings: any,
+    onJumpToMessage?: (timestamp: number) => void 
+}> = ({ contact, onUpdate, globalSettings, onJumpToMessage }) => {
   const garden = contact.garden || { seed: '', level: 0, exp: 0, lastWaterDate: '', lastFertilizeDate: '' };
   
   const [previewCardData, setPreviewCardData] = useState<any>(null);
@@ -287,10 +291,90 @@ const GardenPage: React.FC<{ contact: Contact, onUpdate: (c: Contact, sysMsg?: s
   const [showFertilizerInput, setShowFertilizerInput] = useState(false);
   const [fertilizerMsg, setFertilizerMsg] = useState("");
 
+  const [cardStyle, setCardStyle] = useState<'glass' | 'polaroid' | 'paper' | 'minimal'>('minimal');
   const cardToSaveRef = useRef<HTMLDivElement>(null); 
   const [isSavingImage, setIsSavingImage] = useState(false);
 
-  if (!garden.seed) { /* ... 选择种子UI，保持不变 ... */ return ( <div className="p-6 h-full flex flex-col items-center justify-center animate-fadeIn"> <h3 className="text-xl font-black text-gray-800 mb-2">选择一颗种子</h3> <p className="text-sm text-gray-500 mb-6 text-center">一旦种下，就不能更换了哦。</p> <div className="grid grid-cols-2 gap-4 w-full"> {SEED_TYPES.map(seed => ( <div key={seed.id} onClick={() => onUpdate({ ...contact, garden: { ...garden, seed: seed.id } })} className={`p-4 rounded-2xl border-2 cursor-pointer transition-all hover:scale-105 ${seed.bg} border-transparent hover:border-blue-300 flex flex-col items-center text-center shadow-sm`}> <span className="text-4xl mb-2">{seed.emoji}</span> <span className={`font-bold ${seed.color}`}>{seed.name}</span> <span className="text-[10px] text-gray-500 mt-1">{seed.desc}</span> </div> ))} </div> </div> ); }
+  // === 1. 生成备用头像 (如果图片加载失败，自动画一个首字母头像) ===
+  const generateFallbackAvatar = (name: string) => {
+      const canvas = document.createElement('canvas');
+      canvas.width = 100;
+      canvas.height = 100;
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+          // 画背景
+          ctx.fillStyle = '#818cf8'; // 漂亮的靛蓝色
+          ctx.fillRect(0, 0, 100, 100);
+          // 画文字
+          ctx.font = 'bold 50px sans-serif';
+          ctx.fillStyle = '#ffffff';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText((name || 'A')[0].toUpperCase(), 50, 50);
+          return canvas.toDataURL('image/png');
+      }
+      return "";
+  };
+
+  // === 2. 强力转码 (Fetch -> Blob -> Base64) ===
+  const urlToBase64 = async (url: string, name: string) => {
+    if (!url || url === "undefined") return generateFallbackAvatar(name);
+    if (url.startsWith('data:')) return url; // 已经是 Base64 就直接用
+
+    try {
+        const response = await fetch(url, { mode: 'cors', credentials: 'omit' });
+        if (!response.ok) throw new Error("Network response was not ok");
+        const blob = await response.blob();
+        return new Promise<string>((resolve) => {
+            const reader = new FileReader();
+            reader.onloadend = () => resolve(reader.result as string);
+            reader.readAsDataURL(blob);
+        });
+    } catch (e) {
+        console.warn(`头像加载失败 (${url})，启用备用方案`);
+        // ★★★ 核心：如果下载失败，直接返回生成的备用头像，保证不空 ★★★
+        return generateFallbackAvatar(name);
+    }
+  };
+
+  // 辅助函数：自动计算文字颜色
+  const getContrastColor = (hexColor?: string) => {
+      if (!hexColor || !hexColor.startsWith('#')) return '#000000';
+      const r = parseInt(hexColor.substr(1, 2), 16);
+      const g = parseInt(hexColor.substr(3, 2), 16);
+      const b = parseInt(hexColor.substr(5, 2), 16);
+      const yiq = ((r * 299) + (g * 587) + (b * 114)) / 1000;
+      return yiq >= 128 ? '#111827' : '#ffffff';
+  };
+
+  const handleJumpToContext = () => {
+      if (!previewCardData) return;
+      const targetTime = previewCardData.timestamp;
+      setPreviewCardData(null);
+      if (onJumpToMessage) {
+          onJumpToMessage(targetTime);
+      } else {
+          alert(`📍 请在聊天记录中寻找：${new Date(targetTime).toLocaleString()} 附近的消息`);
+      }
+  };
+
+  if (!garden.seed) { 
+      return ( 
+          <div className="p-6 h-full flex flex-col items-center justify-center animate-fadeIn"> 
+              <h3 className="text-xl font-black text-gray-800 mb-2">选择一颗种子</h3> 
+              <p className="text-sm text-gray-500 mb-6 text-center">一旦种下，就不能更换了哦。</p> 
+              <div className="grid grid-cols-2 gap-4 w-full"> 
+                  {SEED_TYPES.map(seed => ( 
+                      <div key={seed.id} onClick={() => onUpdate({ ...contact, garden: { ...garden, seed: seed.id } })} className={`p-4 rounded-2xl border-2 cursor-pointer transition-all hover:scale-105 ${seed.bg} border-transparent hover:border-blue-300 flex flex-col items-center text-center shadow-sm`}> 
+                          <span className="text-4xl mb-2">{seed.emoji}</span> 
+                          <span className={`font-bold ${seed.color}`}>{seed.name}</span> 
+                          <span className="text-[10px] text-gray-500 mt-1">{seed.desc}</span> 
+                      </div> 
+                  ))} 
+              </div> 
+          </div> 
+      ); 
+  }
 
   const seedInfo = SEED_TYPES.find(s => s.id === garden.seed) || SEED_TYPES[0];
   const todayStr = new Date().toISOString().slice(0, 10);
@@ -298,167 +382,438 @@ const GardenPage: React.FC<{ contact: Contact, onUpdate: (c: Contact, sysMsg?: s
   const isAiWatered = isWateredToday && (garden as any).aiWateredToday;
   const isFertilizedToday = garden.lastFertilizeDate === todayStr;
   
+  // ==================== 截图保存逻辑 ====================
+  const handleSaveCardAsImage = async () => {
+    if (!cardToSaveRef.current) return;
+    setIsSavingImage(true);
 
+    const wrapper = cardToSaveRef.current;
+    const scrollableContent = wrapper.querySelector('.custom-scrollbar') as HTMLElement | null;
+    
+    const originalWrapperStyle = { height: wrapper.style.height, maxHeight: wrapper.style.maxHeight, overflow: wrapper.style.overflow };
+    const originalContentStyle = scrollableContent ? { maxHeight: scrollableContent.style.maxHeight, overflowY: scrollableContent.style.overflowY, height: scrollableContent.style.height } : null;
 
-
-
-
-// ==================== 这是一组修复后的图片保存代码 (自动展开长图+修复背景) ====================
-const handleSaveCardAsImage = async () => {
-  if (!cardToSaveRef.current) return;
-  setIsSavingImage(true);
-
-  // 1. 找到卡片里那个“原本有滚动条”的区域
-  // 我们要临时把它撑开，这样生成的图片才是完整的长图，不是截断的
-  const scrollableContent = cardToSaveRef.current.querySelector('.custom-scrollbar') as HTMLElement | null;
-  
-  // 2. 备份一下原来的样式（为了生成完后恢复原状）
-  let originalMaxHeight = '';
-  let originalOverflow = '';
-  
-  if (scrollableContent) {
-      originalMaxHeight = scrollableContent.style.maxHeight;
-      originalOverflow = scrollableContent.style.overflow;
-      
-      // 3. 【核心魔法】强制把高度限制去掉，让内容全部展示出来
-      scrollableContent.style.maxHeight = 'none';
-      scrollableContent.style.overflow = 'visible';
-  }
-
-  try {
-    // 4. 给浏览器一点点时间去重新排版 (防止字叠在一起)
-    await new Promise(resolve => setTimeout(resolve, 300));
-
-    // 5. 开始生成图片
-    const dataUrl = await domtoimage.toPng(cardToSaveRef.current!, {
-      quality: 1.0,           // 图片质量最高
-      bgcolor: '#f1f5f9',    // 【关键】强制设置背景色 (防止变透明黑底)，这里用了 slate-100 的颜色
-      width: cardToSaveRef.current!.scrollWidth, // 强制宽度对齐
-      height: cardToSaveRef.current!.scrollHeight, // 强制高度适应内容
-      style: {
-        transform: 'scale(1)', // 防止因为页面缩放导致图片偏移
-        margin: '0',           // 去掉多余边距
-      },
-      // 过滤掉可能导致报错的跨域图片节点 (如果有问题)
-      filter: (node: Node) => {
-         // 排除掉不想要的元素 (可选)
-         return true; 
+    try {
+      // 1. 暴力展开
+      if (scrollableContent) {
+        scrollableContent.style.maxHeight = 'none';
+        scrollableContent.style.overflowY = 'visible';
+        scrollableContent.style.height = 'auto'; 
       }
-    });
+      wrapper.style.height = 'auto';
+      wrapper.style.maxHeight = 'none';
+      wrapper.style.overflow = 'visible';
 
-    // 6. 下载图片
-    const link = document.createElement('a');
-    link.download = `memory-${new Date().toISOString().slice(0, 10)}.png`;
-    link.href = dataUrl;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+      // 2. 增加等待时间，确保图片渲染
+      await new Promise(resolve => setTimeout(resolve, 1500)); 
 
-  } catch (error) {
-    console.error('图片生成失败:', error);
-    alert('保存失败，可能是因为头像图片跨域。请尝试换一张本地头像或检查控制台。');
-  } finally {
-    // 7. 【还原现场】把样式改回去，变回带滚动条的样子
-    if (scrollableContent) {
-        scrollableContent.style.maxHeight = originalMaxHeight;
-        scrollableContent.style.overflow = originalOverflow;
+      // 3. 截图 (JPG + 白底)
+      const dataUrl = await htmlToImage.toJpeg(wrapper, {
+        quality: 0.95, 
+        pixelRatio: 3, 
+        backgroundColor: '#ffffff',
+        height: wrapper.scrollHeight, 
+        style: { overflow: 'hidden', height: 'auto', maxHeight: 'none', transform: 'none' }, 
+        cacheBust: true, 
+      });
+
+      const link = document.createElement('a');
+      link.href = dataUrl;
+      link.download = `HamburgerPhone-${contact.name}-${new Date().toISOString().slice(0, 10)}.jpg`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+
+    } catch (error) {
+      console.error('保存失败', error);
+      alert('保存失败，请截图保存。');
+    } finally {
+      if (scrollableContent && originalContentStyle) {
+        scrollableContent.style.maxHeight = originalContentStyle.maxHeight;
+        scrollableContent.style.overflowY = originalContentStyle.overflowY;
+        scrollableContent.style.height = originalContentStyle.height;
+      }
+      wrapper.style.height = originalWrapperStyle.height;
+      wrapper.style.maxHeight = originalWrapperStyle.maxHeight;
+      wrapper.style.overflow = originalWrapperStyle.overflow;
+      setIsSavingImage(false);
     }
-    setIsSavingImage(false);
-  }
-};
+  };
 
+  const handleWater = async () => { 
+      // if (isWateredToday) return; 
+      
+      const validMsgs = contact.history.filter(m => 
+          m.content.length > 1 && 
+          !m.content.includes('"type":') 
+      ); 
 
+      if (validMsgs.length < 5) return alert("回忆不足5条，再聊聊吧~"); 
+      setIsWatering(true); 
+      
+      const generateCard = async (dialogue: any[], memoryTimestamp: number, isBonus: boolean = false) => { 
+          
+          // ★★★ 核心：所有图片预处理 ★★★
+          const processedMessages = await Promise.all(dialogue.map(async (d: any) => {
+              const name = d.role === 'user' ? contact.userName : contact.name;
+              const avatarUrl = d.role === 'user' ? contact.userAvatar : contact.avatar;
+              
+              // 1. 头像转码 (带备用生成)
+              const base64Avatar = await urlToBase64(avatarUrl, name);
+              
+              // 2. 内容图转码
+              let content = d.content;
+              if (d.type === 'image' && !content.startsWith('data:')) {
+                  content = await urlToBase64(content, "IMG");
+              }
 
+              return { 
+                  role: d.role, 
+                  avatar: base64Avatar, 
+                  content: content,
+                  type: d.type 
+              };
+          }));
 
+          const payload = { 
+              type: "memory_share_card", 
+              title: "一段珍贵的回忆", 
+              seedName: seedInfo.name, 
+              level: garden.level, 
+              timestamp: memoryTimestamp, 
+              messages: processedMessages
+          }; 
+          
+          setPreviewCardData(payload); 
+          const expGain = isBonus ? 20 : 10; 
+          const newExp = garden.exp + expGain; 
+          
+          onUpdate({ ...contact, garden: { ...garden, lastWaterDate: todayStr, level: newExp >= 100 ? garden.level + 1 : garden.level, exp: newExp >= 100 ? 0 : newExp } }); 
+          
+          if (isBonus) alert(`⚠️ AI 走神了，但精灵帮你随机打捞了一段回忆！\n🎁 补偿：经验+20！`); 
+      }; 
 
+      try { 
+          const totalCount = validMsgs.length; 
+          const targetLength = Math.floor(Math.random() * 4) + 5; 
+          const sliceLength = Math.min(totalCount, targetLength);
+          const maxStartIndex = Math.max(0, totalCount - sliceLength); 
+          const startIndex = Math.floor(Math.random() * (maxStartIndex + 1)); 
+          const randomSlice = validMsgs.slice(startIndex, startIndex + sliceLength); 
+          const memoryTimestamp = randomSlice[randomSlice.length-1].timestamp; 
+          
+          await generateCard(randomSlice, memoryTimestamp, false);
 
+      } catch (e) { 
+          console.warn("生成失败", e); 
+      } finally { 
+          setIsWatering(false); 
+      } 
+  };
 
+  const handleFertilize = () => { 
+      if (!fertilizerMsg.trim()) return; 
+      const sysMsg = `[花园传信] 🌸 ${contact.userName} 给花施肥并说：“${fertilizerMsg}”`; 
+      onUpdate({ ...contact, garden: { ...garden, lastFertilizeDate: todayStr, exp: Math.min(100, garden.exp + 20) } }, sysMsg); 
+      setFertilizerMsg(""); setShowFertilizerInput(false); alert("📨 施肥成功！"); 
+  };
 
-
-
-  const handleWater = async () => { if (isWateredToday) return; const validMsgs = contact.history.filter(m => m.type === 'text' && m.role !== 'system' && m.content.length > 2); if (validMsgs.length < 5) return alert("回忆不足5条，再聊聊吧~"); setIsWatering(true); const generateCard = (dialogue: any[], memoryTimestamp: number, isBonus: boolean = false) => { const payload = { type: "memory_share_card", title: "一段珍贵的回忆", seedName: seedInfo.name, level: garden.level, timestamp: memoryTimestamp, messages: dialogue.map((d: any) => ({ role: d.role, avatar: d.role === 'user' ? contact.userAvatar : contact.avatar, content: d.content })) }; setPreviewCardData(payload); const expGain = isBonus ? 20 : 10; const newExp = garden.exp + expGain; onUpdate({ ...contact, garden: { ...garden, lastWaterDate: todayStr, level: newExp >= 100 ? garden.level + 1 : garden.level, exp: newExp >= 100 ? 0 : newExp } }); if (isBonus) alert(`⚠️ AI 走神了，但精灵帮你随机打捞了一段回忆！\n🎁 补偿：经验+20！`); else alert("💧 浇水成功！回忆卡片已生成！"); }; try { const activePreset = globalSettings.apiPresets.find((p: any) => p.id === globalSettings.activePresetId); if (!activePreset) throw new Error("No API"); const recentChat = validMsgs.slice(-50).map(m => ({ role: m.role, name: m.role === 'user' ? contact.userName : contact.name, content: m.content })); const prompt = `你是一位回忆剪辑师。请从对话中截取一段【连续的对话】（3-5句）。必须返回纯JSON格式：{"dialogue": [{"role": "user/assistant", "content": "..."}]} 素材：${JSON.stringify(recentChat)}`; const res = await generateResponse([{ role: 'user', content: prompt }], activePreset); const jsonMatch = res.match(/\{[\s\S]*\}/); if (jsonMatch) { const result = JSON.parse(jsonMatch[0]); let memoryTimestamp = validMsgs[validMsgs.length - 1].timestamp; if (result.dialogue && result.dialogue.length > 0) { const firstAiContent = result.dialogue[0].content; for(let i = 0; i <= validMsgs.length - result.dialogue.length; i++) { if(validMsgs[i].content.includes(firstAiContent.slice(0,10))) { let isMatch = true; for(let j = 1; j < result.dialogue.length; j++) { if (validMsgs[i+j].role !== result.dialogue[j].role) { isMatch = false; break; } } if (isMatch) { memoryTimestamp = validMsgs[i + result.dialogue.length - 1].timestamp; break; } } } } generateCard(result.dialogue, memoryTimestamp, false); } else { throw new Error("Format Error"); } } catch (e) { console.warn("AI生成失败，启用随机打捞", e); const totalCount = validMsgs.length; const sliceLength = Math.floor(Math.random() * 3) + 3; const maxStartIndex = Math.max(0, totalCount - sliceLength); const startIndex = Math.floor(Math.random() * (maxStartIndex + 1)); const randomSlice = validMsgs.slice(startIndex, startIndex + sliceLength); const memoryTimestamp = randomSlice[randomSlice.length-1].timestamp; generateCard(randomSlice.map(m=>({role: m.role, content: m.content})), memoryTimestamp, true); } finally { setIsWatering(false); } };
-  const handleFertilize = () => { if (!fertilizerMsg.trim()) return; const sysMsg = `[花园传信] 🌸 ${contact.userName} 给花施肥并说：“${fertilizerMsg}”`; onUpdate({ ...contact, garden: { ...garden, lastFertilizeDate: todayStr, exp: Math.min(100, garden.exp + 20) } }, sysMsg); setFertilizerMsg(""); setShowFertilizerInput(false); alert("📨 施肥成功！"); };
+  const fullTimestamp = new Date().toLocaleString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }).replace(/\//g, '/');
 
   return (
     <div className="p-6 h-full flex flex-col items-center justify-center animate-fadeIn relative overflow-hidden">
         <FlowerChatWidget contact={contact} seedInfo={seedInfo} globalSettings={globalSettings} onUpdate={(newHistory) => onUpdate({ ...contact, garden: { ...contact.garden!, flowerHistory: newHistory } })} />
-        <div className="bg-white/90 backdrop-blur-xl rounded-[2rem] p-8 shadow-xl border border-white w-full max-w-sm relative overflow-hidden z-10">
-            {/* ... 省略花园UI内部代码，保持不变 ... */}
-            <div className="text-center mb-8"><span className="text-xs font-bold text-gray-400 tracking-widest uppercase">Secret Garden</span><h3 className={`text-2xl font-black ${seedInfo.color} mt-1 flex items-center justify-center gap-2`}>{seedInfo.name} <span className="text-xs bg-black/5 px-2 py-1 rounded-full text-gray-500">Lv.{garden.level}</span></h3><p className="text-xs text-gray-400 mt-2 italic">{seedInfo.desc}</p></div>
-            <div className="h-48 flex items-center justify-center mb-8 relative transition-all duration-500"><div className="filter drop-shadow-xl animate-bounce-slow cursor-pointer transform transition-transform hover:scale-110 active:scale-95" style={{ fontSize: `${4 + garden.level}rem` }} onClick={handleWater}>{seedInfo.emoji}</div>{!isWateredToday && !isWatering && <div className="absolute -top-4 right-4 bg-blue-500 text-white text-[10px] px-2 py-1 rounded-full animate-bounce shadow-md">渴了...💧</div>}{isAiWatered && <div className="absolute -top-4 left-4 bg-pink-500 text-white text-[10px] px-2 py-1 rounded-full animate-pulse shadow-md">TA浇过啦❤️</div>}{isWatering && <div className="absolute top-0 text-2xl animate-pulse">🚿</div>}</div>
-            <div className="w-full h-3 bg-gray-100 rounded-full overflow-hidden mb-8 border border-gray-200"><div className={`h-full ${seedInfo.bg.replace('bg-', 'bg-')} ${seedInfo.color.replace('text-', 'bg-')} transition-all duration-1000`} style={{ width: `${garden.exp}%` }}></div></div>
-            <div className="grid grid-cols-2 gap-3"><button onClick={handleWater} disabled={isWateredToday || isWatering} className={`py-4 rounded-2xl font-bold text-sm shadow-md transition-all active:scale-95 flex flex-col items-center justify-center gap-1 ${isWateredToday ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-blue-500 text-white hover:bg-blue-600 shadow-blue-200'}`}><span className="text-2xl">{isWatering ? '⏳' : '💧'}</span><span className="text-sm font-black">{isWatering ? '萃取中...' : (isWateredToday ? (isAiWatered ? 'TA已浇水' : '明日再来') : '浇水')}</span><span className="text-[10px] opacity-80 font-normal">回忆掉落</span></button><button onClick={() => !isFertilizedToday && setShowFertilizerInput(true)} disabled={isFertilizedToday} className={`py-4 rounded-2xl font-bold text-sm shadow-md transition-all active:scale-95 flex flex-col items-center justify-center gap-1 ${isFertilizedToday ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-green-500 text-white hover:bg-green-600 shadow-green-200'}`}><span className="text-2xl">🧪</span> <span className="text-sm font-black">{isFertilizedToday ? '养分充足' : '施肥'}</span><span className="text-[10px] opacity-80 font-normal">写语传情</span></button></div>
-        </div>
-        {showFertilizerInput && (<div className="absolute inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-6 animate-fadeIn"><div className="bg-white rounded-3xl p-6 w-full max-w-xs shadow-2xl animate-scaleIn"><h4 className="text-lg font-bold text-green-700 mb-2 text-center">施肥 · 写语传情</h4><p className="text-xs text-gray-400 mb-4 text-center">写一句话作为养分，花朵精灵会帮你传达给 TA。</p><textarea className="w-full h-24 bg-green-50 rounded-xl p-4 text-sm outline-none resize-none mb-4 border border-gray-200 focus:ring-2 focus:ring-green-200 transition-all" placeholder="写在这里..." value={fertilizerMsg} onChange={e => setFertilizerMsg(e.target.value)} autoFocus /><div className="flex gap-3"><button onClick={() => setShowFertilizerInput(false)} className="flex-1 py-3 bg-gray-100 rounded-xl font-bold text-gray-500">取消</button><button onClick={handleFertilize} className="flex-1 py-3 bg-green-500 rounded-xl font-bold text-white shadow-lg shadow-green-200">确认施肥</button></div></div></div>)}
         
-        {previewCardData && (
-            <div className="absolute inset-0 bg-black/60 z-[70] flex items-center justify-center p-6 animate-fadeIn backdrop-blur-sm">
-                <div className="bg-white w-full max-w-sm rounded-3xl p-2 shadow-2xl animate-scaleIn flex flex-col items-center">
-                 {/* 这是一组彻底消除顶部空白 + 完美对齐的回忆卡片代码（请完全替换原来的 cardToSaveRef 内部内容） */}
-// ==================== 这是一组完美对齐的卡片UI代码 (无顶部留白+头像防挤压) ====================
-<div ref={cardToSaveRef} className="w-full bg-slate-100 rounded-3xl p-5 relative overflow-hidden flex flex-col items-center">
-  {/* 顶部标题 - 增加 mb-4 拉开距离 */}
-  <h3 className="text-center font-bold text-gray-500 text-[10px] uppercase tracking-[0.2em] mb-4 opacity-60">
-      MEMORY GENERATED
-  </h3>
-  
-  <div className="bg-white w-full rounded-2xl shadow-sm border border-gray-200 overflow-hidden text-xs">
-    {/* 蓝色头部条 */}
-    <div className="bg-blue-50/80 px-4 py-3 border-b border-blue-100 font-bold text-blue-600 flex justify-between items-center">
-      <span className="flex items-center gap-1.5">
-          <span className="text-lg">💧</span> 
-          <span>{previewCardData.seedName}的回忆</span>
-      </span>
-      <span className="text-[10px] font-mono opacity-60">
-          {new Date(previewCardData.timestamp).toLocaleDateString()}
-      </span>
-    </div>
-    
-    {/* 核心内容区 - 添加 custom-scrollbar 类名用于刚才的JS抓取 */}
-    <div className="px-4 py-5 space-y-4 bg-white custom-scrollbar" style={{ maxHeight: '300px', overflowY: 'auto' }}>
-      
-      {/* 居中的回忆标题 */}
-      <div className="text-center pb-2">
-        <span className="inline-block bg-slate-50 border border-slate-200 px-4 py-1.5 rounded-full font-bold shadow-sm text-gray-600 text-[10px]">
-          “ {previewCardData.title} ”
-        </span>
-      </div>
-      
-      {/* 对话气泡列表 */}
-      {previewCardData.messages.map((m: any, i: number) => (
-        <div key={i} className={`flex items-start gap-2.5 ${m.role === 'user' ? 'flex-row-reverse' : 'flex-row'}`}>
-          {/* 头像 - 强制不压缩 */}
-          <img 
-            src={m.avatar} 
-            alt="avatar" 
-            className="w-8 h-8 rounded-full border-2 border-white shadow-sm flex-shrink-0 object-cover bg-gray-200"
-            // 添加 crossorigin 属性尝试解决跨域（不一定完全有效，取决于图片源，但加上没坏处）
-            crossOrigin="anonymous"
-          />
-          
-          {/* 气泡 - 优化圆角和行高 */}
-          <div className={`max-w-[85%] px-3 py-2 rounded-2xl text-xs leading-5 shadow-sm break-words ${
-            m.role === 'user' 
-              ? 'bg-blue-500 text-white rounded-br-none' 
-              : 'bg-gray-100 text-gray-800 border border-gray-100 rounded-bl-none'
-          }`}>
-            {m.content}
-          </div>
+        {/* 主面板 */}
+        <div className="bg-white/90 backdrop-blur-xl rounded-[2rem] p-8 shadow-xl border border-white w-full max-w-sm relative overflow-hidden z-10">
+            <div className="text-center mb-8">
+                <span className="text-xs font-bold text-gray-400 tracking-widest uppercase">Secret Garden</span>
+                <h3 className={`text-2xl font-black ${seedInfo.color} mt-1 flex items-center justify-center gap-2`}>
+                    {seedInfo.name} <span className="text-xs bg-black/5 px-2 py-1 rounded-full text-gray-500">Lv.{garden.level}</span>
+                </h3>
+                <p className="text-xs text-gray-400 mt-2 italic">{seedInfo.desc}</p>
+            </div>
+            <div className="h-48 flex items-center justify-center mb-8 relative transition-all duration-500">
+                <div className="filter drop-shadow-xl animate-bounce-slow cursor-pointer transform transition-transform hover:scale-110 active:scale-95" style={{ fontSize: `${4 + garden.level}rem` }} onClick={handleWater}>{seedInfo.emoji}</div>
+                {!isWatering && <div className="absolute -top-4 right-4 bg-blue-500 text-white text-[10px] px-2 py-1 rounded-full animate-bounce shadow-md">点我生成!</div>}
+                {isWatering && <div className="absolute top-0 text-2xl animate-pulse">🚿</div>}
+            </div>
+            <div className="w-full h-3 bg-gray-100 rounded-full overflow-hidden mb-8 border border-gray-200">
+                <div className={`h-full ${seedInfo.bg.replace('bg-', 'bg-')} ${seedInfo.color.replace('text-', 'bg-')} transition-all duration-1000`} style={{ width: `${garden.exp}%` }}></div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+                <button onClick={handleWater} disabled={isWatering} className={`py-4 rounded-2xl font-bold text-sm shadow-md transition-all active:scale-95 flex flex-col items-center justify-center gap-1 ${isWatering ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-blue-500 text-white hover:bg-blue-600 shadow-blue-200'}`}>
+                    <span className="text-2xl">{isWatering ? '⏳' : '♾️'}</span><span className="text-sm font-black">{isWatering ? '生成中...' : '无限浇水'}</span><span className="text-[10px] opacity-80 font-normal">测试通道</span>
+                </button>
+                <button onClick={() => !isFertilizedToday && setShowFertilizerInput(true)} disabled={isFertilizedToday} className={`py-4 rounded-2xl font-bold text-sm shadow-md transition-all active:scale-95 flex flex-col items-center justify-center gap-1 ${isFertilizedToday ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-green-500 text-white hover:bg-green-600 shadow-green-200'}`}>
+                    <span className="text-2xl">🧪</span><span className="text-sm font-black">{isFertilizedToday ? '养分充足' : '施肥'}</span><span className="text-[10px] opacity-80 font-normal">写语传情</span>
+                </button>
+            </div>
         </div>
-      ))}
-      
-      {/* 底部装饰 - 只有生成图片时才看得到 */}
-      <div className="pt-4 text-center">
-          <div className="w-8 h-1 bg-gray-100 rounded-full mx-auto"></div>
-      </div>
-    </div>
-  </div>
-</div>
-                    <div className="flex gap-2 w-full px-2 pb-2">
-                        <button onClick={handleSaveCardAsImage} disabled={isSavingImage} className="flex-1 py-3 bg-gray-100 text-gray-600 rounded-2xl font-bold text-sm hover:bg-gray-200 transition disabled:opacity-50">{isSavingImage ? '保存中...' : '📥 保存图片'}</button>
-                        <button onClick={() => { onUpdate(contact, undefined, previewCardData); setPreviewCardData(null); alert("已分享给TA！"); }} className="flex-1 py-3 bg-blue-500 text-white rounded-2xl font-bold text-sm shadow-lg shadow-blue-200 hover:bg-blue-600 transition">📤 分享给TA</button>
+
+        {/* 施肥弹窗 */}
+        {showFertilizerInput && (
+            <div className="absolute inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-6 animate-fadeIn">
+               <div className="bg-white rounded-3xl p-6 w-full max-w-xs shadow-2xl">
+                   <h4 className="text-lg font-bold text-green-700 mb-2 text-center">施肥 · 写语传情</h4>
+                   <textarea className="w-full h-24 bg-green-50 rounded-xl p-4 text-sm outline-none resize-none mb-4 border border-gray-200" placeholder="写在这里..." value={fertilizerMsg} onChange={e => setFertilizerMsg(e.target.value)} autoFocus />
+                   <div className="flex gap-3">
+                       <button onClick={() => setShowFertilizerInput(false)} className="flex-1 py-3 bg-gray-100 rounded-xl font-bold text-gray-500">取消</button>
+                       <button onClick={handleFertilize} className="flex-1 py-3 bg-green-500 rounded-xl font-bold text-white">确认施肥</button>
+                   </div>
+               </div>
+            </div>
+        )}
+        
+        {/* ==================== 核心：卡片预览区域 ==================== */}
+        {previewCardData && (
+            <div className="absolute inset-0 bg-black/80 z-[70] flex flex-col items-center justify-center p-4 animate-fadeIn backdrop-blur-md">
+                
+                {/* 风格切换器 */}
+                <div className="flex gap-2 mb-4 bg-white/10 p-1.5 rounded-full backdrop-blur-md border border-white/20 overflow-x-auto max-w-full">
+                    <button onClick={() => setCardStyle('glass')} className={`px-3 py-1.5 rounded-full text-[10px] font-bold transition-all whitespace-nowrap ${cardStyle === 'glass' ? 'bg-white text-blue-600 shadow-md' : 'text-white/70 hover:bg-white/10'}`}>💎 高级磨砂</button>
+                    <button onClick={() => setCardStyle('minimal')} className={`px-3 py-1.5 rounded-full text-[10px] font-bold transition-all whitespace-nowrap ${cardStyle === 'minimal' ? 'bg-white text-gray-900 shadow-md' : 'text-white/70 hover:bg-white/10'}`}>📱 极简手机</button>
+                    <button onClick={() => setCardStyle('polaroid')} className={`px-3 py-1.5 rounded-full text-[10px] font-bold transition-all whitespace-nowrap ${cardStyle === 'polaroid' ? 'bg-white text-gray-800 shadow-md' : 'text-white/70 hover:bg-white/10'}`}>📸 拍立得</button>
+                    <button onClick={() => setCardStyle('paper')} className={`px-3 py-1.5 rounded-full text-[10px] font-bold transition-all whitespace-nowrap ${cardStyle === 'paper' ? 'bg-yellow-50 text-yellow-800 shadow-md' : 'text-white/70 hover:bg-white/10'}`}>📄 羊皮纸</button>
+                </div>
+
+                <div className="flex flex-col items-center w-full max-w-sm h-full max-h-[85vh] overflow-hidden">
+                 {/* ========== 截图区域 (cardToSaveRef) ========== */}
+                    <div 
+                        ref={cardToSaveRef} 
+                        className={`w-full relative shadow-2xl transition-all duration-300 flex flex-col ${cardStyle === 'minimal' ? 'rounded-[32px]' : 'rounded-[20px]'}`}
+                        style={{
+                            backgroundImage: contact.chatBackground 
+                                ? `url(${contact.chatBackground})` 
+                                : `radial-gradient(#e5e7eb 1px, transparent 1px)`,
+                            backgroundSize: contact.chatBackground ? 'cover' : '20px 20px',
+                            backgroundColor: '#ffffff',
+                            backgroundPosition: 'center',
+                            fontFamily: globalSettings.fontFamily || 'sans-serif',
+                            height: 'auto',
+                            minHeight: '520px',
+                            maxHeight: '80vh', 
+                            overflow: 'hidden' 
+                        }}
+                    >
+                        
+                        {/* ==================== 🔮 全新设计：高级磨砂 (水晶极光版) ==================== */}
+                        {cardStyle === 'glass' ? (
+                            <>
+                                {/* 1. 磨砂专属：深色唯美滤镜遮罩 */}
+                                <div className="absolute inset-0 bg-gray-900/60 backdrop-blur-xl z-0"></div>
+                                {/* 2. 磨砂专属：极光光晕装饰 */}
+                                <div className="absolute -top-20 -left-20 w-64 h-64 bg-blue-500/40 rounded-full blur-[80px] mix-blend-screen animate-pulse z-0"></div>
+                                <div className="absolute top-40 -right-20 w-64 h-64 bg-purple-500/40 rounded-full blur-[80px] mix-blend-screen animate-pulse z-0"></div>
+
+                                <div className="relative z-10 flex flex-col h-full p-7 text-white">
+                                    {/* --- 顶部设计：杂志封面感 --- */}
+                                    <div className="flex justify-between items-start mb-8">
+                                        <div>
+                                            <div className="flex items-center gap-2 mb-2">
+                                                <span className="px-2 py-0.5 rounded-full border border-white/30 bg-white/10 text-[9px] tracking-[0.2em] backdrop-blur-md shadow-lg font-bold">
+                                                    MEMORY
+                                                </span>
+                                                <div className="h-px w-10 bg-white/40"></div>
+                                            </div>
+                                            <h2 className="text-3xl font-black italic tracking-tighter leading-none text-transparent bg-clip-text bg-gradient-to-r from-white via-white to-white/60 drop-shadow-sm">
+                                                {seedInfo.name}
+                                            </h2>
+                                            <p className="text-[10px] text-white/60 mt-1 font-mono tracking-widest uppercase">
+                                                {previewCardData.title}
+                                            </p>
+                                        </div>
+                                        {/* 等级水晶标 */}
+                                        <div className="flex flex-col items-center justify-center w-12 h-14 border border-white/20 bg-gradient-to-b from-white/10 to-transparent backdrop-blur-md rounded-b-[2rem] shadow-lg">
+                                            <span className="text-xl filter drop-shadow-[0_0_5px_rgba(255,255,255,0.8)]">{seedInfo.emoji}</span>
+                                            <span className="text-[8px] font-bold mt-0.5">Lv.{garden.level}</span>
+                                        </div>
+                                    </div>
+
+                                    {/* --- 内容区域：悬浮玻璃片 --- */}
+                                    <div className="flex-1 overflow-y-auto custom-scrollbar pr-1 relative">
+                                        {/* 侧边装饰线 */}
+                                        <div className="absolute top-2 bottom-2 left-0 w-px bg-gradient-to-b from-transparent via-white/20 to-transparent"></div>
+                                        
+                                        <div className="space-y-6 pl-4">
+                                            {previewCardData.messages.map((m: any, i: number) => {
+                                                const isMe = m.role === 'user';
+                                                return (
+                                                    <div key={i} className={`flex flex-col ${isMe ? 'items-end' : 'items-start'} relative group`}>
+                                                        
+                                                        {/* 时间轴节点 */}
+                                                        <div className={`absolute top-4 -left-[19px] w-2.5 h-2.5 rounded-full border-2 border-white/10 bg-white/90 shadow-[0_0_10px_white] z-20 ${isMe ? 'opacity-50' : 'opacity-100'}`}></div>
+
+                                                        <div className={`max-w-[90%]`}>
+                                                            {/* 气泡本体：水晶质感 */}
+                                                            <div className={`
+                                                                px-4 py-3 text-sm leading-relaxed backdrop-blur-md shadow-2xl transition-all duration-300 border
+                                                                ${isMe 
+                                                                    ? 'rounded-2xl rounded-tr-none bg-gradient-to-br from-blue-500/20 to-purple-500/20 border-white/30 text-white' 
+                                                                    : 'rounded-2xl rounded-tl-none bg-white/10 border-white/20 text-white/90'
+                                                                }
+                                                            `}>
+                                                                {m.type === 'image' || (typeof m.content === 'string' && m.content.startsWith('data:image')) ? (
+                                                                    <img src={m.content} alt="img" className="rounded-lg opacity-90 hover:opacity-100 transition shadow-lg" />
+                                                                ) : (
+                                                                    m.content
+                                                                )}
+                                                            </div>
+                                                            
+                                                            {/* 名字与头像 */}
+                                                            <div className={`flex items-center gap-2 mt-1.5 opacity-60 ${isMe ? 'flex-row-reverse' : 'flex-row'}`}>
+                                                                <div className="w-4 h-4 rounded-full bg-cover bg-center border border-white/30 shadow-sm" style={{ backgroundImage: `url(${m.avatar})` }}></div>
+                                                                <span className="text-[9px] font-light tracking-widest uppercase">{isMe ? contact.userName : contact.name}</span>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+
+                                    {/* --- 底部：科技感/波形图 --- */}
+                                    <div className="mt-6 pt-3 border-t border-white/10 flex justify-between items-center">
+                                        <div className="flex flex-col">
+                                            <span className="text-[7px] tracking-[0.3em] uppercase opacity-50">TIMESTAMP</span>
+                                            <span className="text-[10px] font-mono font-bold opacity-90">{fullTimestamp}</span>
+                                        </div>
+                                        {/* 模拟音频波形 */}
+                                        <div className="flex items-center gap-0.5 h-3 opacity-60">
+                                            {[0.4, 0.8, 0.3, 0.9, 0.5, 1, 0.6, 0.4, 0.7, 0.3].map((h, k) => (
+                                                <div key={k} className="w-0.5 bg-white rounded-full" style={{ height: `${h * 100}%` }}></div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                </div>
+                            </>
+                        ) : (
+                            // ==================== 原有样式 (极简/拍立得/羊皮纸) ====================
+                            <>
+                                {/* 原有背景遮罩逻辑 */}
+                                <div className={`absolute inset-0 z-0 ${
+                                    cardStyle === 'minimal' ? (contact.chatBackground ? 'bg-black/5' : 'bg-transparent') : 
+                                    cardStyle === 'polaroid' ? 'bg-black/10 backdrop-blur-sm' : 
+                                    'bg-white/50 backdrop-blur-sm'
+                                }`}></div>
+
+                                <div className={`relative z-10 flex flex-col flex-1 w-full ${cardStyle === 'polaroid' ? 'p-6 pb-16' : cardStyle === 'minimal' ? 'p-0' : 'p-6'}`}>
+                                    
+                                    {/* Header (保持不变) */}
+                                    {cardStyle === 'minimal' ? (
+                                        <div className="pt-5 pb-3 px-5 bg-white/70 backdrop-blur-xl border-b border-white/40 flex justify-between items-center shadow-sm z-20">
+                                            <div className="flex items-center gap-2">
+                                                <div className="w-8 h-8 rounded-full bg-white/50 flex items-center justify-center text-lg shadow-inner">{seedInfo.emoji}</div>
+                                                <div><h3 className="text-sm font-black text-gray-800 leading-none">{seedInfo.name}的回忆</h3><p className="text-[9px] text-gray-500 font-mono mt-0.5">{new Date(previewCardData.timestamp).toLocaleDateString()}</p></div>
+                                            </div>
+                                            <div className="text-right"><span className="text-[9px] font-bold bg-white/50 px-2 py-0.5 rounded-full text-blue-600">Lv.{garden.level}</span></div>
+                                        </div>
+                                    ) : (
+                                        <div className="flex justify-between items-center mb-5">
+                                            <div className="flex items-center gap-3">
+                                                <div className={`p-2.5 rounded-xl backdrop-blur-md shadow-sm border bg-white border-gray-200`}><span className="text-2xl filter drop-shadow-sm">{seedInfo.emoji}</span></div>
+                                                <div className="flex flex-col items-start gap-1">
+                                                    <p className={`text-[9px] font-black uppercase tracking-[0.15em] leading-none px-1.5 py-0.5 rounded backdrop-blur-sm text-gray-500 bg-white/80`}>MEMORY</p>
+                                                    <p className={`text-base font-black leading-none px-2 py-1 rounded-md backdrop-blur-sm shadow-sm border text-gray-800 bg-white border-gray-200`}>{seedInfo.name}的回忆</p>
+                                                </div>
+                                            </div>
+                                            <div className="text-right">
+                                                <p className={`text-[10px] font-mono px-2 py-0.5 rounded-full backdrop-blur-sm mb-1 bg-white/50 text-gray-600`}>{new Date(previewCardData.timestamp).toLocaleDateString()}</p>
+                                                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full bg-white text-blue-600 border`}>Lv.{garden.level}</span>
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* 聊天内容 (保持不变) */}
+                                    <div className={`flex-1 flex flex-col ${cardStyle === 'minimal' ? 'bg-transparent p-5' : cardStyle === 'polaroid' ? 'bg-white rounded-sm p-5 pb-12 shadow-2xl border-[12px] border-white transform rotate-1' : 'bg-[#fffdf5] rounded-lg border-yellow-100/50 shadow-md p-5'}`}>
+                                        {cardStyle === 'polaroid' && <div className="absolute -top-3 left-1/2 -translate-x-1/2 w-20 h-6 bg-red-500/20 transform -rotate-2 backdrop-blur-sm z-20"></div>}
+                                        {cardStyle !== 'minimal' && (
+                                            <div className="text-center mb-6 relative z-10"><span className={`text-xs font-bold px-4 py-1.5 rounded-full shadow-sm border inline-block backdrop-blur-md ${cardStyle === 'polaroid' ? 'text-gray-600 bg-white border-gray-200' : 'text-yellow-800 bg-yellow-50 border-yellow-200'}`}>“{previewCardData.title}”</span></div>
+                                        )}
+
+                                        <div className="space-y-4 custom-scrollbar relative z-10 flex-1 h-auto overflow-y-auto">
+                                            {previewCardData.messages.map((m: any, i: number) => {
+                                                if (m.role === 'system') {
+                                                    const content = m.content.replace('【系统通知】', '').trim();
+                                                    return (
+                                                        <div key={i} className="flex justify-center my-3 relative group">
+                                                            <div className="absolute inset-0 bg-yellow-600/20 transform rotate-[-2deg] rounded-sm translate-y-1 translate-x-1 blur-[2px]"></div>
+                                                            <div className="relative bg-[#FFFBEB] text-[#78350F] text-xs px-4 py-3 rounded-sm border border-[#FDE68A] transform rotate-[-1deg] max-w-[85%] text-center shadow-sm">
+                                                            <div className="absolute -top-2 left-1/2 -translate-x-1/2 w-8 h-3 bg-yellow-200/50 backdrop-blur-[1px] rotate-90 opacity-60"></div>
+                                                            <span className="font-medium leading-relaxed">{content}</span>
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                }
+                                                const isMe = m.role === 'user';
+                                                const bubbleBg = isMe ? (contact.bubbleColorUser || '#FBCFE8') : (contact.bubbleColorAI || '#ffffff');  
+                                                const textColor = getContrastColor(bubbleBg);
+                                                return (
+                                                    <div key={i} className={`flex items-start gap-3 ${isMe ? 'justify-end' : 'justify-start'}`}>
+                                                        {!isMe && (
+                                                            <div 
+                                                                className="w-9 h-9 rounded-full border border-white/50 shadow-sm flex-shrink-0 bg-cover bg-center"
+                                                                style={{ backgroundImage: `url(${m.avatar})` }}
+                                                            ></div>
+                                                        )}
+                                                        
+                                                        {m.type === 'image' || (typeof m.content === 'string' && m.content.startsWith('data:image')) ? (
+                                                            <img src={m.content} alt="msg-img" crossOrigin="anonymous" className="rounded-lg max-w-[70%] border border-black/5 shadow-sm" />
+                                                        ) : (
+                                                            <div className={`px-3.5 py-2 rounded-2xl text-sm max-w-[80%] leading-relaxed shadow-sm break-words relative border border-black/5`}
+                                                                style={{ backgroundColor: bubbleBg, color: textColor, borderTopLeftRadius: !isMe ? '2px' : '18px', borderTopRightRadius: isMe ? '2px' : '18px' }}>
+                                                                {m.content}
+                                                            </div>
+                                                        )}
+                                                        {isMe && (
+                                                            <div 
+                                                                className="w-9 h-9 rounded-full border border-white/50 shadow-sm flex-shrink-0 bg-cover bg-center"
+                                                                style={{ backgroundImage: `url(${m.avatar})` }}
+                                                            ></div>
+                                                        )}
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+
+                                    {/* 底部信息 (保持不变) */}
+                                    {cardStyle === 'minimal' ? (
+                                        <div className="mt-4 pt-3 pb-3 px-4 bg-white/70 backdrop-blur-xl border-t border-white/40 flex justify-between items-center z-20 rounded-xl mx-2 mb-2 shadow-sm">
+                                            <div className="flex items-center gap-1.5"><span className="text-sm">🍔</span><span className="text-[9px] font-black tracking-widest uppercase text-gray-500">HAMBURGER PHONE</span></div>
+                                            <div className="flex flex-col items-end"><span className="text-[8px] font-bold text-gray-600">@{contact.userName || 'User'} & {contact.name}</span><span className="text-[7px] text-gray-400 font-mono">{fullTimestamp}</span></div>
+                                        </div>
+                                    ) : (
+                                        <div className={`mt-5 py-3 px-5 flex justify-between items-end bg-white/70 backdrop-blur-xl rounded-xl shadow-sm border border-white/40 ${cardStyle === 'polaroid' ? 'absolute bottom-4 left-8 right-8 text-gray-800' : 'mx-2 mb-2'}`}>
+                                            <div className="flex items-center gap-2">
+                                                <div className={`w-8 h-8 rounded-full flex items-center justify-center text-lg shadow-sm bg-white border border-gray-200`}>🍔</div>
+                                                <div className="flex flex-col"><span className={`text-[10px] font-black tracking-[0.15em] uppercase leading-none text-gray-700`}>HAMBURGER PHONE</span><span className={`text-[7px] mt-0.5 font-mono text-gray-500`}>Captured on {fullTimestamp}</span></div>
+                                            </div>
+                                            <div className={`text-[9px] font-bold italic text-gray-500`}>@{contact.userName || 'User'} & {contact.name}</div>
+                                        </div>
+                                    )}
+                                </div>
+                            </>
+                        )}
                     </div>
-                    <button onClick={() => setPreviewCardData(null)} className="mt-2 text-gray-400 text-xs hover:text-gray-600">关闭</button>
+
+                    {/* 按钮组 + 定位按钮 */}
+                    <div className="flex gap-2 w-full animate-scaleIn mt-2">
+                        <button onClick={handleJumpToContext} className="px-3 py-3 bg-gray-100 text-gray-600 rounded-xl font-bold text-xs hover:bg-gray-200 transition flex items-center justify-center">
+                            📍 定位原文
+                        </button>
+                        <button onClick={handleSaveCardAsImage} disabled={isSavingImage} className="flex-1 py-3 bg-white text-gray-700 rounded-xl font-bold text-sm hover:bg-gray-50 transition shadow-lg active:scale-95 disabled:opacity-50 flex items-center justify-center gap-2">
+                            {isSavingImage ? <><span>⏳</span> 渲染长图...</> : <><span>📸</span> 保存图片 (JPG)</>}
+                        </button>
+                        <button onClick={() => { onUpdate(contact, undefined, previewCardData); setPreviewCardData(null); alert("已分享给TA！"); }} className="flex-1 py-3 bg-gradient-to-r from-blue-500 to-indigo-500 text-white rounded-xl font-bold text-sm shadow-lg shadow-blue-200 hover:opacity-90 transition active:scale-95 flex items-center justify-center gap-2">
+                            <span>📤</span> 分享
+                        </button>
+                    </div>
+                    
+                    <div className="text-center mt-3 text-white/70 text-[10px] animate-pulse">
+                        💡 提示：预览窗有滚动条，但【保存图片】会自动生成完整长图，请放心导出！
+                    </div>
+                    <button onClick={() => setPreviewCardData(null)} className="mt-4 text-white/50 text-xs hover:text-white underline decoration-dashed mb-10">关闭预览</button>
                 </div>
             </div>
         )}
@@ -476,6 +831,24 @@ const handleSaveCardAsImage = async () => {
 
 
 
+// ==================== 4. 主组件 (RelationshipSpace) ====================
+// ==================== 4. 主组件 (RelationshipSpace) ====================
+
+interface RelationshipSpaceProps {
+  contacts: Contact[];
+  setContacts: React.Dispatch<React.SetStateAction<Contact[]>>;
+  onClose: () => void;
+  onRelationshipSpaceAction: (contactId: string, msg: string) => void;
+  globalSettings: GlobalSettings;
+  // ★★★ 修改：跳转回调需要传两个参数：(联系人ID, 时间戳)
+  onJumpToMessage?: (contactId: string, timestamp: number) => void; 
+}
+
+
+
+
+
+
 
 // ==================== 4. 主组件 (RelationshipSpace) ====================
 
@@ -485,61 +858,58 @@ interface RelationshipSpaceProps {
   onClose: () => void;
   onRelationshipSpaceAction: (contactId: string, msg: string) => void;
   globalSettings: GlobalSettings;
+  // 新增：跳转回调（App.tsx 需要传进来）
+  onJumpToMessage?: (timestamp: number) => void; 
 }
 
-
-
-
-
-
-
-const RelationshipSpace: React.FC<RelationshipSpaceProps> = ({ contacts, setContacts, onClose, onRelationshipSpaceAction, globalSettings }) => {
-  // ★★★ 核心修复：View 状态定义 (防黑屏关键) ★★★
+const RelationshipSpace: React.FC<RelationshipSpaceProps> = ({ contacts, setContacts, onClose, onRelationshipSpaceAction, globalSettings, onJumpToMessage }) => {
   const [view, setView] = useState<'landing' | 'list' | 'space'>('landing');
   const [targetId, setTargetId] = useState<string | null>(null);
   const [tab, setTab] = useState<'hub' | 'garden'>('hub');
   const [selectedLetter, setSelectedLetter] = useState<LoveLetter | null>(null);
-  
-  // ★★★ 设置 & 写信 状态 ★★★
   const [showSettings, setShowSettings] = useState(false);
   const [showWriteLetter, setShowWriteLetter] = useState(false);
   const [letterDraft, setLetterDraft] = useState({ title: '', content: '' });
-
-// ★★★ 新增：用户提问功能的状态 ★★★
   const [showQuestionModal, setShowQuestionModal] = useState(false);
   const [questionDraft, setQuestionDraft] = useState("");
 
-
-// ★★★ 新增：用于存放刚刚生成的“回忆卡片”数据，准备预览 ★★★
-  const [previewCardData, setPreviewCardData] = useState<any>(null);
-  // 获取当前关系
   const currentRelationship = contacts.find(c => c.RelationShipUnlocked);
   const targetContact = contacts.find(c => c.id === targetId);
 
-  // 计算红点
   const getUnreadCount = (c: Contact) => (c.letters || []).filter(l => !l.isOpened && l.from === 'ai').length;
   const RelationshipUnread = currentRelationship ? getUnreadCount(currentRelationship) : 0;
   const friendsUnread = contacts.filter(c => !c.RelationShipUnlocked).reduce((sum, c) => sum + getUnreadCount(c), 0);
 
-  // 自动跳转逻辑
   useEffect(() => {
       if (currentRelationship && view === 'landing' && !targetId) {
           setTargetId(currentRelationship.id);
           setView('space');
       }
-  }, []); // 只在挂载时检查一次，如果用户手动退回到 Landing，不会被强制吸回去
+  }, []); 
 
-  // --- Shadow AI 检查 (每次进空间触发) ---
-  useEffect(() => {
-      if (view === 'space' && targetContact) {
-          const nowStr = new Date().toLocaleDateString();
-          // 如果今天还没检查过，或者数据太老，可以在这里触发一次轻量级检查
-          // 目前主要依赖 App.tsx 的全局定时器，这里主要做数据同步
-          // 可以在这里加上逻辑：如果进空间时发现 hef 有大变化，触发某种动画
+
+
+
+
+
+// --- 处理跳转逻辑 ---
+  const handleJump = (timestamp: number) => {
+      // 1. 关闭 RelationshipSpace
+      onClose();
+      // 2. 调用父级的跳转 (如果有)，并传入当前联系人的ID
+      if (onJumpToMessage && targetContact) {
+          onJumpToMessage(targetContact.id, timestamp);
+      } else {
+          console.log("Jump request to:", timestamp);
       }
-  }, [view, targetContact]);
+  };
 
-  // --- 落地页 (Landing) ---
+
+
+
+
+
+
   if (view === 'landing') {
       return (
           <div className="h-full w-full bg-slate-50 flex flex-col pt-[calc(env(safe-area-inset-top)+20px)] p-6">
@@ -551,7 +921,6 @@ const RelationshipSpace: React.FC<RelationshipSpaceProps> = ({ contacts, setCont
                 onClick={() => { if (currentRelationship) { setTargetId(currentRelationship.id); setView('space'); } else { alert("还未解锁恋人空间哦 (需好感度>60且AI同意)"); setView('list'); } }} 
                 className="bg-gradient-to-br from-rose-400 to-pink-600 rounded-3xl p-6 shadow-xl shadow-rose-200 mb-6 cursor-pointer transform transition hover:scale-105 active:scale-95 relative overflow-hidden group"
               >
-                  {/* 红点提醒 */}
                   {RelationshipUnread > 0 && <div className="absolute top-4 right-4 bg-white text-rose-500 text-xs font-bold px-2 py-1 rounded-full shadow-md animate-bounce">{RelationshipUnread} 新信件</div>}
                   <div className="absolute -right-4 -bottom-4 text-9xl opacity-20 group-hover:scale-110 transition-transform">💞</div>
                   <h3 className="text-xl font-bold text-white mb-1">唯一挚爱</h3>
@@ -571,7 +940,6 @@ const RelationshipSpace: React.FC<RelationshipSpaceProps> = ({ contacts, setCont
       );
   }
 
-  // --- 列表页 (List) ---
   if (view === 'list') {
       return (
           <div className="h-full w-full bg-slate-50 flex flex-col">
@@ -592,13 +960,11 @@ const RelationshipSpace: React.FC<RelationshipSpaceProps> = ({ contacts, setCont
       );
   }
 
-  // --- 空间页 (Space) ---
   if (view === 'space' && targetContact) {
       const isRelationship = !!targetContact.RelationShipUnlocked;
       const theme = getTheme(isRelationship ? 'Honeymoon' : (targetContact.relationshipStatus || 'Friend'));
       const daysTogether = Math.floor((Date.now() - (targetContact.created)) / 86400000) + 1;
 
-      // 信件阅读模式
       if (selectedLetter) {
           return (
               <div className={`h-full w-full ${theme.bg} flex flex-col pt-[calc(env(safe-area-inset-top)+20px)]`}>
@@ -625,7 +991,6 @@ const RelationshipSpace: React.FC<RelationshipSpaceProps> = ({ contacts, setCont
               <SafeAreaHeader 
                   title={tab === 'hub' ? theme.title : '秘密花园'} 
                   left={<button onClick={() => setView('landing')} className={`text-xl ${theme.primary} pl-2`}>✕</button>}
-                  // ★★★ 右上角设置按钮：纪念日 & 解除关系 ★★★
                   right={
                       <div className="relative">
                           <button onClick={() => setShowSettings(!showSettings)} className={`text-xl ${theme.primary} pr-2`}>⚙️</button>
@@ -633,10 +998,8 @@ const RelationshipSpace: React.FC<RelationshipSpaceProps> = ({ contacts, setCont
                               <div className="absolute right-0 top-8 bg-white rounded-xl shadow-xl border border-gray-100 p-2 w-32 z-50 animate-scaleIn">
                                   <button onClick={() => {
                                       const newDate = prompt("修改纪念日 (格式: YYYY-MM-DD)", targetContact.created ? new Date(targetContact.created).toISOString().slice(0,10) : "");
-                                      // 这里其实应该存 anniversary 字段，暂时用 created 代替演示
                                       setShowSettings(false);
                                   }} className="block w-full text-left px-3 py-2 text-xs text-gray-700 hover:bg-gray-50 rounded">📅 改纪念日</button>
-                                  
                                   {isRelationship && <button onClick={() => {
                                       if(confirm("⚠️ 确定要解除情侣空间吗？\n\n所有信件和花园等级将保留，但关系将退回普通朋友。")) {
                                           setContacts(prev => prev.map(c => c.id === targetContact.id ? { ...c, RelationShipUnlocked: false } : c));
@@ -653,7 +1016,6 @@ const RelationshipSpace: React.FC<RelationshipSpaceProps> = ({ contacts, setCont
               <div className="flex-1 overflow-y-auto custom-scrollbar pb-24">
                   {tab === 'hub' && (
                       <div className="p-6 space-y-8 animate-fadeIn">
-                          {/* 头部信息 */}
                           <div className="relative p-6 text-center">
                               <div className="inline-block relative group">
                                   <img src={targetContact.avatar} className="w-24 h-24 rounded-full border-4 border-white shadow-xl object-cover transition-transform group-hover:scale-105" alt="avatar" />
@@ -666,7 +1028,6 @@ const RelationshipSpace: React.FC<RelationshipSpaceProps> = ({ contacts, setCont
                               </div>
                           </div>
                           
-                          {/* 信箱 (可写信) */}
                           <div className="px-6 mb-4">
                               <MailboxWidget 
                                   letters={targetContact.letters || []} 
@@ -676,20 +1037,11 @@ const RelationshipSpace: React.FC<RelationshipSpaceProps> = ({ contacts, setCont
                               />
                           </div>
 
-                          {/* 问答 (落子无悔) */}
                           <div className="px-6 mt-6">
-                             {/* ★★★ 标题栏：增加了“提问”按钮 ★★★ */}
-                          <div className="text-sm font-bold text-gray-500 mb-4 px-1 flex items-center justify-between">
-                              <span className="flex items-center gap-2">🧩 灵魂拷问</span>
-                              
-                              {/* --- 新增的提问按钮 --- */}
-                              <button 
-                                onClick={() => setShowQuestionModal(true)}
-                                className="text-[10px] bg-white text-gray-600 px-3 py-1 rounded-full font-bold hover:bg-gray-50 transition shadow-sm border border-gray-200 flex items-center gap-1"
-                              >
-                                ✍️ 提问
-                              </button>
-                          </div>
+                             <div className="text-sm font-bold text-gray-500 mb-4 px-1 flex items-center justify-between">
+                                  <span className="flex items-center gap-2">🧩 灵魂拷问</span>
+                                  <button onClick={() => setShowQuestionModal(true)} className="text-[10px] bg-white text-gray-600 px-3 py-1 rounded-full font-bold hover:bg-gray-50 transition shadow-sm border border-gray-200 flex items-center gap-1">✍️ 提问</button>
+                             </div>
                               <QACardStack 
                                 questions={targetContact.questions || []} 
                                 theme={theme} 
@@ -708,6 +1060,8 @@ const RelationshipSpace: React.FC<RelationshipSpaceProps> = ({ contacts, setCont
                       <GardenPage 
                         contact={targetContact} 
                         globalSettings={globalSettings} 
+                        // ★★★ 传入跳转回调 ★★★
+                        onJumpToMessage={handleJump}
                         onUpdate={(c, sysMsg, shareCard) => { 
                             setContacts(prev => prev.map(old => old.id === c.id ? c : old)); 
                             if(shareCard) onRelationshipSpaceAction(c.id, JSON.stringify(shareCard)); 
@@ -717,7 +1071,6 @@ const RelationshipSpace: React.FC<RelationshipSpaceProps> = ({ contacts, setCont
                   )}
               </div>
 
-              {/* 底部导航 */}
               <div className="absolute bottom-6 left-0 right-0 flex justify-center z-40 pointer-events-none">
                   <div className="bg-white/90 backdrop-blur-xl border border-white/50 rounded-full px-2 py-1.5 shadow-2xl flex gap-1 pointer-events-auto">
                       <button onClick={() => setTab('hub')} className={`px-6 py-2 rounded-full text-xs font-bold transition-all ${tab === 'hub' ? `${theme.accent} text-white shadow-md` : 'text-gray-400 hover:bg-gray-100'}`}>🏠 空间</button>
@@ -725,172 +1078,52 @@ const RelationshipSpace: React.FC<RelationshipSpaceProps> = ({ contacts, setCont
                   </div>
               </div>
 
-              {/* 写信弹窗 */}
               {showWriteLetter && (
                   <div className="absolute inset-0 bg-black/50 z-[60] flex items-center justify-center p-6 animate-fadeIn">
                       <div className="bg-white w-full max-w-sm rounded-2xl p-6 shadow-2xl animate-scaleIn">
                           <h3 className="font-bold text-lg text-gray-800 mb-4 text-center">✍️ 写信给 TA</h3>
-                          <input 
-                             className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2 mb-3 text-sm outline-none font-bold"
-                             placeholder="标题 (例如: 给亲爱的你)"
-                             value={letterDraft.title}
-                             onChange={e => setLetterDraft({...letterDraft, title: e.target.value})}
-                          />
-                          <textarea 
-                             className="w-full h-32 bg-gray-50 border border-gray-200 rounded-xl p-4 text-sm outline-none resize-none mb-4"
-                             placeholder="写下你想对 TA 说的话... (落子无悔哦)"
-                             value={letterDraft.content}
-                             onChange={e => setLetterDraft({...letterDraft, content: e.target.value})}
-                          />
+                          <input className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2 mb-3 text-sm outline-none font-bold" placeholder="标题" value={letterDraft.title} onChange={e => setLetterDraft({...letterDraft, title: e.target.value})} />
+                          <textarea className="w-full h-32 bg-gray-50 border border-gray-200 rounded-xl p-4 text-sm outline-none resize-none mb-4" placeholder="写下你想对 TA 说的话..." value={letterDraft.content} onChange={e => setLetterDraft({...letterDraft, content: e.target.value})} />
                           <div className="flex gap-3">
                               <button onClick={() => setShowWriteLetter(false)} className="flex-1 py-3 bg-gray-100 rounded-xl font-bold text-gray-500">取消</button>
-                              <button 
-                                onClick={() => {
+                              <button onClick={() => {
                                     if(!letterDraft.title || !letterDraft.content) return alert("写完再寄哦！");
-                                    const newLetter: LoveLetter = {
-                                        id: Date.now().toString(),
-                                        title: letterDraft.title,
-                                        content: letterDraft.content,
-                                        timestamp: Date.now(),
-                                        isOpened: false, // 对方未读
-                                        from: 'user'
-                                    };
+                                    const newLetter: LoveLetter = { id: Date.now().toString(), title: letterDraft.title, content: letterDraft.content, timestamp: Date.now(), isOpened: false, from: 'user' };
                                     setContacts(prev => prev.map(c => c.id === targetContact.id ? { ...c, letters: [...(c.letters||[]), newLetter] } : c));
-                                    onRelationshipSpaceAction(targetContact.id, `[系统通知] 用户刚刚给你寄了一封信，标题是《${newLetter.title}》。\n(请在下次行动中表现出收到信的反应，或者回信)`);
+                                    onRelationshipSpaceAction(targetContact.id, `[系统通知] 用户给你寄了一封信《${newLetter.title}》。`);
                                     setLetterDraft({title:'', content:''});
                                     setShowWriteLetter(false);
                                     alert("信件已投递！📮");
-                                }}
-                                className={`flex-1 py-3 rounded-xl font-bold text-white shadow-lg ${theme.accent}`}
-                              >
-                                  投递
-                              </button>
+                                }} className={`flex-1 py-3 rounded-xl font-bold text-white shadow-lg ${theme.accent}`}>投递</button>
                           </div>
                       </div>
                   </div>
               )}
 
-
-
-
-{/* ★★★ 新增：用户提问弹窗 ★★★ */}
               {showQuestionModal && (
                   <div className="absolute inset-0 bg-black/50 z-[60] flex items-center justify-center p-6 animate-fadeIn">
                       <div className="bg-white w-full max-w-sm rounded-2xl p-6 shadow-2xl animate-scaleIn">
                           <h3 className="font-bold text-lg text-gray-800 mb-4 text-center">🧩 灵魂拷问</h3>
-                          <p className="text-xs text-center text-gray-400 mb-4">
-                            向 TA 提出一个问题，<br/>TA 会在某个时刻给你答案。
-                          </p>
-                          <textarea 
-                             className="w-full h-28 bg-gray-50 border border-gray-200 rounded-xl p-4 text-sm outline-none resize-none mb-4 focus:ring-2 focus:ring-purple-200"
-                             placeholder="例如：对你来说，最重要的是什么？"
-                             value={questionDraft}
-                             onChange={e => setQuestionDraft(e.target.value)}
-                             autoFocus
-                          />
+                          <textarea className="w-full h-28 bg-gray-50 border border-gray-200 rounded-xl p-4 text-sm outline-none resize-none mb-4 focus:ring-2 focus:ring-purple-200" placeholder="例如：对你来说，最重要的是什么？" value={questionDraft} onChange={e => setQuestionDraft(e.target.value)} autoFocus />
                           <div className="flex gap-3">
                               <button onClick={() => setShowQuestionModal(false)} className="flex-1 py-3 bg-gray-100 rounded-xl font-bold text-gray-500">取消</button>
-                              <button 
-                                onClick={() => {
+                              <button onClick={() => {
                                     if(!questionDraft.trim()) return alert("问题不能为空哦！");
-                                    
-                                    // 1. 创建一个新的 QA 对象 (注意：aiAnswer 为空，等待AI回答)
-                                    const newQA: QAEntry = {
-                                        id: Date.now().toString(),
-                                        question: questionDraft,
-                                        aiAnswer: "", // AI 尚未回答
-                                        userAnswer: "这是我提出的问题", // 可以用一个标记表明这是用户提的
-                                        date: new Date().toLocaleDateString(),
-                                        timestamp: Date.now(),
-                                    };
-
-                                    // 2. 更新数据
-                                    setContacts(prev => prev.map(c => 
-                                        c.id === targetContact.id ? { ...c, questions: [...(c.questions||[]), newQA] } : c
-                                    ));
-
-                                    // 3. 发送系统通知给 AI
-                                    onRelationshipSpaceAction(targetContact.id, `[系统通知] 用户向你提出了一个灵魂拷问：\n“${questionDraft}”\n(请在未来的某个时刻，通过 'action' 指令回答这个问题)`);
-                                    
-                                    // 4. 重置并关闭
+                                    const newQA: QAEntry = { id: Date.now().toString(), question: questionDraft, aiAnswer: "", userAnswer: "这是我提出的问题", date: new Date().toLocaleDateString(), timestamp: Date.now() };
+                                    setContacts(prev => prev.map(c => c.id === targetContact.id ? { ...c, questions: [...(c.questions||[]), newQA] } : c));
+                                    onRelationshipSpaceAction(targetContact.id, `[系统通知] 用户向你提出了一个灵魂拷问：“${questionDraft}”`);
                                     setQuestionDraft("");
                                     setShowQuestionModal(false);
-                                    alert("问题已送达！等待 TA 的回答吧~");
-                                }}
-                                className={`flex-1 py-3 rounded-xl font-bold text-white shadow-lg bg-purple-500 shadow-purple-200`}
-                              >
-                                  发送
-                              </button>
+                                    alert("问题已送达！");
+                                }} className={`flex-1 py-3 rounded-xl font-bold text-white shadow-lg bg-purple-500 shadow-purple-200`}>发送</button>
                           </div>
                       </div>
                   </div>
               )}
-
-
-
-
-{/* ★★★ 回忆卡片预览 & 分享弹窗 ★★★ */}
-              {previewCardData && (
-                  <div className="absolute inset-0 bg-black/60 z-[70] flex items-center justify-center p-6 animate-fadeIn backdrop-blur-sm">
-                      <div className="bg-white w-full max-w-sm rounded-3xl p-2 shadow-2xl animate-scaleIn flex flex-col items-center">
-                          <div className="w-full bg-gray-100 rounded-t-3xl rounded-b-xl p-4 mb-2 relative overflow-hidden">
-                              <h3 className="text-center font-bold text-gray-600 mb-2 text-xs uppercase tracking-widest">Memory Generated</h3>
-                              {/*这里直接复用卡片样式，稍微简化一点用于预览*/}
-                              <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden text-xs">
-                                  <div className="bg-blue-50 p-2 border-b border-gray-100 font-bold text-blue-600 flex justify-between">
-                                      <span>💧 {previewCardData.seedName}的回忆</span>
-                                      <span>{new Date(previewCardData.timestamp).toLocaleDateString()}</span>
-                                  </div>
-                                  <div className="p-3 space-y-2 bg-gray-50/30 max-h-[200px] overflow-y-auto custom-scrollbar">
-                                      <div className="text-center"><span className="bg-white border px-2 py-0.5 rounded-full font-bold shadow-sm">“{previewCardData.title}”</span></div>
-                                      {previewCardData.messages.map((m: any, i: number) => (
-                                          <div key={i} className={`flex gap-1 ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                                              <div className={`px-2 py-1 rounded max-w-[85%] ${m.role==='user'?'bg-blue-500 text-white':'bg-white border'}`}>{m.content}</div>
-                                          </div>
-                                      ))}
-                                  </div>
-                              </div>
-                          </div>
-
-                          <div className="flex gap-2 w-full px-2 pb-2">
-                              <button 
-                                onClick={() => {
-                                    alert("图片已保存到相册！(模拟)");
-                                }} 
-                                className="flex-1 py-3 bg-gray-100 text-gray-600 rounded-2xl font-bold text-sm hover:bg-gray-200 transition"
-                              >
-                                  📥 保存图片
-                              </button>
-                              <button 
-                                onClick={() => {
-                                    // ★★★ 在这里真正发送给主AI ★★★
-                                    onRelationshipSpaceAction(contact.id, JSON.stringify(previewCardData));
-                                    setPreviewCardData(null); // 关闭弹窗
-                                    alert("已分享给TA！快去聊天窗口看看吧~");
-                                }} 
-                                className="flex-1 py-3 bg-blue-500 text-white rounded-2xl font-bold text-sm shadow-lg shadow-blue-200 hover:bg-blue-600 transition"
-                              >
-                                  📤 分享给TA
-                              </button>
-                          </div>
-                          
-                          <button onClick={() => setPreviewCardData(null)} className="mt-2 text-gray-400 text-xs hover:text-gray-600">关闭 (仅保留经验值)</button>
-                      </div>
-                  </div>
-              )}
-
-
-
-
-
-
-
-
           </div>
       );
   }
 
-  // 兜底
   return <div className="h-full flex items-center justify-center text-gray-400">Loading...</div>;
 };
 

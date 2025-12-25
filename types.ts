@@ -96,6 +96,7 @@ export interface FavoriteEntry {
   messages?: Message[];
   isPackage: boolean;
   contactName: string;
+  contactId?: string; // ★★★ 新增：记录角色ID，用于精准跳转 ★★★
   avatar: string;
   category: string;
   timestamp: number;

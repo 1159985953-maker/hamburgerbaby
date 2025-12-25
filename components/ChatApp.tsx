@@ -16,8 +16,6 @@ import WorldBookApp from './WorldBookApp'; // <--- 确保加了这行导入！
 
 
 
-
-// 2. 【移动】ChatAppProps 必须定义在组件前面
 interface ChatAppProps {
   contacts: Contact[];
   setContacts: React.Dispatch<React.SetStateAction<Contact[]>>;
@@ -30,11 +28,11 @@ interface ChatAppProps {
   initialContactId: string | null;
   onChatOpened: () => void;
   onNewMessage: (contactId: string, name: string, avatar: string, content: string) => void;
-  // ★★★ 新增：接收跳转设置页的函数
   onOpenSettings?: () => void;
+  jumpToTimestamp?: number | null; 
+  // ★★★ 新增：允许 ChatApp 通知外面要跳转 ★★★
+  onJumpToMessage?: (contactId: string, timestamp: number) => void;
 }
-
-
 
 
 
@@ -550,13 +548,14 @@ const ChatApp: React.FC<ChatAppProps> = ({
   worldBooks,
   setWorldBooks,
   onExit,
-  isBackground, // 👈 把它加在这里！
+  isBackground, 
   initialContactId,
   onChatOpened,
   onNewMessage,
-   onOpenSettings, // ★★★★★ 把它加在这里！接收父组件传来的“传送”函
+  onOpenSettings,
+  jumpToTimestamp,
+  onJumpToMessage, // ★★★ 记得把这个加进来！
 }) => {
-
 
 
 
@@ -579,6 +578,9 @@ const ChatApp: React.FC<ChatAppProps> = ({
   const [navTab, setNavTab] = useState<'chats' | 'moments' | 'favorites'>('chats');
   const [favorites, setFavorites] = useState<FavoriteEntry[]>([]);
   const [activeFavCategory, setActiveFavCategory] = useState("全部");
+  // ==================== 🌟 新增：收藏夹长按菜单状态 ====================
+  const [showFavMenu, setShowFavMenu] = useState(false); // 收藏菜单开关
+  const [selectedFav, setSelectedFav] = useState<FavoriteEntry | null>(null); // 当前选中的收藏
   const [replyTo, setReplyTo] = useState<{ id: string; content: string; name: string } | null>(null);
   const [selectedMsg, setSelectedMsg] = useState<Message | null>(null);
   const [showMsgMenu, setShowMsgMenu] = useState(false);
@@ -612,6 +614,9 @@ const ChatApp: React.FC<ChatAppProps> = ({
   const [showTokenModal, setShowTokenModal] = useState(false);
 const [isAnalyzing, setIsAnalyzing] = useState(false); // 控制 AI 分析的加载状态
   const [loadingText, setLoadingText] = useState("");    // 控制加载时显示的文字
+const [showBackToBottom, setShowBackToBottom] = useState(false); // 控制“回到底部”按钮
+  // ★★★ 核心修复：默认就是 false (正常滚动)，只有 useEffect 触发时才变成 true
+// ★★★ 记账本：记录上一次已经处理过的跳转时间戳 ★★★
 
 
 
@@ -630,7 +635,12 @@ const isLongPress = useRef(false); // 标记是否触发了长按
 const isBackgroundRef = useRef(isBackground); // ★★★ 1. 追踪后台状态的 Ref
 const viewRef = useRef(view);               // 盯着现在的页面状态
 const activeContactIdRef = useRef(activeContactId); // 盯着现在正在跟谁聊
-const messagesEndRef = useRef<HTMLDivElement>(null);
+ const prevHistoryLen = useRef(0);
+const isManualNav = useRef(false);
+const messagesEndRef = useRef<HTMLDivElement>(null); // ★★★ 补回丢失的这一行 ★★★
+  const isJumpingRef = useRef(false);                  // ★★★ 确保这一行也在 ★★★
+// 跳转锁定开关
+
 
 
 
@@ -1156,9 +1166,33 @@ const toggleMessageSelection = (msgId: string) => {
 
 
 
+// ==================== 🚀 新增：执行收藏跳转逻辑 ====================
+  const handleJumpToFav = () => {
+    if (!selectedFav || !onJumpToMessage) return;
+
+    // 1. 确定要找的人 (优先用存的ID，没有就按名字查)
+    const targetId = selectedFav.contactId || contacts.find(c => c.name === selectedFav.contactName)?.id;
+    // 2. 确定跳转时间 (如果是打包，就跳到第一条)
+    const targetTime = selectedFav.isPackage ? selectedFav.messages?.[0]?.timestamp : selectedFav.msg?.timestamp;
+
+    if (targetId && targetTime) {
+      // 3. 关闭菜单，发射！
+      setShowFavMenu(false);
+      setSelectedFav(null);
+      onJumpToMessage(targetId, targetTime);
+    } else {
+      alert("无法跳转：找不到对应的联系人或消息记录可能已删除。");
+    }
+  };
 
 
-  const handleBatchCollect = () => {
+
+
+
+
+
+
+const handleBatchCollect = () => {
     if (selectedIds.length === 0 || !activeContact) return;
     const selectedMessages = activeContact.history
       .filter(m => selectedIds.includes(m.id))
@@ -1170,6 +1204,8 @@ const toggleMessageSelection = (msgId: string) => {
       isPackage: true,
       messages: selectedMessages,
       contactName: activeContact.name,
+      // ★★★ 核心新增：保存 contactId ★★★
+      contactId: activeContact.id,
       avatar: activeContact.avatar,
       category: category || "聊天记录",
       timestamp: Date.now()
@@ -1182,11 +1218,7 @@ const toggleMessageSelection = (msgId: string) => {
 
 
 
-
-
-
-
-  const handleCollectMessage = () => {
+const handleCollectMessage = () => {
     if (!activeContact || !selectedMsg) return;
     const category = prompt("请输入收藏分类 (例如: 可爱, 约定, 搞笑):", "默认");
     if (category === null) return;
@@ -1194,6 +1226,8 @@ const toggleMessageSelection = (msgId: string) => {
       id: Date.now().toString(),
       msg: selectedMsg,
       contactName: activeContact.name,
+      // ★★★ 核心新增：保存 contactId ★★★
+      contactId: activeContact.id, 
       avatar: selectedMsg.role === 'user' ? activeContact.userAvatar : activeContact.avatar,
       category: category || "默认",
       timestamp: Date.now()
@@ -3607,19 +3641,17 @@ const readTavernPng = async (file: File): Promise<any | null> => {
 
 
 
-  const scrollToBottom = (behavior: ScrollBehavior = 'auto') => {
-    if (messagesEndRef.current) {
-      // 1. 优先尝试 scrollIntoView (最稳)
-      messagesEndRef.current.scrollIntoView({ behavior });
-      
-      // 2. 双重保险：直接操纵 scrollTop
-      const container = messagesEndRef.current.parentElement;
-      if (container) {
-        container.scrollTop = container.scrollHeight;
-      }
-    }
-  };
+const scrollToBottom = (behavior: ScrollBehavior = 'auto') => {
+  // ★★★ 核心逻辑：如果正在跳转，就直接退出，什么都不做 ★★★
+  if (isJumpingRef.current) {
+    console.log("✋ 自动滚动被跳转暂停");
+    return;
+  }
 
+  if (messagesEndRef.current) {
+    messagesEndRef.current.scrollIntoView({ behavior });
+  }
+};
 
 
 
@@ -5069,14 +5101,80 @@ useEffect(() => { viewRef.current = view; }, [view]);
 
 
 
+
+// ==================== 🚀 按钮控制版：精准跳转逻辑 ====================
   useEffect(() => {
-    // 如果视图是聊天，且 ID 对应的角色在联系人列表里找不到
-    if (view === 'chat' && activeContactId && !contacts.find(c => c.id === activeContactId)) {
-      console.log("当前角色已消失，自动返回列表");
-      setActiveContactId(null);
-      setView('list');
+    // 1. 如果没有跳转目标，直接不执行
+    if (!jumpToTimestamp || view !== 'chat' || !activeContact) return;
+
+    // ★★★ 核心改变：开启“历史模式”，显示按钮，禁止自动滚动 ★★★
+    isJumpingRef.current = true; 
+    setShowBackToBottom(true); // 让按钮显示出来
+
+    const tryScroll = (retryCount = 0) => {
+      const elementId = `msg_${jumpToTimestamp}`;
+      const targetElement = document.getElementById(elementId);
+
+      if (targetElement) {
+        // 2. 执行跳转
+        targetElement.scrollIntoView({ behavior: 'auto', block: 'center' });
+        
+        // 3. 高亮一下
+        targetElement.style.transition = "background-color 0.5s ease";
+        targetElement.style.backgroundColor = "#fef08a"; 
+        setTimeout(() => { targetElement.style.backgroundColor = "transparent"; }, 2500);
+
+        // ★★★ 注意：这里不再自动解除锁定了！必须点按钮才解除！ ★★★
+
+      } else {
+        // 没找到，重试
+        if (retryCount < 20) { 
+          setTimeout(() => tryScroll(retryCount + 1), 100);
+        } else {
+          // 实在找不到，也要解除锁定，不然会卡住
+          isJumpingRef.current = false; 
+          setShowBackToBottom(false);
+        }
+      }
+    };
+
+    setTimeout(() => tryScroll(), 100);
+
+    // ★★★ 修改依赖项：加上 isJumpingRef.current 的变化 ★★★
+    // 这样，当 isJumpingRef 状态改变时，useEffect 会重新执行一次
+    // （虽然理论上不会，但这是 React Hooks 的最佳实践）
+  }, [jumpToTimestamp, view, activeContactId, isJumpingRef.current]);
+
+
+
+
+
+useEffect(() => {
+    if (view !== 'chat' || !activeContact) return;
+
+    // ★★★ 关键：如果按钮显示着 (showBackToBottom)，说明你在看旧消息，绝对不滚！★★★
+    if (showBackToBottom) return;
+
+    const currentLen = activeContact.history.length;
+    
+    // 只有正在打字，或者消息变多了，才滚动
+    if (isAiTyping || currentLen > prevHistoryLen.current) {
+        scrollToBottom('smooth');
     }
-  }, [contacts, activeContactId, view]);
+
+    prevHistoryLen.current = currentLen;
+    
+  }, [activeContact?.history.length, isAiTyping, view, showBackToBottom]);
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -5142,20 +5240,37 @@ useEffect(() => {
 
  
 
-
+// ==================== 1. 刚进入页面时的定位逻辑 (智能分流版) ====================
   useLayoutEffect(() => {
-    if (view === 'chat') {
-      // 这里的 setTimeout 是关键！让浏览器先把页面画好，稍微等 10ms 再滚，防止滚早了高度不对。
-      setTimeout(() => {
-        scrollToBottom('auto'); // 瞬间跳到底部，不要动画 (防晕)
-      }, 10);
-    }
-  }, [
-    activeContact?.history, // 1. 有新消息时
-    isAiTyping,             // 2. AI 正在输入时
-    view,                   // 3. ★★★ 关键：刚切进聊天页面时
-    activeContactId         // 4. ★★★ 关键：切换联系人时
-  ]);
+    setTimeout(() => {
+      // 判断条件：有跳转任务，并且【不是】手动点进来的 -> 执行跳转
+      if (jumpToTimestamp && !isManualNav.current) {
+          console.log("🚀 执行自动跳转定位:", jumpToTimestamp);
+          const element = document.getElementById(`msg_${jumpToTimestamp}`);
+          if (element) {
+              element.scrollIntoView({ behavior: 'auto', block: 'center' });
+              // 高亮特效
+              element.style.transition = "background-color 0.5s";
+              element.style.backgroundColor = "#fef08a";
+              setTimeout(() => { element.style.backgroundColor = "transparent"; }, 2000);
+          } else {
+              scrollToBottom('auto'); // 没找到元素，兜底
+          }
+      } 
+      // 其他情况（手动点进来的，或者根本没任务） -> 统统滚到底部
+      else {
+          console.log("⬇️ 正常进入(或手动覆盖)，滚到底部");
+          scrollToBottom('auto');
+      }
+      
+      // ★★★ 关键：用完之后，把手动标记重置，不影响下次操作
+      isManualNav.current = false;
+      
+    }, 50); 
+  }, [activeContactId, jumpToTimestamp, view]);
+
+
+
 
 
   useEffect(() => {
@@ -5262,17 +5377,21 @@ right={
                 </div>
               )}
               {contacts.map((c, index) => (
-                <ChatListItem
-                  key={c.id}
-                  contact={c}
-                  onClick={() => {
-                    setActiveContactId(c.id);
-                    setView('chat');
-                  }}
-                  onDelete={handleDeleteContact}
-                  onPin={handlePinContact}
-                  isPinned={index === 0 && contacts.length > 1}
-                />
+             <ChatListItem
+                    key={c.id}
+                    contact={c}
+                    onClick={() => {
+                      // 1. ★★★ 标记为手动进入！告诉后面的代码不要执行跳转！ ★★★
+                      isManualNav.current = true;
+                      
+                      // 2. 正常切换页面 (删掉了报错的 setJumpTo... 代码)
+                      setActiveContactId(c.id);
+                      setView('chat');
+                    }}
+                    onDelete={handleDeleteContact}
+                    onPin={handlePinContact}
+                    isPinned={index === 0 && contacts.length > 1}
+                  />
               ))}
             </>
           )}
@@ -5284,52 +5403,127 @@ right={
             </div>
           )}
 
-          {/* 收藏夹 */}
-{navTab === 'favorites' && (
-  <div className="flex flex-col min-h-full bg-gray-50">
-    <div className="p-3 bg-white shadow-sm overflow-x-auto whitespace-nowrap no-scrollbar flex gap-2 z-10 sticky top-0">
-      {["全部", ...Array.from(new Set(favorites.map(f => f.category)))].map(cat => (
-        <button
-          key={cat}
-          onClick={() => setActiveFavCategory(cat)}
-          className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all ${activeFavCategory === cat
-              ? 'bg-blue-500 text-white shadow-md transform scale-105'
-              : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
-            }`}
-        >
-          {cat}
-        </button>
-      ))}
-    </div>
-    <div className="flex-1 p-4 space-y-4">
-      {favorites.filter(f => activeFavCategory === "全部" || f.category === activeFavCategory).map((item) => (
-        <div key={item.id} className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100 relative group animate-slideUp">
-          <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center gap-2">
-              <img src={item.avatar} className="w-8 h-8 rounded-full object-cover border border-gray-100" alt="avatar" />
-              <div>
-                <div className="font-bold text-xs text-gray-700">{item.contactName}</div>
-                <div className="text-[10px] text-gray-400">{new Date(item.timestamp).toLocaleDateString()}</div>
+{/* ==================== ⭐ 收藏夹：真·聊天记录卡片版 ==================== */}
+          {navTab === 'favorites' && (
+            <div className="flex flex-col min-h-full bg-gray-50">
+              {/* 顶部标签栏 */}
+              <div className="p-3 bg-white shadow-sm overflow-x-auto whitespace-nowrap no-scrollbar flex gap-2 z-10 sticky top-0">
+                {["全部", ...Array.from(new Set(favorites.map(f => f.category)))].map(cat => (
+                  <button
+                    key={cat}
+                    onClick={() => setActiveFavCategory(cat)}
+                    className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all ${activeFavCategory === cat
+                        ? 'bg-blue-500 text-white shadow-md transform scale-105'
+                        : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+                      }`}
+                  >
+                    {cat}
+                  </button>
+                ))}
+              </div>
+
+              {/* 列表内容 */}
+              <div className="flex-1 p-4 space-y-6 pb-20">
+                {favorites.filter(f => activeFavCategory === "全部" || f.category === activeFavCategory).map((item) => {
+                  // 1. 尝试找到对应的角色（为了获取准确的头像和气泡颜色）
+                  const targetContact = contacts.find(c => c.id === item.contactId || c.name === item.contactName);
+                  // 2. 准备数据
+                  const msgs = item.isPackage ? item.messages : [item.msg];
+                  // 3. 获取气泡颜色
+                  const userBg = targetContact?.bubbleColorUser || '#FBCFE8';
+                  const aiBg = targetContact?.bubbleColorAI || '#ffffff';
+
+                  return (
+                    <div
+                      key={item.id}
+                      // ★★★ 长按检测逻辑 (加了 preventDefault 防止系统菜单干扰) ★★★
+                      onTouchStart={(e) => {
+                        isLongPress.current = false;
+                        longPressTimer.current = setTimeout(() => {
+                          isLongPress.current = true;
+                          setSelectedFav(item);
+                          setShowFavMenu(true);
+                          if (navigator.vibrate) navigator.vibrate(50);
+                        }, 600);
+                      }}
+                      onTouchEnd={() => { if (longPressTimer.current) clearTimeout(longPressTimer.current); }}
+                      onMouseDown={() => { longPressTimer.current = setTimeout(() => { setSelectedFav(item); setShowFavMenu(true); }, 600); }}
+                      onMouseUp={() => { if (longPressTimer.current) clearTimeout(longPressTimer.current); }}
+                      onContextMenu={(e) => e.preventDefault()} // 禁止右键菜单/系统长按菜单
+                      
+                      // 点击逻辑 (如果没触发长按，就什么都不做，或者你可以加预览)
+                      onClick={() => { if (isLongPress.current) isLongPress.current = false; }}
+                      
+                      className="bg-white rounded-3xl shadow-md border border-gray-100 overflow-hidden relative group active:scale-98 transition-transform duration-200 select-none"
+                    >
+                      {/* --- 卡片头部：信息 --- */}
+                      <div className="bg-gray-50/80 px-4 py-3 border-b border-gray-100 flex justify-between items-center backdrop-blur-sm">
+                        <div className="flex items-center gap-2">
+                          <span className="text-lg">⭐</span>
+                          <div>
+                            <div className="font-bold text-xs text-gray-800">{item.contactName} 的回忆</div>
+                            <div className="text-[9px] text-gray-400 font-mono">{new Date(item.timestamp).toLocaleDateString()}</div>
+                          </div>
+                        </div>
+                        <span className="bg-blue-100 text-blue-600 text-[10px] px-2 py-1 rounded-lg font-bold">
+                          #{item.category}
+                        </span>
+                      </div>
+
+                      {/* --- 卡片内容：完全模拟聊天窗口 --- */}
+                      <div className="p-4 space-y-3 bg-gray-50/30">
+                        {msgs?.filter(Boolean).map((m, i) => {
+                          const isMe = m.role === 'user';
+                          const avatar = isMe ? (targetContact?.userAvatar || globalSettings.avatar) : (targetContact?.avatar || item.avatar);
+                          
+                          return (
+                            <div key={i} className={`flex items-start gap-2 ${isMe ? 'justify-end' : 'justify-start'}`}>
+                              {/* AI 头像 */}
+                              {!isMe && <img src={avatar} className="w-8 h-8 rounded-full border border-white shadow-sm flex-shrink-0 object-cover" />}
+                              
+                              {/* 气泡本体 */}
+                              <div className="flex flex-col max-w-[80%]">
+                                <div 
+                                  className={`px-3 py-2 text-xs leading-relaxed shadow-sm break-words relative
+                                    ${isMe ? 'rounded-2xl rounded-tr-sm' : 'rounded-2xl rounded-tl-sm'}
+                                  `}
+                                  style={{ 
+                                    backgroundColor: isMe ? userBg : aiBg,
+                                    // 自动计算文字颜色 (黑/白)
+                                    color: isMe ? getContrastTextColor(userBg) : getContrastTextColor(aiBg)
+                                  }}
+                                >
+                                  {m.type === 'image' || (m.content && m.content.startsWith('data:image')) ? (
+                                    <img src={m.content} className="rounded-lg max-w-full" alt="img" />
+                                  ) : m.type === 'voice' ? (
+                                    <div className="flex items-center gap-1 opacity-80"><span>🔊</span> 语音消息</div>
+                                  ) : (
+                                    // 普通文本
+                                    m.content?.replace(/\[.*?\]/g, '') || '...'
+                                  )}
+                                </div>
+                              </div>
+
+                              {/* 用户头像 */}
+                              {isMe && <img src={avatar} className="w-8 h-8 rounded-full border border-white shadow-sm flex-shrink-0 object-cover" />}
+                            </div>
+                          );
+                        })}
+                        
+                        {/* 遮罩层 (暗示还可以长按) */}
+                        <div className="absolute inset-0 bg-transparent z-10" />
+                      </div>
+
+                      {/* 底部提示 */}
+                      <div className="bg-white p-2 border-t border-gray-50 text-center">
+                         <p className="text-[9px] text-gray-300 font-bold tracking-widest uppercase">长按操作 • LOONG PRESS</p>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             </div>
-            <span className="bg-blue-50 text-blue-500 text-[10px] px-2 py-1 rounded-lg font-bold">
-              #{item.category} {item.isPackage ? `(${item.messages?.length}条)` : ''}
-            </span>
-          </div>
-          <div className="space-y-2">
-            {/* 如果是打包收藏，循环显示所有消息 */}
-            {(item.isPackage ? item.messages : [item.msg]).filter(Boolean).map((m, i) => (
-              <div key={i} className="bg-gray-50 p-3 rounded-xl text-sm text-gray-700 leading-relaxed font-mono">
-                {m?.content?.replace(/^>.*?\n\n/, '').replace(/\[.*?\]/g, '') || '空消息'}
-              </div>
-            ))}
-          </div>
-          <button onClick={(e) => { e.stopPropagation(); setFavorites(prev => prev.filter(f => f.id !== item.id)); }} className="absolute -top-2 -right-2 bg-red-500 text-white w-6 h-6 rounded-full flex items-center justify-center shadow-md text-xs opacity-0 group-hover:opacity-100 transition-opacity">×</button>
-        </div>
-      ))}
-    </div>
-  </div>
-)}
+          )}
         </div>
 
         {/* 5. 底部导航栏 */}
@@ -6714,6 +6908,48 @@ return (
 
 
   
+{/* ★★★ 收藏夹长按菜单 ★★★ */}
+        {showFavMenu && selectedFav && (
+          <div className="absolute inset-0 z-50 flex items-end justify-center bg-black/40 animate-fadeIn" onClick={() => setShowFavMenu(false)}>
+            <div className="bg-white w-full rounded-t-2xl p-4 animate-slideUp" onClick={e => e.stopPropagation()}>
+              <div className="text-center text-gray-400 text-xs mb-4">收藏选项</div>
+              
+              {/* 跳转按钮 */}
+              <button 
+                onClick={handleJumpToFav} 
+                className="w-full py-3 mb-2 bg-blue-50 text-blue-600 rounded-xl font-bold flex items-center justify-center gap-2"
+              >
+                <span>🚀</span> 跳转到消息原文
+              </button>
+
+              {/* 删除按钮 */}
+              <button 
+                onClick={() => {
+                   if(confirm("确定删除这条收藏吗？")) {
+                       setFavorites(prev => prev.filter(f => f.id !== selectedFav.id));
+                       setShowFavMenu(false);
+                   }
+                }} 
+                className="w-full py-3 text-red-500 font-bold border-b"
+              >
+                🗑️ 删除收藏
+              </button>
+              
+              <div className="h-2 bg-gray-100 -mx-4 mt-2"></div>
+              <button onClick={() => setShowFavMenu(false)} className="w-full py-3 text-gray-500 font-bold">取消</button>
+            </div>
+          </div>
+        )}
+
+
+
+
+
+
+
+
+
+
 
 {/* ★★★ 消息操作菜单 (长按触发) ★★★ */}
 {showMsgMenu && selectedMsg && (
@@ -6966,10 +7202,17 @@ return (
           </div>
         )}
 
-       <div 
+
+<div 
+         // ★★★ 必须确保这一行存在！msg_加上时间戳，和上面的代码对应 ★★★
+         id={`msg_${msg.timestamp}`} 
          className={`message-wrapper ${msg.role === 'user' ? 'user' : 'ai'} flex gap-3 ${msg.role === 'user' ? 'justify-end' : 'justify-start'} animate-slideUp mb-1`}
          style={{ minHeight: `${currentAvatarSize}px` }} 
        >
+
+
+
+
           {isSelectionMode && (
             <div className={`flex items-center justify-center ${msg.role === 'user' ? 'order-2' : 'order-1'}`}>
               <div onClick={() => toggleMessageSelection(msg.id)} className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${isSelected ? 'bg-blue-500 border-blue-500' : 'border-gray-300 bg-white'}`}>
@@ -7171,6 +7414,33 @@ return (
               </div>
             );
           })()}
+
+
+
+{/* ★★★ 新增：回到底部按钮 ★★★ */}
+          {showBackToBottom && (
+            <div className="sticky bottom-4 flex justify-center z-50 animate-bounce">
+              <button
+                onClick={() => {
+                  // 1. 解除锁定
+                  setShowBackToBottom(false);
+                  isJumpingRef.current = false;
+                  // 2. 滚到底部
+                  scrollToBottom('smooth');
+                }}
+                className="bg-blue-500 text-white px-4 py-2 rounded-full shadow-lg font-bold text-xs flex items-center gap-2 hover:bg-blue-600 transition active:scale-95"
+              >
+                <span>⬇️</span> 我看完了，回到底部
+              </button>
+            </div>
+          )}
+
+
+
+
+
+
+
 
           <div ref={messagesEndRef} />
         </div>
