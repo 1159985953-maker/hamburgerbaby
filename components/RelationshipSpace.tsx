@@ -3,7 +3,9 @@ import { Contact, LoveLetter, QAEntry, Message, GlobalSettings } from '../types'
 import SafeAreaHeader from './SafeAreaHeader';
 import { generateResponse } from '../services/apiService'; 
 // 【RelationshipSpace.tsx】 文件最顶部
-import html2canvas from 'html2canvas';
+// 这是一组导入 html-to-image 的代码（请完全替换原来的 html2canvas 导入行）
+// 这是一组导入 dom-to-image 的代码（请完全替换原来的 html-to-image 导入行）
+import domtoimage from 'dom-to-image';
 
 
 
@@ -271,6 +273,11 @@ User: ${input}`;
 
 // 【RelationshipSpace.tsx】 找到 GardenPage 子组件，用这个【兼容对齐版】完全覆盖它
 
+
+
+
+
+
 // 🌱 秘密花园 (兼容对齐版)
 const GardenPage: React.FC<{ contact: Contact, onUpdate: (c: Contact, sysMsg?: string, shareMsg?: any) => void, globalSettings: any }> = ({ contact, onUpdate, globalSettings }) => {
   const garden = contact.garden || { seed: '', level: 0, exp: 0, lastWaterDate: '', lastFertilizeDate: '' };
@@ -291,7 +298,84 @@ const GardenPage: React.FC<{ contact: Contact, onUpdate: (c: Contact, sysMsg?: s
   const isAiWatered = isWateredToday && (garden as any).aiWateredToday;
   const isFertilizedToday = garden.lastFertilizeDate === todayStr;
   
-  const handleSaveCardAsImage = async () => { if (!cardToSaveRef.current) return; setIsSavingImage(true); try { const canvas = await html2canvas(cardToSaveRef.current, { useCORS: true, backgroundColor: '#f1f5f9', scale: 2 }); const image = canvas.toDataURL('image/png'); const link = document.createElement('a'); link.href = image; link.download = `our-memory-${Date.now()}.png`; document.body.appendChild(link); link.click(); document.body.removeChild(link); } catch (error) { console.error('图片保存失败!', error); alert('图片保存失败'); } finally { setIsSavingImage(false); } };
+
+
+
+
+
+// ==================== 这是一组修复后的图片保存代码 (自动展开长图+修复背景) ====================
+const handleSaveCardAsImage = async () => {
+  if (!cardToSaveRef.current) return;
+  setIsSavingImage(true);
+
+  // 1. 找到卡片里那个“原本有滚动条”的区域
+  // 我们要临时把它撑开，这样生成的图片才是完整的长图，不是截断的
+  const scrollableContent = cardToSaveRef.current.querySelector('.custom-scrollbar') as HTMLElement | null;
+  
+  // 2. 备份一下原来的样式（为了生成完后恢复原状）
+  let originalMaxHeight = '';
+  let originalOverflow = '';
+  
+  if (scrollableContent) {
+      originalMaxHeight = scrollableContent.style.maxHeight;
+      originalOverflow = scrollableContent.style.overflow;
+      
+      // 3. 【核心魔法】强制把高度限制去掉，让内容全部展示出来
+      scrollableContent.style.maxHeight = 'none';
+      scrollableContent.style.overflow = 'visible';
+  }
+
+  try {
+    // 4. 给浏览器一点点时间去重新排版 (防止字叠在一起)
+    await new Promise(resolve => setTimeout(resolve, 300));
+
+    // 5. 开始生成图片
+    const dataUrl = await domtoimage.toPng(cardToSaveRef.current!, {
+      quality: 1.0,           // 图片质量最高
+      bgcolor: '#f1f5f9',    // 【关键】强制设置背景色 (防止变透明黑底)，这里用了 slate-100 的颜色
+      width: cardToSaveRef.current!.scrollWidth, // 强制宽度对齐
+      height: cardToSaveRef.current!.scrollHeight, // 强制高度适应内容
+      style: {
+        transform: 'scale(1)', // 防止因为页面缩放导致图片偏移
+        margin: '0',           // 去掉多余边距
+      },
+      // 过滤掉可能导致报错的跨域图片节点 (如果有问题)
+      filter: (node: Node) => {
+         // 排除掉不想要的元素 (可选)
+         return true; 
+      }
+    });
+
+    // 6. 下载图片
+    const link = document.createElement('a');
+    link.download = `memory-${new Date().toISOString().slice(0, 10)}.png`;
+    link.href = dataUrl;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+
+  } catch (error) {
+    console.error('图片生成失败:', error);
+    alert('保存失败，可能是因为头像图片跨域。请尝试换一张本地头像或检查控制台。');
+  } finally {
+    // 7. 【还原现场】把样式改回去，变回带滚动条的样子
+    if (scrollableContent) {
+        scrollableContent.style.maxHeight = originalMaxHeight;
+        scrollableContent.style.overflow = originalOverflow;
+    }
+    setIsSavingImage(false);
+  }
+};
+
+
+
+
+
+
+
+
+
+
   const handleWater = async () => { if (isWateredToday) return; const validMsgs = contact.history.filter(m => m.type === 'text' && m.role !== 'system' && m.content.length > 2); if (validMsgs.length < 5) return alert("回忆不足5条，再聊聊吧~"); setIsWatering(true); const generateCard = (dialogue: any[], memoryTimestamp: number, isBonus: boolean = false) => { const payload = { type: "memory_share_card", title: "一段珍贵的回忆", seedName: seedInfo.name, level: garden.level, timestamp: memoryTimestamp, messages: dialogue.map((d: any) => ({ role: d.role, avatar: d.role === 'user' ? contact.userAvatar : contact.avatar, content: d.content })) }; setPreviewCardData(payload); const expGain = isBonus ? 20 : 10; const newExp = garden.exp + expGain; onUpdate({ ...contact, garden: { ...garden, lastWaterDate: todayStr, level: newExp >= 100 ? garden.level + 1 : garden.level, exp: newExp >= 100 ? 0 : newExp } }); if (isBonus) alert(`⚠️ AI 走神了，但精灵帮你随机打捞了一段回忆！\n🎁 补偿：经验+20！`); else alert("💧 浇水成功！回忆卡片已生成！"); }; try { const activePreset = globalSettings.apiPresets.find((p: any) => p.id === globalSettings.activePresetId); if (!activePreset) throw new Error("No API"); const recentChat = validMsgs.slice(-50).map(m => ({ role: m.role, name: m.role === 'user' ? contact.userName : contact.name, content: m.content })); const prompt = `你是一位回忆剪辑师。请从对话中截取一段【连续的对话】（3-5句）。必须返回纯JSON格式：{"dialogue": [{"role": "user/assistant", "content": "..."}]} 素材：${JSON.stringify(recentChat)}`; const res = await generateResponse([{ role: 'user', content: prompt }], activePreset); const jsonMatch = res.match(/\{[\s\S]*\}/); if (jsonMatch) { const result = JSON.parse(jsonMatch[0]); let memoryTimestamp = validMsgs[validMsgs.length - 1].timestamp; if (result.dialogue && result.dialogue.length > 0) { const firstAiContent = result.dialogue[0].content; for(let i = 0; i <= validMsgs.length - result.dialogue.length; i++) { if(validMsgs[i].content.includes(firstAiContent.slice(0,10))) { let isMatch = true; for(let j = 1; j < result.dialogue.length; j++) { if (validMsgs[i+j].role !== result.dialogue[j].role) { isMatch = false; break; } } if (isMatch) { memoryTimestamp = validMsgs[i + result.dialogue.length - 1].timestamp; break; } } } } generateCard(result.dialogue, memoryTimestamp, false); } else { throw new Error("Format Error"); } } catch (e) { console.warn("AI生成失败，启用随机打捞", e); const totalCount = validMsgs.length; const sliceLength = Math.floor(Math.random() * 3) + 3; const maxStartIndex = Math.max(0, totalCount - sliceLength); const startIndex = Math.floor(Math.random() * (maxStartIndex + 1)); const randomSlice = validMsgs.slice(startIndex, startIndex + sliceLength); const memoryTimestamp = randomSlice[randomSlice.length-1].timestamp; generateCard(randomSlice.map(m=>({role: m.role, content: m.content})), memoryTimestamp, true); } finally { setIsWatering(false); } };
   const handleFertilize = () => { if (!fertilizerMsg.trim()) return; const sysMsg = `[花园传信] 🌸 ${contact.userName} 给花施肥并说：“${fertilizerMsg}”`; onUpdate({ ...contact, garden: { ...garden, lastFertilizeDate: todayStr, exp: Math.min(100, garden.exp + 20) } }, sysMsg); setFertilizerMsg(""); setShowFertilizerInput(false); alert("📨 施肥成功！"); };
 
@@ -310,29 +394,66 @@ const GardenPage: React.FC<{ contact: Contact, onUpdate: (c: Contact, sysMsg?: s
         {previewCardData && (
             <div className="absolute inset-0 bg-black/60 z-[70] flex items-center justify-center p-6 animate-fadeIn backdrop-blur-sm">
                 <div className="bg-white w-full max-w-sm rounded-3xl p-2 shadow-2xl animate-scaleIn flex flex-col items-center">
-                    <div ref={cardToSaveRef} className="w-full bg-slate-100 rounded-t-3xl rounded-b-xl p-4 mb-2 relative overflow-hidden">
-                        <h3 className="text-center font-bold text-gray-500 mb-2 text-xs uppercase tracking-widest">MEMORY GENERATED</h3>
-                        <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden text-xs">
-                            <div className="bg-blue-50 p-2 border-b border-gray-100 font-bold text-blue-600 flex justify-between"><span>💧 {previewCardData.seedName}的回忆</span><span>{new Date(previewCardData.timestamp).toLocaleDateString()}</span></div>
-                            <div className="p-3 space-y-3 bg-slate-50/50 max-h-[200px] overflow-y-auto custom-scrollbar">
-                                <div className="text-center"><span className="bg-white border px-2 py-0.5 rounded-full font-bold shadow-sm">“{previewCardData.title}”</span></div>
-                                {previewCardData.messages.map((m: any, i: number) => (
-                                    // ★★★ 核心修复：去掉 gap-2，改用 margin ★★★
-                                    <div key={i} className={`flex items-start ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                                        {/* AI 头像在左，并加上右边距 */}
-                                        {m.role !== 'user' && <img src={m.avatar} className="w-5 h-5 rounded-full border border-white mr-2" />}
-                                        
-                                        <div className={`px-2.5 py-1.5 rounded-lg max-w-[85%] ${m.role==='user'?'bg-blue-500 text-white rounded-br-sm':'bg-white border rounded-bl-sm'}`}>
-                                          {m.content}
-                                        </div>
-                                        
-                                        {/* 用户头像在右，并加上左边距 */}
-                                        {m.role === 'user' && <img src={m.avatar} className="w-5 h-5 rounded-full border border-white ml-2" />}
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-                    </div>
+                 {/* 这是一组彻底消除顶部空白 + 完美对齐的回忆卡片代码（请完全替换原来的 cardToSaveRef 内部内容） */}
+// ==================== 这是一组完美对齐的卡片UI代码 (无顶部留白+头像防挤压) ====================
+<div ref={cardToSaveRef} className="w-full bg-slate-100 rounded-3xl p-5 relative overflow-hidden flex flex-col items-center">
+  {/* 顶部标题 - 增加 mb-4 拉开距离 */}
+  <h3 className="text-center font-bold text-gray-500 text-[10px] uppercase tracking-[0.2em] mb-4 opacity-60">
+      MEMORY GENERATED
+  </h3>
+  
+  <div className="bg-white w-full rounded-2xl shadow-sm border border-gray-200 overflow-hidden text-xs">
+    {/* 蓝色头部条 */}
+    <div className="bg-blue-50/80 px-4 py-3 border-b border-blue-100 font-bold text-blue-600 flex justify-between items-center">
+      <span className="flex items-center gap-1.5">
+          <span className="text-lg">💧</span> 
+          <span>{previewCardData.seedName}的回忆</span>
+      </span>
+      <span className="text-[10px] font-mono opacity-60">
+          {new Date(previewCardData.timestamp).toLocaleDateString()}
+      </span>
+    </div>
+    
+    {/* 核心内容区 - 添加 custom-scrollbar 类名用于刚才的JS抓取 */}
+    <div className="px-4 py-5 space-y-4 bg-white custom-scrollbar" style={{ maxHeight: '300px', overflowY: 'auto' }}>
+      
+      {/* 居中的回忆标题 */}
+      <div className="text-center pb-2">
+        <span className="inline-block bg-slate-50 border border-slate-200 px-4 py-1.5 rounded-full font-bold shadow-sm text-gray-600 text-[10px]">
+          “ {previewCardData.title} ”
+        </span>
+      </div>
+      
+      {/* 对话气泡列表 */}
+      {previewCardData.messages.map((m: any, i: number) => (
+        <div key={i} className={`flex items-start gap-2.5 ${m.role === 'user' ? 'flex-row-reverse' : 'flex-row'}`}>
+          {/* 头像 - 强制不压缩 */}
+          <img 
+            src={m.avatar} 
+            alt="avatar" 
+            className="w-8 h-8 rounded-full border-2 border-white shadow-sm flex-shrink-0 object-cover bg-gray-200"
+            // 添加 crossorigin 属性尝试解决跨域（不一定完全有效，取决于图片源，但加上没坏处）
+            crossOrigin="anonymous"
+          />
+          
+          {/* 气泡 - 优化圆角和行高 */}
+          <div className={`max-w-[85%] px-3 py-2 rounded-2xl text-xs leading-5 shadow-sm break-words ${
+            m.role === 'user' 
+              ? 'bg-blue-500 text-white rounded-br-none' 
+              : 'bg-gray-100 text-gray-800 border border-gray-100 rounded-bl-none'
+          }`}>
+            {m.content}
+          </div>
+        </div>
+      ))}
+      
+      {/* 底部装饰 - 只有生成图片时才看得到 */}
+      <div className="pt-4 text-center">
+          <div className="w-8 h-1 bg-gray-100 rounded-full mx-auto"></div>
+      </div>
+    </div>
+  </div>
+</div>
                     <div className="flex gap-2 w-full px-2 pb-2">
                         <button onClick={handleSaveCardAsImage} disabled={isSavingImage} className="flex-1 py-3 bg-gray-100 text-gray-600 rounded-2xl font-bold text-sm hover:bg-gray-200 transition disabled:opacity-50">{isSavingImage ? '保存中...' : '📥 保存图片'}</button>
                         <button onClick={() => { onUpdate(contact, undefined, previewCardData); setPreviewCardData(null); alert("已分享给TA！"); }} className="flex-1 py-3 bg-blue-500 text-white rounded-2xl font-bold text-sm shadow-lg shadow-blue-200 hover:bg-blue-600 transition">📤 分享给TA</button>
