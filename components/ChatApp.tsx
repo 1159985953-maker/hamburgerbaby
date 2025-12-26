@@ -507,6 +507,13 @@ const TokenDetailModal: React.FC<{
 
 
 
+
+
+
+
+
+
+
 // ==================== [补全组件] 聊天记录切片卡 ====================
 const SharedMemoryCard: React.FC<{ data: any }> = ({ data }) => {
   return (
@@ -8438,23 +8445,38 @@ return (
 
 
 // [这是修复代码] 系统消息渲染 (增加废话过滤器)
+// ==================== ⬇️ 替换这里：系统消息智能渲染 (支持卡片) ⬇️ ====================
     if (msg.role === 'system') {
-        // ... (shareData 的解析逻辑保持不变) ...
-
-        // 如果不是卡片，走原来的【系统便签/撤回】逻辑
+        let cardData = null;
         let displayContent = msg.content;
-        displayContent = displayContent.replace('【系统通知】', '').trim();
-        // ... (其他的文本清洗逻辑也保持不变) ...
-        
-        // ★★★ 核心新增：废话过滤器 ★★★
-        // 如果清理后的内容是“已记录你的约定: 无”或者类似的东西，直接不显示这条消息
-        if (displayContent.includes('约定: 无') || displayContent.includes('约定：无')) {
-            return null; // 直接返回 null，这条消息就像没存在过一样
+        let isRecall = false;
+
+        // 1. 尝试解析是不是“回忆卡片” (JSON格式)
+        try {
+            if (msg.content.includes('"type": "memory_share_card"') || msg.content.includes('"type":"memory_share_card"')) {
+                // 清理可能存在的非JSON前缀
+                const jsonStart = msg.content.indexOf('{');
+                const jsonEnd = msg.content.lastIndexOf('}');
+                if (jsonStart !== -1 && jsonEnd !== -1) {
+                    const jsonStr = msg.content.substring(jsonStart, jsonEnd + 1);
+                    cardData = JSON.parse(jsonStr);
+                }
+            }
+        } catch (e) {
+            console.log("不是卡片数据，按普通文本渲染");
         }
 
-        const isRecall = msg.content.includes("撤回");
+        // 2. 如果是卡片，直接渲染大卡片组件！
+        if (cardData) {
+            return <SharedMemoryCard key={msg.id} data={cardData} />;
+        }
 
-        // 下面的 return ... 渲染逻辑保持你原来的不变
+        // 3. 如果不是卡片，走普通系统通知逻辑 (过滤废话)
+        displayContent = displayContent.replace('【系统通知】', '').trim();
+        if (displayContent.includes('约定: 无') || displayContent.includes('约定：无')) return null;
+        
+        isRecall = msg.content.includes("撤回");
+
         return (
           <React.Fragment key={msg.id}>
             {showInterval && (
@@ -8471,6 +8493,7 @@ return (
                        {msg.role === 'user' ? '你' : activeContact.name} 撤回了一条消息 🗑️
                     </span>
                 ) : (
+                    // 以前的黄色便签样式
                     <div className="relative bg-[#FFFBEB] text-[#78350F] text-xs px-4 py-3 rounded-sm shadow-md border border-[#FDE68A] transform -rotate-1 hover:rotate-0 transition-transform duration-300 max-w-[80%]">
                         <div className="absolute -top-1.5 left-1/2 -translate-x-1/2 w-16 h-4 bg-yellow-200/60 opacity-80 rotate-1 shadow-sm backdrop-blur-[1px]"></div>
                         <div className="flex flex-col items-center gap-1 text-center">
@@ -8485,7 +8508,6 @@ return (
           </React.Fragment>
         );
     }
-
 
 
 

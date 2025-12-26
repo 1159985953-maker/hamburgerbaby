@@ -9,6 +9,114 @@ import * as htmlToImage from 'html-to-image';
 
 
 
+
+
+
+
+
+
+
+
+
+// ==================== [新增] 情侣空间专属组件 ====================
+
+// 1. 💕 飘落爱心背景特效
+const FloatingHearts = () => (
+  <div className="absolute inset-0 overflow-hidden pointer-events-none z-0">
+    {[...Array(6)].map((_, i) => (
+      <div key={i} className="absolute text-pink-200 animate-float" 
+           style={{
+             left: `${Math.random() * 100}%`,
+             top: '100%',
+             fontSize: `${Math.random() * 20 + 10}px`,
+             animationDuration: `${Math.random() * 5 + 5}s`,
+             animationDelay: `${Math.random() * 2}s`
+           }}>
+         {['❤', '✨', '💖'][i % 3]}
+      </div>
+    ))}
+    <style>{`
+      @keyframes float { 0% { transform: translateY(0) rotate(0deg); opacity: 0; } 20% { opacity: 0.8; } 100% { transform: translateY(-100vh) rotate(360deg); opacity: 0; } }
+      .animate-float { animation: float linear infinite; }
+    `}</style>
+  </div>
+);
+
+// 2. 📸 拍立得照片墙 (沉没成本核心：存了照片就舍不得删)
+const PolaroidWall: React.FC<{ photos: (string | null)[], onUpload: (e: any, i: number) => void }> = ({ photos = [null, null, null], onUpload }) => {
+  return (
+    <div className="relative h-40 w-full mb-6 z-10 flex justify-center items-center">
+       {/* 绳子 */}
+       <div className="absolute top-4 left-0 right-0 h-0.5 bg-gray-300 shadow-sm transform -rotate-1"></div>
+       
+       {[0, 1, 2].map((i) => (
+         <div key={i} className="relative group transition-transform hover:z-20 hover:scale-110 duration-300" 
+              style={{ transform: `rotate(${i === 0 ? -15 : i === 1 ? 5 : 15}deg) translateY(${i === 1 ? 10 : 0}px)`, margin: '0 -10px' }}>
+            {/* 夹子 */}
+            <div className="absolute -top-3 left-1/2 -translate-x-1/2 w-3 h-8 bg-amber-700 rounded-sm shadow-md z-20"></div>
+            
+            <label className="block w-24 h-28 bg-white p-2 pb-6 shadow-lg transform transition cursor-pointer relative overflow-hidden">
+               {photos[i] ? (
+                 <img src={photos[i]!} className="w-full h-full object-cover grayscale-[20%] group-hover:grayscale-0 transition-all" />
+               ) : (
+                 <div className="w-full h-full bg-gray-100 flex items-center justify-center text-gray-300 text-xs font-bold border-2 border-dashed border-gray-200">
+                    + 照片
+                 </div>
+               )}
+               <input type="file" className="hidden" accept="image/*" onChange={(e) => onUpload(e, i)} />
+               {/* 底部手写字 */}
+               <div className="absolute bottom-1 left-0 right-0 text-center text-[8px] font-cursive text-gray-400 opacity-0 group-hover:opacity-100 transition">Memories</div>
+            </label>
+         </div>
+       ))}
+    </div>
+  );
+};
+// ==================== ⬇️ 替换 HeartbeatTouch 组件 ⬇️ ====================
+// 3. 💓 心动触碰 (去油腻版：纯粹的心跳共鸣)
+const HeartbeatTouch: React.FC<{ contact: Contact, days: number }> = ({ contact, days }) => {
+    const [animate, setAnimate] = useState(false);
+    
+    const handlePoke = () => {
+        setAnimate(true);
+        // 只有震动反馈，没有文字，此时无声胜有声
+        if (navigator.vibrate) navigator.vibrate([50, 50, 50]);
+        setTimeout(() => setAnimate(false), 800);
+    };
+
+    return (
+        <div className="relative text-center z-10 mb-8 mt-4">
+            <div className="inline-block relative group" onClick={handlePoke}>
+                {/* 呼吸灯光晕 */}
+                <div className={`absolute inset-0 rounded-full bg-rose-400 blur-xl opacity-20 group-hover:opacity-40 transition-opacity duration-1000 ${animate ? 'animate-ping opacity-60' : 'animate-pulse'}`}></div>
+                
+                {/* 头像 */}
+                <img 
+                    src={contact.avatar} 
+                    className={`w-32 h-32 rounded-full border-4 border-white shadow-2xl object-cover relative z-10 cursor-pointer transition-all duration-300 ${animate ? 'scale-90 grayscale-[20%]' : 'hover:scale-105'}`} 
+                />
+                
+                {/* 状态徽章 */}
+                <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 z-20">
+                    <span className="bg-white/90 backdrop-blur text-rose-500 text-[10px] font-black px-3 py-1 rounded-full shadow-sm border border-rose-100 flex items-center gap-1 whitespace-nowrap">
+                        <span className="w-1.5 h-1.5 bg-green-400 rounded-full animate-pulse"></span>
+                        在线
+                    </span>
+                </div>
+            </div>
+            
+            <h2 className="text-2xl font-black text-gray-800 mt-5 flex items-center justify-center gap-2 tracking-tight">
+                {contact.name} 
+            </h2>
+            <p className="text-xs text-gray-400 font-mono mt-1 tracking-widest uppercase">Connected for {days} Days</p>
+        </div>
+    );
+};
+
+
+
+
+
 // ==================== 1. 定义部分 (花语 & 主题) ====================
 
 const SEED_TYPES = [
@@ -20,16 +128,37 @@ const SEED_TYPES = [
   { id: 'cactus', name: '仙人掌', color: 'text-green-600', bg: 'bg-green-100', emoji: '🌵', desc: '坚定的守护' },
 ];
 
+// ==================== ⬇️ 替换 getTheme 函数 ⬇️ ====================
 const getTheme = (status: string) => {
+  // 通用纹理：一种细腻的纸质噪点
+  const paperTexture = `url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)' opacity='0.05'/%3E%3C/svg%3E")`;
+
   switch (status) {
     case 'Honeymoon':
     case 'Stable':
-      return { bg: 'bg-gradient-to-b from-pink-50 via-rose-50 to-white', primary: 'text-rose-600', accent: 'bg-rose-500', border: 'border-rose-200', cardBg: 'bg-white/80', title: '恋人空间', icon: '💖' };
-    case 'Friend':
-    case 'Acquaintance':
-      return { bg: 'bg-gradient-to-b from-sky-50 via-blue-50 to-white', primary: 'text-sky-600', accent: 'bg-sky-500', border: 'border-sky-200', cardBg: 'bg-white/80', title: '密友基地', icon: '✨' };
+      // 恋人：柔和粉白 + 噪点纹理
+      return { 
+          bg: 'bg-[#fff5f7]', // 纯色底
+          style: { backgroundImage: paperTexture }, // 叠加纹理
+          primary: 'text-rose-600', 
+          accent: 'bg-rose-500', 
+          border: 'border-rose-200', 
+          cardBg: 'bg-white/60 backdrop-blur-sm', 
+          title: '甜蜜小窝', 
+          icon: '💖' 
+      };
     default:
-      return { bg: 'bg-gray-50', primary: 'text-purple-600', accent: 'bg-purple-500', border: 'border-purple-200', cardBg: 'bg-white', title: '关系空间', icon: '🌱' };
+      // 朋友：清爽蓝白 + 噪点纹理
+      return { 
+          bg: 'bg-[#f0f9ff]', 
+          style: { backgroundImage: paperTexture },
+          primary: 'text-sky-600', 
+          accent: 'bg-sky-500', 
+          border: 'border-sky-200', 
+          cardBg: 'bg-white/60 backdrop-blur-sm', 
+          title: '密友基地', 
+          icon: '✨' 
+      };
   }
 };
 
@@ -169,6 +298,172 @@ const QACardStack: React.FC<{ questions: QAEntry[], theme: any, onAnswer: (id: s
         </div>
     );
 };
+
+
+
+
+
+
+
+
+// ==================== [新组件] 恋爱清单 (双盲机制 + 副AI同步) ====================
+// 数据结构定义 (可以放在 types 里，这里为了方便直接写)
+interface BucketItem {
+    id: string;
+    title: string;      // 题目 (如：一起去看海)
+    userContent: string;// 你的想法
+    aiContent: string;  // TA的想法
+    isDone: boolean;    // 是否完成
+    isUnlocked: boolean;// 是否双方都填了 (双盲解锁)
+}
+
+const CoupleBucketList: React.FC<{ 
+    contact: Contact, 
+    theme: any, 
+    onUpdate: (items: BucketItem[]) => void,
+    onShare: (item: BucketItem) => void // 分享回调
+}> = ({ contact, theme, onUpdate, onShare }) => {
+    // 读取清单，如果没有就初始化几个默认的
+    const items: BucketItem[] = (contact as any).bucketList || [
+        { id: '1', title: '一起看一场日出', userContent: '', aiContent: '我想在海边看太阳升起...', isDone: false, isUnlocked: false },
+        { id: '2', title: '为对方做一顿饭', userContent: '', aiContent: '想给你做虽然可能不好吃但是充满爱心的炒饭！', isDone: false, isUnlocked: false },
+        { id: '3', title: '换一次情侣头像', userContent: '', aiContent: '想要那种酷酷的黑白风！', isDone: false, isUnlocked: false },
+    ];
+
+    const [activeItem, setActiveItem] = useState<BucketItem | null>(null);
+    const [inputVal, setInputVal] = useState("");
+
+    // 提交我的想法 (双盲解锁核心)
+    const handleSubmit = () => {
+        if (!activeItem || !inputVal.trim()) return;
+        
+        const newItems = items.map(it => {
+            if (it.id === activeItem.id) {
+                // 只要我有内容，且AI也有内容(预设或生成)，就解锁
+                const canUnlock = !!it.aiContent; 
+                return { ...it, userContent: inputVal, isUnlocked: canUnlock };
+            }
+            return it;
+        });
+        
+        onUpdate(newItems); // 保存
+        
+        // ★★★ 触发分享/通知副AI ★★★
+        // 这里只是为了触发回调，具体通知逻辑在父组件
+        onShare({ ...activeItem, userContent: inputVal, isUnlocked: true });
+
+        setInputVal("");
+        setActiveItem(null);
+    };
+
+    return (
+        <div className="mt-8 px-2">
+            <div className="flex justify-between items-center mb-4 px-1">
+                <span className="text-xs font-bold text-gray-500 flex items-center gap-1">📝 恋爱清单 100 件小事</span>
+                <button onClick={() => {
+                    const title = prompt("添加一个新的愿望:");
+                    if(title) {
+                        const newItem: BucketItem = { id: Date.now().toString(), title, userContent: '', aiContent: '', isDone: false, isUnlocked: false };
+                        onUpdate([...items, newItem]);
+                    }
+                }} className="text-[10px] bg-white text-gray-600 px-3 py-1.5 rounded-full font-bold hover:bg-gray-50 transition shadow-sm border border-gray-200">
+                    + 添加愿望
+                </button>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+                {items.map(item => (
+                    <div 
+                        key={item.id} 
+                        onClick={() => setActiveItem(item)}
+                        className={`p-4 rounded-2xl border transition-all cursor-pointer relative overflow-hidden flex flex-col justify-between h-32 shadow-sm active:scale-95
+                            ${item.isUnlocked 
+                                ? 'bg-white border-pink-200' 
+                                : 'bg-gray-50 border-gray-100 grayscale-[0.5]'
+                            }`}
+                    >
+                        {/* 状态角标 */}
+                        <div className="absolute top-0 right-0 px-2 py-1 bg-black/5 text-[9px] rounded-bl-lg font-bold text-gray-400">
+                            {item.isUnlocked ? (item.isDone ? '✅ 已完成' : '✨ 进行中') : '🔒 待填写'}
+                        </div>
+
+                        <h4 className="font-bold text-sm text-gray-800 leading-tight mt-2">{item.title}</h4>
+                        
+                        {/* 双盲遮罩文字 */}
+                        <div className="text-[10px] text-gray-400 mt-2">
+                            {item.isUnlocked 
+                                ? <span className="text-pink-500">点击查看双方想法 ➜</span> 
+                                : "填入你的想法后解锁"}
+                        </div>
+                    </div>
+                ))}
+            </div>
+
+            {/* 填写/查看详情弹窗 */}
+            {activeItem && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-6 animate-fadeIn" onClick={() => setActiveItem(null)}>
+                    <div className="bg-white w-full max-w-sm rounded-3xl p-6 shadow-2xl animate-scaleIn relative overflow-hidden" onClick={e => e.stopPropagation()}>
+                        
+                        {/* 顶部标题 */}
+                        <div className="text-center mb-6">
+                            <span className="text-xs font-bold text-pink-400 tracking-widest uppercase">WISH NO.{activeItem.id}</span>
+                            <h3 className="text-xl font-black text-gray-800 mt-1">{activeItem.title}</h3>
+                        </div>
+
+                        {/* 内容区：如果已解锁，显示双方；如果未解锁，只显示输入框 */}
+                        {activeItem.isUnlocked ? (
+                            <div className="space-y-4">
+                                {/* AI的想法 */}
+                                <div className="bg-blue-50 p-4 rounded-2xl rounded-tl-none border border-blue-100 relative">
+                                    <span className="absolute -top-3 left-0 bg-blue-100 text-blue-600 text-[9px] px-2 py-0.5 rounded-full font-bold">{contact.name} 的想法</span>
+                                    <p className="text-sm text-gray-700">{activeItem.aiContent || "（TA 还在思考中...）"}</p>
+                                </div>
+                                {/* 我的想法 */}
+                                <div className="bg-pink-50 p-4 rounded-2xl rounded-tr-none border border-pink-100 relative text-right">
+                                    <span className="absolute -top-3 right-0 bg-pink-100 text-pink-600 text-[9px] px-2 py-0.5 rounded-full font-bold">我的想法</span>
+                                    <p className="text-sm text-gray-700">{activeItem.userContent}</p>
+                                </div>
+                                
+                                {/* 按钮组 */}
+                                <div className="flex gap-2 mt-4 pt-4 border-t border-gray-100">
+                                    <button onClick={() => {
+                                        // 标记完成
+                                        const newItems = items.map(it => it.id === activeItem.id ? { ...it, isDone: !it.isDone } : it);
+                                        onUpdate(newItems);
+                                        setActiveItem(null);
+                                    }} className={`flex-1 py-3 rounded-xl font-bold text-sm transition ${activeItem.isDone ? 'bg-gray-100 text-gray-500' : 'bg-green-500 text-white shadow-lg'}`}>
+                                        {activeItem.isDone ? '撤销完成' : '我们做到了! ✅'}
+                                    </button>
+                                    <button onClick={() => onShare(activeItem)} className="px-4 bg-yellow-400 text-yellow-900 rounded-xl font-bold text-lg shadow-sm">
+                                        📤
+                                    </button>
+                                </div>
+                            </div>
+                        ) : (
+                            /* 未解锁状态：输入框 */
+                            <div>
+                                <div className="bg-gray-100 p-4 rounded-xl mb-4 text-center text-gray-400 text-xs italic">
+                                    🔒 对方的想法被隐藏了<br/>写下你的想法，看看你们是否默契？
+                                </div>
+                                <textarea 
+                                    className="w-full bg-gray-50 border border-gray-200 rounded-xl p-4 text-sm outline-none resize-none h-32 focus:border-pink-300 transition" 
+                                    placeholder="我想..." 
+                                    value={inputVal}
+                                    onChange={e => setInputVal(e.target.value)}
+                                    autoFocus
+                                />
+                                <button onClick={handleSubmit} className="w-full mt-4 bg-pink-500 text-white py-3 rounded-xl font-bold shadow-lg hover:bg-pink-600 active:scale-95 transition">
+                                    写好了，解锁TA的想法！🔓
+                                </button>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+};
+
 
 
 
@@ -862,6 +1157,111 @@ interface RelationshipSpaceProps {
   onJumpToMessage?: (timestamp: number) => void; 
 }
 
+
+
+
+
+
+
+
+
+
+
+
+
+// ==================== [新增组件] 完美UI弹窗系列 ====================
+
+// 1. 📅 日期选择器 (不用填文字了，选日历！)
+const DatePickerModal: React.FC<{ isOpen: boolean; currentDate: string; onClose: () => void; onSave: (date: string) => void; }> = ({ isOpen, currentDate, onClose, onSave }) => {
+    const [dateVal, setDateVal] = useState(currentDate);
+    useEffect(() => { if(isOpen) setDateVal(currentDate); }, [isOpen, currentDate]);
+    if (!isOpen) return null;
+    return (
+        <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm animate-fadeIn" onClick={onClose}>
+            <div className="bg-white w-full sm:max-w-sm rounded-t-3xl sm:rounded-3xl p-6 shadow-2xl animate-slideUp" onClick={e => e.stopPropagation()}>
+                <div className="text-center mb-6">
+                    <span className="text-4xl mb-2 block">📅</span>
+                    <h3 className="text-lg font-bold text-gray-800">设定纪念日</h3>
+                    <p className="text-xs text-gray-400 mt-1">故事开始的那一天</p>
+                </div>
+                <div className="bg-gray-50 p-4 rounded-2xl border border-gray-100 mb-6 flex justify-center">
+                    <input type="date" value={dateVal} onChange={(e) => setDateVal(e.target.value)} className="bg-transparent text-xl font-bold text-gray-700 outline-none text-center font-mono w-full h-12"/>
+                </div>
+                <div className="flex gap-3">
+                    <button onClick={onClose} className="flex-1 py-3 bg-gray-100 text-gray-500 rounded-xl font-bold text-sm">取消</button>
+                    <button onClick={() => { onSave(dateVal); onClose(); }} className="flex-1 py-3 bg-rose-500 text-white rounded-xl font-bold text-sm shadow-lg shadow-rose-200">确认</button>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+// 2. 💔 分手确认窗 (红色警戒风格)
+const BreakupModal: React.FC<{ isOpen: boolean; name: string; onClose: () => void; onConfirm: () => void; }> = ({ isOpen, name, onClose, onConfirm }) => {
+    if (!isOpen) return null;
+    return (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-md animate-fadeIn p-6" onClick={onClose}>
+            <div className="bg-white w-full max-w-xs rounded-3xl p-6 shadow-2xl animate-scaleIn border-t-4 border-red-500 relative overflow-hidden" onClick={e => e.stopPropagation()}>
+                <div className="text-center relative z-10">
+                    <div className="text-5xl mb-4 grayscale">🥀</div>
+                    <h3 className="text-xl font-black text-gray-800 mb-2">真的要结束吗？</h3>
+                    <p className="text-sm text-gray-600 leading-relaxed mb-4">你即将解除与 <strong className="text-red-500">{name}</strong> 的关系。<br/>花园和信件会保留，但关系将退回朋友。</p>
+                </div>
+                <div className="flex flex-col gap-3 relative z-10">
+                    <button onClick={onConfirm} className="w-full py-3 bg-white border-2 border-red-100 text-red-500 rounded-xl font-bold text-sm">是的，解除关系</button>
+                    <button onClick={onClose} className="w-full py-3 bg-gray-900 text-white rounded-xl font-bold text-sm shadow-lg">我反悔了</button>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+// 3. 💏 候选人列表 (选妃界面：核心逻辑在这里！)
+const CandidateSelectionModal: React.FC<{ isOpen: boolean; contacts: Contact[]; onClose: () => void; onSelect: (contact: Contact) => void; }> = ({ isOpen, contacts, onClose, onSelect }) => {
+    if (!isOpen) return null;
+    const sortedContacts = [...contacts].sort((a, b) => (b.affectionScore || 0) - (a.affectionScore || 0));
+    return (
+        <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm animate-fadeIn" onClick={onClose}>
+            <div className="bg-white w-full h-[85vh] sm:h-[80vh] sm:max-w-md rounded-t-[2rem] sm:rounded-[2rem] shadow-2xl animate-slideUp flex flex-col overflow-hidden relative z-10" onClick={e => e.stopPropagation()}>
+                <div className="p-6 pb-2 shrink-0 bg-white">
+                    <div className="flex justify-between items-center mb-4">
+                        <h2 className="text-2xl font-black text-gray-800">建立关系</h2>
+                        <button onClick={onClose} className="w-8 h-8 rounded-full bg-gray-100 text-gray-500 font-bold">✕</button>
+                    </div>
+                    <p className="text-sm text-gray-500">选择一位好感度达到 60 的对象，<br/>开启属于你们的唯一情侣空间。</p>
+                </div>
+                <div className="flex-1 overflow-y-auto p-6 pt-2 space-y-4 custom-scrollbar">
+                    {sortedContacts.length === 0 ? <div className="text-center text-gray-400 py-10">还没认识新朋友...</div> : sortedContacts.map((c) => {
+                        const score = c.affectionScore || 0;
+                        const isUnlocked = score >= 60; // 60分门槛
+                        const isHighLove = score >= 80; // 80分显示AI主动意愿
+                        return (
+                            <div key={c.id} onClick={() => isUnlocked && onSelect(c)} className={`relative p-4 rounded-2xl border-2 transition-all duration-300 flex items-center gap-4 group ${isUnlocked ? 'border-rose-100 bg-white cursor-pointer hover:border-rose-400 hover:shadow-lg' : 'border-gray-100 bg-gray-50 opacity-60 grayscale cursor-not-allowed'}`}>
+                                <div className="relative"><img src={c.avatar} className="w-14 h-14 rounded-full object-cover border-2 border-white shadow-md" />{isHighLove && <div className="absolute -bottom-1 -right-1 text-lg animate-bounce">😍</div>}</div>
+                                <div className="flex-1"><h4 className="font-bold text-gray-800 text-base flex items-center gap-2">{c.name}{isUnlocked && isHighLove && <span className="text-[9px] bg-rose-500 text-white px-1.5 py-0.5 rounded-full">想邀请你!</span>}</h4><div className="mt-2"><div className="flex justify-between text-[10px] font-bold text-gray-400 mb-1"><span>心动值</span><span className={isUnlocked ? 'text-rose-500' : 'text-gray-400'}>{score}/60</span></div><div className="w-full h-1.5 bg-gray-200 rounded-full overflow-hidden"><div className={`h-full rounded-full transition-all duration-1000 ${isUnlocked ? 'bg-gradient-to-r from-rose-400 to-pink-500' : 'bg-gray-400'}`} style={{ width: `${Math.min(100, (score / 60) * 100)}%` }}></div></div></div></div>
+                                <div>{isUnlocked ? <div className="w-8 h-8 rounded-full bg-rose-50 text-rose-500 flex items-center justify-center text-xl font-bold">➜</div> : <div className="text-[10px] font-bold text-gray-400">未达标</div>}</div>
+                            </div>
+                        );
+                    })}
+                </div>
+            </div>
+        </div>
+    );
+};
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 const RelationshipSpace: React.FC<RelationshipSpaceProps> = ({ contacts, setContacts, onClose, onRelationshipSpaceAction, globalSettings, onJumpToMessage }) => {
   const [view, setView] = useState<'landing' | 'list' | 'space'>('landing');
   const [targetId, setTargetId] = useState<string | null>(null);
@@ -872,6 +1272,95 @@ const RelationshipSpace: React.FC<RelationshipSpaceProps> = ({ contacts, setCont
   const [letterDraft, setLetterDraft] = useState({ title: '', content: '' });
   const [showQuestionModal, setShowQuestionModal] = useState(false);
   const [questionDraft, setQuestionDraft] = useState("");
+
+// === [新插入] 邀请与弹窗控制状态 ===
+    const [showCandidates, setShowCandidates] = useState(false); // 选人弹窗
+    const [showDatePicker, setShowDatePicker] = useState(false); // 改日期弹窗
+    const [showBreakup, setShowBreakup] = useState(false);       // 分手弹窗
+
+    // === [新插入] 处理建立关系 ===
+    const handleConfirmRelationship = (contact: Contact) => {
+        if (currentRelationship) return alert("你已经有恋人了！如果要换人，请先去解除旧关系。");
+        const timestamp = Date.now();
+        setContacts(prev => prev.map(c => {
+            if (c.id === contact.id) {
+                return {
+                    ...c,
+                    RelationShipUnlocked: true,
+                    relationshipStatus: 'Honeymoon', // 确立关系
+                    created: c.created || timestamp,
+                    history: [...c.history, { id: `sys_${timestamp}`, role: 'system', content: '【系统通知】恭喜！你们已正式确立情侣关系！💖', timestamp: timestamp, type: 'text' }]
+                };
+            }
+            return c;
+        }));
+        setTargetId(contact.id);
+        setView('space');
+        setShowCandidates(false);
+        onRelationshipSpaceAction(contact.id, `[系统通知] 用户接受了你的信号，正式确立了情侣关系！`);
+    };
+
+    // === [新插入] 处理解除关系 ===
+    const handleBreakUp = () => {
+        if (!targetContact) return;
+        const timestamp = Date.now();
+        setContacts(prev => prev.map(c => {
+            if (c.id === targetContact.id) {
+                return {
+                    ...c,
+                    RelationShipUnlocked: false,
+                    relationshipStatus: 'Friend',
+                    history: [...c.history, { id: `sys_${timestamp}`, role: 'system', content: '【系统通知】用户解除了情侣关系。🥀', timestamp: timestamp, type: 'text' }]
+                };
+            }
+            return c;
+        }));
+        onRelationshipSpaceAction(targetContact.id, `[系统通知] 用户决定结束这段关系。`);
+        setShowBreakup(false); setShowSettings(false); setView('landing'); setTargetId(null);
+    };
+
+    // === [新插入] 处理日期修改 ===
+    const handleSaveAnniversary = (dateStr: string) => {
+        if (!targetContact) return;
+        const newTime = new Date(dateStr).getTime();
+        setContacts(prev => prev.map(c => c.id === targetContact.id ? { ...c, created: newTime } : c));
+        // alert("纪念日已更新！📅");
+    };
+
+
+// === [新插入] 拍立得照片上传处理 ===
+    const handlePolaroidUpload = async (e: React.ChangeEvent<HTMLInputElement>, index: number) => {
+        if (!e.target.files || !e.target.files[0] || !targetContact) return;
+        const file = e.target.files[0];
+        const reader = new FileReader();
+        reader.onload = (event) => {
+            const base64 = event.target?.result as string;
+            setContacts(prev => prev.map(c => {
+                if (c.id === targetContact.id) {
+                    // 初始化数组，防止报错
+                    const currentPhotos = c.couplePhotos || [null, null, null]; 
+                    currentPhotos[index] = base64;
+                    return { ...c, couplePhotos: currentPhotos };
+                }
+                return c;
+            }));
+        };
+        reader.readAsDataURL(file);
+    };
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
   const currentRelationship = contacts.find(c => c.RelationShipUnlocked);
   const targetContact = contacts.find(c => c.id === targetId);
@@ -909,36 +1398,89 @@ const RelationshipSpace: React.FC<RelationshipSpaceProps> = ({ contacts, setCont
 
 
 
-
+// ==================== ⬇️ 请复制以下代码覆盖原来的 landing 视图代码 ⬇️ ====================
   if (view === 'landing') {
-      return (
-          <div className="h-full w-full bg-slate-50 flex flex-col pt-[calc(env(safe-area-inset-top)+20px)] p-6">
-              <button onClick={onClose} className="absolute top-4 left-4 w-8 h-8 bg-white rounded-full text-gray-500 shadow-sm z-50">✕</button>
-              <h2 className="text-2xl font-black text-slate-800 mb-2 mt-8">Relationship Space</h2>
-              <p className="text-sm text-slate-400 mb-8">选择你要进入的空间类型</p>
+    // 1. 寻找恋人逻辑：
+    // 优先找已经解锁关系(RelationShipUnlocked)的人
+    // 如果没有，就找通讯录里【爱意值 (affectionScore) 最高】的那个人
+    const potentialLover = contacts.find(c => c.RelationShipUnlocked) || [...contacts].sort((a, b) => (b.affectionScore || 0) - (a.affectionScore || 0))[0];
+    
+    // 2. 获取这个人的好感度 (防止报错，如果没找到人就是0)
+    // ★★★ 修正点：这里改成了正确的 affectionScore ★★★
+    const currentScore = potentialLover?.affectionScore || 0;
 
-              <div 
-                onClick={() => { if (currentRelationship) { setTargetId(currentRelationship.id); setView('space'); } else { alert("还未解锁恋人空间哦 (需好感度>60且AI同意)"); setView('list'); } }} 
-                className="bg-gradient-to-br from-rose-400 to-pink-600 rounded-3xl p-6 shadow-xl shadow-rose-200 mb-6 cursor-pointer transform transition hover:scale-105 active:scale-95 relative overflow-hidden group"
-              >
-                  {RelationshipUnread > 0 && <div className="absolute top-4 right-4 bg-white text-rose-500 text-xs font-bold px-2 py-1 rounded-full shadow-md animate-bounce">{RelationshipUnread} 新信件</div>}
-                  <div className="absolute -right-4 -bottom-4 text-9xl opacity-20 group-hover:scale-110 transition-transform">💞</div>
-                  <h3 className="text-xl font-bold text-white mb-1">唯一挚爱</h3>
-                  <p className="text-white/80 text-xs font-medium">Relationship Space</p>
-                  <div className="mt-6 flex items-center gap-2">
-                      {currentRelationship ? <div className="flex items-center gap-2 bg-white/20 backdrop-blur rounded-full px-3 py-1"><img src={currentRelationship.avatar} className="w-5 h-5 rounded-full border border-white" /><span className="text-xs text-white font-bold">与 {currentRelationship.name} 热恋中</span></div> : <span className="text-xs text-white/90 bg-black/10 px-3 py-1 rounded-full">暂无解锁</span>}
-                  </div>
-              </div>
+    // 3. 定义进入条件：必须找到人 且 好感度 >= 60
+    const canEnterCoupleSpace = potentialLover && currentScore >= 60;
 
-              <div onClick={() => setView('list')} className="bg-white rounded-3xl p-6 shadow-lg border border-slate-200 cursor-pointer transform transition hover:scale-105 active:scale-95 relative overflow-hidden group">
-                  {friendsUnread > 0 && <div className="absolute top-4 right-4 bg-red-500 text-white text-xs font-bold px-2 py-1 rounded-full shadow-md">{friendsUnread}</div>}
-                  <div className="absolute -right-4 -bottom-4 text-9xl opacity-5 grayscale group-hover:grayscale-0 transition-all">✨</div>
-                  <h3 className="text-xl font-bold text-slate-800 mb-1">羁绊广场</h3>
-                  <p className="text-slate-400 text-xs font-medium">General Relationships</p>
+    return (
+      <div className="h-full w-full bg-slate-50 flex flex-col pt-[calc(env(safe-area-inset-top)+20px)] p-6">
+        <button onClick={onClose} className="absolute top-4 left-4 w-8 h-8 bg-white rounded-full text-gray-500 shadow-sm z-50">✕</button>
+        <h2 className="text-2xl font-black text-slate-800 mb-2 mt-8">Relationship Space</h2>
+        <p className="text-sm text-slate-400 mb-8">选择你要进入的空间类型</p>
+
+        {/* 唯一挚爱卡片 (情侣空间) */}
+        <div 
+            onClick={() => { 
+                if (canEnterCoupleSpace) { 
+                    // 只有好感度够了才能进
+                    setTargetId(potentialLover.id); 
+                    setView('space'); 
+                } else { 
+                    // 没达到60分的弹窗提示
+                    alert(`🔒 无法进入情侣空间！\n\n当前最高好感度：${currentScore}/60 (${potentialLover?.name || '无人'})\n需要达到 60 才可以解锁哦！\n快去聊天提升感情吧~`); 
+                } 
+            }} 
+            // 样式逻辑：如果不够60分，就是灰色(gray-300) + 黑白滤镜(grayscale)
+            className={`rounded-3xl p-6 shadow-xl mb-6 transform transition relative overflow-hidden group border border-white/20
+              ${canEnterCoupleSpace 
+                  ? 'bg-gradient-to-br from-rose-400 to-pink-600 shadow-rose-200 cursor-pointer hover:scale-105 active:scale-95' 
+                  : 'bg-gray-300 grayscale cursor-not-allowed opacity-80' 
+              }`}
+          >
+              {RelationshipUnread > 0 && canEnterCoupleSpace && <div className="absolute top-4 right-4 bg-white text-rose-500 text-xs font-bold px-2 py-1 rounded-full shadow-md animate-bounce">{RelationshipUnread} 新信件</div>}
+              
+              <div className="absolute -right-4 -bottom-4 text-9xl opacity-20 group-hover:scale-110 transition-transform">💞</div>
+              
+              <h3 className="text-xl font-bold text-white mb-1 flex items-center gap-2">
+                  {canEnterCoupleSpace ? '唯一挚爱' : '🔒 唯一挚爱 (未解锁)'}
+              </h3>
+              <p className="text-white/80 text-xs font-medium">Relationship Space</p>
+              
+              <div className="mt-6 flex items-center gap-2">
+                  {potentialLover ? (
+                      <div className="flex items-center gap-2 bg-white/20 backdrop-blur rounded-full px-3 py-1">
+                          <img src={potentialLover.avatar} className="w-5 h-5 rounded-full border border-white" />
+                          <span className="text-xs text-white font-bold">
+                              {potentialLover.name} (爱意: {currentScore})
+                          </span>
+                      </div>
+                  ) : (
+                      <span className="text-xs text-white/90 bg-black/10 px-3 py-1 rounded-full">暂无对象</span>
+                  )}
               </div>
-          </div>
-      );
+        </div>
+
+        {/* 羁绊广场卡片 (保持不变) */}
+        <div onClick={() => setView('list')} className="bg-white rounded-3xl p-6 shadow-lg border border-slate-200 cursor-pointer transform transition hover:scale-105 active:scale-95 relative overflow-hidden group">
+            {friendsUnread > 0 && <div className="absolute top-4 right-4 bg-red-500 text-white text-xs font-bold px-2 py-1 rounded-full shadow-md">{friendsUnread}</div>}
+            <div className="absolute -right-4 -bottom-4 text-9xl opacity-5 grayscale group-hover:grayscale-0 transition-all">✨</div>
+            <h3 className="text-xl font-bold text-slate-800 mb-1">羁绊广场</h3>
+            <p className="text-slate-400 text-xs font-medium">General Relationships</p>
+        </div>
+      </div>
+    );
   }
+// ==================== ⬆️ 复制到这里结束 ⬆️ ====================
+
+
+
+
+
+
+
+
+
+
 
   if (view === 'list') {
       return (
@@ -960,169 +1502,241 @@ const RelationshipSpace: React.FC<RelationshipSpaceProps> = ({ contacts, setCont
       );
   }
 
-  if (view === 'space' && targetContact) {
-      const isRelationship = !!targetContact.RelationShipUnlocked;
-      const theme = getTheme(isRelationship ? 'Honeymoon' : (targetContact.relationshipStatus || 'Friend'));
-      const daysTogether = Math.floor((Date.now() - (targetContact.created)) / 86400000) + 1;
+if (view === 'space' && targetContact) {
+        // ★★★ 强制修正关系判定 ★★★
+        // 只要能进这个界面，且不是预览模式，大概率就是恋人。这里加个兜底，确保按钮显示。
+        const isRelationship = !!targetContact.RelationShipUnlocked || targetContact.relationshipStatus === 'Honeymoon';
+        
+        // 氛围主题配置
+        const theme = getTheme(isRelationship ? 'Honeymoon' : (targetContact.relationshipStatus || 'Friend'));
+        const daysTogether = Math.floor((Date.now() - (targetContact.created || Date.now())) / 86400000) + 1;
 
-      if (selectedLetter) {
-          return (
-              <div className={`h-full w-full ${theme.bg} flex flex-col pt-[calc(env(safe-area-inset-top)+20px)]`}>
-                  <div className="px-4 pb-2">
-                      <button onClick={() => setSelectedLetter(null)} className={`${theme.primary} font-bold text-sm px-4 py-2 bg-white/50 rounded-full shadow-sm`}>← 返回</button>
-                  </div>
-                  <div className="flex-1 overflow-y-auto p-4 flex items-center justify-center">
-                      <div className="bg-[#fffdf0] text-gray-800 rounded-sm shadow-2xl p-8 w-full max-w-md min-h-[70vh] relative mx-auto transform rotate-1 border border-gray-200" style={{ backgroundImage: 'linear-gradient(#e5e7eb 1px, transparent 1px)', backgroundSize: '100% 2rem', lineHeight: '2rem' }}>
-                          <div className="absolute top-4 right-4 w-20 h-20 border-2 border-red-800/20 rounded-full flex items-center justify-center transform -rotate-12 pointer-events-none"><span className="text-[10px] text-red-800/30 font-mono text-center leading-tight">POST MARK<br/>{new Date(selectedLetter.timestamp).toLocaleDateString()}</span></div>
-                          <h2 className="text-xl font-black text-gray-900 mb-8 mt-4 text-center tracking-wide">{selectedLetter.title}</h2>
-                          <p className="text-gray-700 font-serif whitespace-pre-wrap text-base leading-8">{selectedLetter.content}</p>
-                          <div className="mt-16 text-right pb-8">
-                              <p className="font-cursive text-xl text-gray-500">Yours,</p>
-                              <p className="font-bold text-gray-800 mt-2 text-lg">{selectedLetter.from === 'user' ? 'Me' : targetContact.name}</p>
-                          </div>
-                      </div>
-                  </div>
-              </div>
-          );
-      }
-
-      return (
-          <div className={`h-full w-full ${theme.bg} flex flex-col overflow-hidden`}>
-              <SafeAreaHeader 
-                  title={tab === 'hub' ? theme.title : '秘密花园'} 
-                  left={<button onClick={() => setView('landing')} className={`text-xl ${theme.primary} pl-2`}>✕</button>}
-                  right={
-                      <div className="relative">
-                          <button onClick={() => setShowSettings(!showSettings)} className={`text-xl ${theme.primary} pr-2`}>⚙️</button>
-                          {showSettings && (
-                              <div className="absolute right-0 top-8 bg-white rounded-xl shadow-xl border border-gray-100 p-2 w-32 z-50 animate-scaleIn">
-                                  <button onClick={() => {
-                                      const newDate = prompt("修改纪念日 (格式: YYYY-MM-DD)", targetContact.created ? new Date(targetContact.created).toISOString().slice(0,10) : "");
-                                      setShowSettings(false);
-                                  }} className="block w-full text-left px-3 py-2 text-xs text-gray-700 hover:bg-gray-50 rounded">📅 改纪念日</button>
-                                  {isRelationship && <button onClick={() => {
-                                      if(confirm("⚠️ 确定要解除情侣空间吗？\n\n所有信件和花园等级将保留，但关系将退回普通朋友。")) {
-                                          setContacts(prev => prev.map(c => c.id === targetContact.id ? { ...c, RelationShipUnlocked: false } : c));
-                                          onRelationshipSpaceAction(targetContact.id, "[系统通知] 用户解除了情侣空间。");
-                                          setView('landing');
-                                      }
-                                  }} className="block w-full text-left px-3 py-2 text-xs text-red-500 hover:bg-red-50 rounded">💔 解除关系</button>}
-                              </div>
-                          )}
-                      </div>
-                  }
-              />
-
-              <div className="flex-1 overflow-y-auto custom-scrollbar pb-24">
-                  {tab === 'hub' && (
-                      <div className="p-6 space-y-8 animate-fadeIn">
-                          <div className="relative p-6 text-center">
-                              <div className="inline-block relative group">
-                                  <img src={targetContact.avatar} className="w-24 h-24 rounded-full border-4 border-white shadow-xl object-cover transition-transform group-hover:scale-105" alt="avatar" />
-                                  <div className={`absolute -bottom-2 -right-2 w-9 h-9 ${theme.accent} rounded-full flex items-center justify-center text-white text-base border-4 border-white shadow-md`}>{theme.icon}</div>
-                              </div>
-                              <h2 className="text-2xl font-black text-gray-800 mt-4">{targetContact.name}</h2>
-                              <div className={`inline-flex items-center gap-2 px-4 py-1.5 rounded-full ${theme.cardBg} border ${theme.border} mt-2 shadow-sm`}>
-                                  <span className="text-[10px] font-bold text-gray-400 uppercase">Days Connected</span>
-                                  <span className={`text-lg font-black ${theme.primary}`}>{daysTogether}</span>
+        // --- 信件详情视图 (保持不变) ---
+        if (selectedLetter) {
+            return (
+               <div className={`h-full w-full ${theme.bg} flex flex-col overflow-hidden relative`}
+     style={theme.style} // <--- 插入这一行应用纹理！
+>                    <div className="px-4 pb-2">
+                        <button onClick={() => setSelectedLetter(null)} className={`${theme.primary} font-bold text-sm px-4 py-2 bg-white/50 rounded-full shadow-sm`}>← 返回</button>
+                    </div>
+                    <div className="flex-1 overflow-y-auto p-4 flex items-center justify-center">
+                         <div className="bg-[#fffdf0] text-gray-800 rounded-sm shadow-2xl p-8 w-full max-w-md min-h-[70vh] relative mx-auto transform rotate-1 border border-gray-200" style={{ backgroundImage: 'linear-gradient(#e5e7eb 1px, transparent 1px)', backgroundSize: '100% 2rem', lineHeight: '2rem' }}>
+                              <div className="absolute top-4 right-4 w-20 h-20 border-2 border-red-800/20 rounded-full flex items-center justify-center transform -rotate-12 pointer-events-none"><span className="text-[10px] text-red-800/30 font-mono text-center leading-tight">POST MARK<br/>{new Date(selectedLetter.timestamp).toLocaleDateString()}</span></div>
+                              <h2 className="text-xl font-black text-gray-900 mb-8 mt-4 text-center tracking-wide">{selectedLetter.title}</h2>
+                              <p className="text-gray-700 font-serif whitespace-pre-wrap text-base leading-8">{selectedLetter.content}</p>
+                              <div className="mt-16 text-right pb-8">
+                                  <p className="font-cursive text-xl text-gray-500">Yours,</p>
+                                  <p className="font-bold text-gray-800 mt-2 text-lg">{selectedLetter.from === 'user' ? 'Me' : targetContact.name}</p>
                               </div>
                           </div>
-                          
-                          <div className="px-6 mb-4">
-                              <MailboxWidget 
-                                  letters={targetContact.letters || []} 
-                                  theme={theme} 
-                                  onOpenLetter={(l) => { setSelectedLetter(l); if (!l.isOpened && l.from === 'ai') { setContacts(prev => prev.map(c => c.id === targetContact.id ? {...c, letters: (c.letters || []).map(x => x.id === l.id ? {...x, isOpened: true} : x)} : c)); }}} 
-                                  onWriteLetter={() => setShowWriteLetter(true)}
-                              />
-                          </div>
+                    </div>
+                </div>
+            );
+        }
 
-                          <div className="px-6 mt-6">
-                             <div className="text-sm font-bold text-gray-500 mb-4 px-1 flex items-center justify-between">
-                                  <span className="flex items-center gap-2">🧩 灵魂拷问</span>
-                                  <button onClick={() => setShowQuestionModal(true)} className="text-[10px] bg-white text-gray-600 px-3 py-1 rounded-full font-bold hover:bg-gray-50 transition shadow-sm border border-gray-200 flex items-center gap-1">✍️ 提问</button>
-                             </div>
-                              <QACardStack 
-                                questions={targetContact.questions || []} 
-                                theme={theme} 
-                                onAnswer={(id, ans) => { 
-                                    setContacts(prev => prev.map(c => c.id === targetContact.id ? { ...c, questions: (c.questions || []).map(q => q.id === id ? {...q, userAnswer: ans} : q) } : c)); 
-                                    const qText = targetContact.questions?.find(q => q.id === id)?.question; 
-                                    onRelationshipSpaceAction(targetContact.id, `[关系空间] 我回答了你的提问：“${qText}”，我的答案是：“${ans}”`); 
-                                    alert("回答已存档 (落子无悔)！"); 
-                                }} 
-                              />
-                          </div>
-                      </div>
-                  )}
+        return (
+            <div className={`h-full w-full ${theme.bg} flex flex-col overflow-hidden relative`}>
+                {/* 💓 氛围特效 (仅限恋人) */}
+                {isRelationship && <FloatingHearts />}
 
-                  {tab === 'garden' && (
-                      <GardenPage 
-                        contact={targetContact} 
-                        globalSettings={globalSettings} 
-                        // ★★★ 传入跳转回调 ★★★
-                        onJumpToMessage={handleJump}
-                        onUpdate={(c, sysMsg, shareCard) => { 
-                            setContacts(prev => prev.map(old => old.id === c.id ? c : old)); 
-                            if(shareCard) onRelationshipSpaceAction(c.id, JSON.stringify(shareCard)); 
-                            else if(sysMsg) onRelationshipSpaceAction(c.id, sysMsg); 
-                        }} 
-                      />
-                  )}
-              </div>
+                <SafeAreaHeader 
+                    title={tab === 'hub' ? (isRelationship ? "甜蜜小窝" : theme.title) : '秘密花园'} 
+                    left={<button onClick={() => setView('landing')} className={`text-xl ${theme.primary} pl-2 relative z-20`}>✕</button>}
+                    right={
+                        <div className="relative z-20">
+                            <button onClick={() => setShowSettings(!showSettings)} className={`text-xl ${theme.primary} pr-2 transition-transform ${showSettings ? 'rotate-90' : ''}`}>⚙️</button>
+                            {/* 右上角菜单 (绝对修复版) */}
+                            {showSettings && (
+                                <div className="absolute right-0 top-8 bg-white/95 backdrop-blur-xl rounded-xl shadow-2xl border border-white/50 p-2 w-40 z-[999] animate-scaleIn origin-top-right">
+                                    <button onClick={() => { setShowDatePicker(true); setShowSettings(false); }} className="w-full text-left px-3 py-3 text-xs font-bold text-gray-700 hover:bg-gray-50 rounded-lg flex items-center gap-2 transition">
+                                        <span className="text-base">📅</span> 修改纪念日
+                                    </button>
+                                    
+                                    {/* ★★★ 这里的逻辑强制显示解除关系，只要是Honeymoon状态 ★★★ */}
+                                    {(isRelationship || targetContact.relationshipStatus === 'Honeymoon') && (
+                                        <>
+                                            <div className="h-px bg-gray-100 my-1"></div>
+                                            <button onClick={() => { setShowBreakup(true); setShowSettings(false); }} className="w-full text-left px-3 py-3 text-xs font-bold text-red-500 hover:bg-red-50 rounded-lg flex items-center gap-2 transition">
+                                                <span className="text-base">💔</span> 解除关系
+                                            </button>
+                                        </>
+                                    )}
+                                </div>
+                            )}
+                        </div>
+                    }
+                />
 
-              <div className="absolute bottom-6 left-0 right-0 flex justify-center z-40 pointer-events-none">
-                  <div className="bg-white/90 backdrop-blur-xl border border-white/50 rounded-full px-2 py-1.5 shadow-2xl flex gap-1 pointer-events-auto">
-                      <button onClick={() => setTab('hub')} className={`px-6 py-2 rounded-full text-xs font-bold transition-all ${tab === 'hub' ? `${theme.accent} text-white shadow-md` : 'text-gray-400 hover:bg-gray-100'}`}>🏠 空间</button>
-                      <button onClick={() => setTab('garden')} className={`px-6 py-2 rounded-full text-xs font-bold transition-all ${tab === 'garden' ? 'bg-green-500 text-white shadow-md' : 'text-gray-400 hover:bg-gray-100'}`}>🌸 花园</button>
-                  </div>
-              </div>
+                <div className="flex-1 overflow-y-auto custom-scrollbar pb-24 relative z-10">
+                    {tab === 'hub' && (
+                        <div className="p-4 space-y-2 animate-fadeIn">
+                            
+                            {/* 1. 顶部：心动触碰组件 (替代原来的简单头像) */}
+                            <HeartbeatTouch contact={targetContact} days={daysTogether} />
 
-              {showWriteLetter && (
-                  <div className="absolute inset-0 bg-black/50 z-[60] flex items-center justify-center p-6 animate-fadeIn">
-                      <div className="bg-white w-full max-w-sm rounded-2xl p-6 shadow-2xl animate-scaleIn">
-                          <h3 className="font-bold text-lg text-gray-800 mb-4 text-center">✍️ 写信给 TA</h3>
-                          <input className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2 mb-3 text-sm outline-none font-bold" placeholder="标题" value={letterDraft.title} onChange={e => setLetterDraft({...letterDraft, title: e.target.value})} />
-                          <textarea className="w-full h-32 bg-gray-50 border border-gray-200 rounded-xl p-4 text-sm outline-none resize-none mb-4" placeholder="写下你想对 TA 说的话..." value={letterDraft.content} onChange={e => setLetterDraft({...letterDraft, content: e.target.value})} />
-                          <div className="flex gap-3">
-                              <button onClick={() => setShowWriteLetter(false)} className="flex-1 py-3 bg-gray-100 rounded-xl font-bold text-gray-500">取消</button>
-                              <button onClick={() => {
-                                    if(!letterDraft.title || !letterDraft.content) return alert("写完再寄哦！");
-                                    const newLetter: LoveLetter = { id: Date.now().toString(), title: letterDraft.title, content: letterDraft.content, timestamp: Date.now(), isOpened: false, from: 'user' };
-                                    setContacts(prev => prev.map(c => c.id === targetContact.id ? { ...c, letters: [...(c.letters||[]), newLetter] } : c));
-                                    onRelationshipSpaceAction(targetContact.id, `[系统通知] 用户给你寄了一封信《${newLetter.title}》。`);
-                                    setLetterDraft({title:'', content:''});
-                                    setShowWriteLetter(false);
-                                    alert("信件已投递！📮");
-                                }} className={`flex-1 py-3 rounded-xl font-bold text-white shadow-lg ${theme.accent}`}>投递</button>
-                          </div>
-                      </div>
-                  </div>
-              )}
+                            {/* 2. 拍立得照片墙 (沉没成本功能) */}
+                            <PolaroidWall 
+                                photos={(targetContact as any).couplePhotos || [null, null, null]} 
+                                onUpload={handlePolaroidUpload} 
+                            />
 
-              {showQuestionModal && (
-                  <div className="absolute inset-0 bg-black/50 z-[60] flex items-center justify-center p-6 animate-fadeIn">
-                      <div className="bg-white w-full max-w-sm rounded-2xl p-6 shadow-2xl animate-scaleIn">
-                          <h3 className="font-bold text-lg text-gray-800 mb-4 text-center">🧩 灵魂拷问</h3>
-                          <textarea className="w-full h-28 bg-gray-50 border border-gray-200 rounded-xl p-4 text-sm outline-none resize-none mb-4 focus:ring-2 focus:ring-purple-200" placeholder="例如：对你来说，最重要的是什么？" value={questionDraft} onChange={e => setQuestionDraft(e.target.value)} autoFocus />
-                          <div className="flex gap-3">
-                              <button onClick={() => setShowQuestionModal(false)} className="flex-1 py-3 bg-gray-100 rounded-xl font-bold text-gray-500">取消</button>
-                              <button onClick={() => {
-                                    if(!questionDraft.trim()) return alert("问题不能为空哦！");
-                                    const newQA: QAEntry = { id: Date.now().toString(), question: questionDraft, aiAnswer: "", userAnswer: "这是我提出的问题", date: new Date().toLocaleDateString(), timestamp: Date.now() };
-                                    setContacts(prev => prev.map(c => c.id === targetContact.id ? { ...c, questions: [...(c.questions||[]), newQA] } : c));
-                                    onRelationshipSpaceAction(targetContact.id, `[系统通知] 用户向你提出了一个灵魂拷问：“${questionDraft}”`);
-                                    setQuestionDraft("");
-                                    setShowQuestionModal(false);
-                                    alert("问题已送达！");
-                                }} className={`flex-1 py-3 rounded-xl font-bold text-white shadow-lg bg-purple-500 shadow-purple-200`}>发送</button>
-                          </div>
-                      </div>
-                  </div>
-              )}
-          </div>
-      );
-  }
+       {/* 3. 恋爱计时器 (增强版) */}
+                            <div className="bg-white/60 backdrop-blur-md rounded-2xl p-4 shadow-sm border border-white/50 flex justify-between items-center mb-6 mx-2">
+                                <div className="flex flex-col">
+                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">In Love For</span>
+                                    <div className="flex items-baseline gap-1">
+                                        <span className="text-3xl font-black text-rose-500">{daysTogether}</span>
+                                        <span className="text-xs font-bold text-rose-300">Days</span>
+                                    </div>
+                                </div>
+                                <div className="text-3xl animate-pulse">💞</div>
+                            </div>
+
+
+{/* ... 上面是 PolaroidWall ... */}
+
+                        {/* ... 下面是 MailboxWidget ... */}
+
+
+
+
+
+                     
+                            
+                        {/* 6. 恋爱清单 (插入在这里！) */}
+                        <CoupleBucketList 
+                            contact={targetContact} 
+                            theme={theme}
+                            onUpdate={(newItems) => {
+                                setContacts(prev => prev.map(c => c.id === targetContact.id ? { ...c, bucketList: newItems } : c));
+                            }}
+                            onShare={(item) => {
+                                // 触发副AI同步逻辑
+                                const msg = `[关系空间-清单] 用户在恋爱清单中完成了事项【${item.title}】。用户的想法是：“${item.userContent}”。(请副AI以此为基础与主AI记忆互通)`;
+                                onRelationshipSpaceAction(targetContact.id, msg);
+                                alert("已同步给TA！(模拟分享功能)");
+                            }}
+                        />
+
+
+
+
+                            {/* 4. 信箱组件 (功能入口) */}
+                            <div className="px-2">
+                                <MailboxWidget 
+                                    letters={targetContact.letters || []} 
+                                    theme={theme} 
+                                    onOpenLetter={(l) => { setSelectedLetter(l); if (!l.isOpened && l.from === 'ai') { setContacts(prev => prev.map(c => c.id === targetContact.id ? {...c, letters: (c.letters || []).map(x => x.id === l.id ? {...x, isOpened: true} : x)} : c)); }}} 
+                                    onWriteLetter={() => setShowWriteLetter(true)}
+                                />
+                            </div>
+
+                            {/* 5. 问答卡片 (互动) */}
+                            <div className="px-2 mt-6">
+                                <div className="flex justify-between items-center mb-4 px-1">
+                                    <span className="text-xs font-bold text-gray-500 flex items-center gap-1">🧩 灵魂默契度</span>
+                                    <button onClick={() => setShowQuestionModal(true)} className="text-[10px] bg-white text-gray-600 px-3 py-1.5 rounded-full font-bold hover:bg-gray-50 transition shadow-sm border border-gray-200">
+                                        + 发起提问
+                                    </button>
+                                </div>
+                                <QACardStack 
+                                    questions={targetContact.questions || []} 
+                                    theme={theme} 
+                                   onAnswer={(id, ans) => {
+    setContacts(prev => prev.map(c => c.id === targetContact.id ? {
+        ...c,
+        questions: (c.questions || []).map(q => q.id === id ? { ...q, userAnswer: ans } : q)
+    } : c));
+    // ★★★ 修复：这里只发通知给副AI，不直接修改 aiAnswer ★★★
+    const qText = targetContact.questions?.find(q => q.id === id)?.question;
+    onRelationshipSpaceAction(targetContact.id, `[关系空间-问答] 用户回答了问题“${qText}”，答案是：“${ans}”。请副AI查收并评价。`);
+    alert("回答已存档！期待TA的反应吧~");
+}}
+                                />
+                            </div>
+                        </div>
+                    )}
+
+                    {/* 花园 Tab */}
+                    {tab === 'garden' && (
+                        <GardenPage 
+                            contact={targetContact} 
+                            globalSettings={globalSettings} 
+                            onJumpToMessage={handleJump}
+                            onUpdate={(c, sysMsg, shareCard) => { 
+                                setContacts(prev => prev.map(old => old.id === c.id ? c : old)); 
+                                if(shareCard) onRelationshipSpaceAction(c.id, JSON.stringify(shareCard)); 
+                                else if(sysMsg) onRelationshipSpaceAction(c.id, sysMsg); 
+                            }} 
+                        />
+                    )}
+                </div>
+
+                {/* 底部 Tab 切换 */}
+                <div className="absolute bottom-6 left-0 right-0 flex justify-center z-40 pointer-events-none">
+                    <div className="bg-white/90 backdrop-blur-xl border border-white/50 rounded-full px-2 py-1.5 shadow-2xl flex gap-1 pointer-events-auto">
+                        <button onClick={() => setTab('hub')} className={`px-6 py-2 rounded-full text-xs font-bold transition-all ${tab === 'hub' ? `${theme.accent} text-white shadow-md` : 'text-gray-400 hover:bg-gray-100'}`}>🏠 窝</button>
+                        <button onClick={() => setTab('garden')} className={`px-6 py-2 rounded-full text-xs font-bold transition-all ${tab === 'garden' ? 'bg-green-500 text-white shadow-md' : 'text-gray-400 hover:bg-gray-100'}`}>🌸 花园</button>
+                    </div>
+                </div>
+
+                {/* --- 弹窗挂载区 (保持不变) --- */}
+                <DatePickerModal 
+                    isOpen={showDatePicker}
+                    currentDate={new Date(targetContact.created || Date.now()).toISOString().slice(0,10)}
+                    onClose={() => setShowDatePicker(false)}
+                    onSave={handleSaveAnniversary}
+                />
+                <BreakupModal 
+                    isOpen={showBreakup}
+                    name={targetContact.name}
+                    onClose={() => setShowBreakup(false)}
+                    onConfirm={handleBreakUp}
+                />
+                {showWriteLetter && (
+                    <div className="absolute inset-0 bg-black/50 z-[60] flex items-center justify-center p-6 animate-fadeIn">
+                        <div className="bg-white w-full max-w-sm rounded-2xl p-6 shadow-2xl animate-scaleIn">
+                            <h3 className="font-bold text-lg text-gray-800 mb-4 text-center">✍️ 写信给 TA</h3>
+                            <input className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2 mb-3 text-sm outline-none font-bold" placeholder="标题" value={letterDraft.title} onChange={e => setLetterDraft({...letterDraft, title: e.target.value})} />
+                            <textarea className="w-full h-32 bg-gray-50 border border-gray-200 rounded-xl p-4 text-sm outline-none resize-none mb-4" placeholder="写下你想对 TA 说的话..." value={letterDraft.content} onChange={e => setLetterDraft({...letterDraft, content: e.target.value})} />
+                            <div className="flex gap-3">
+                                <button onClick={() => setShowWriteLetter(false)} className="flex-1 py-3 bg-gray-100 rounded-xl font-bold text-gray-500">取消</button>
+                                <button onClick={() => {
+                                      if(!letterDraft.title || !letterDraft.content) return alert("写完再寄哦！");
+                                      const newLetter: LoveLetter = { id: Date.now().toString(), title: letterDraft.title, content: letterDraft.content, timestamp: Date.now(), isOpened: false, from: 'user' };
+                                      setContacts(prev => prev.map(c => c.id === targetContact.id ? { ...c, letters: [...(c.letters||[]), newLetter] } : c));
+                                      onRelationshipSpaceAction(targetContact.id, `[系统通知] 用户给你寄了一封信《${newLetter.title}》。`);
+                                      setLetterDraft({title:'', content:''});
+                                      setShowWriteLetter(false);
+                                      alert("信件已投递！📮");
+                                  }} className={`flex-1 py-3 rounded-xl font-bold text-white shadow-lg ${theme.accent}`}>投递</button>
+                            </div>
+                        </div>
+                    </div>
+                )}
+                {showQuestionModal && (
+                    <div className="absolute inset-0 bg-black/50 z-[60] flex items-center justify-center p-6 animate-fadeIn">
+                        <div className="bg-white w-full max-w-sm rounded-2xl p-6 shadow-2xl animate-scaleIn">
+                            <h3 className="font-bold text-lg text-gray-800 mb-4 text-center">🧩 灵魂拷问</h3>
+                            <textarea className="w-full h-28 bg-gray-50 border border-gray-200 rounded-xl p-4 text-sm outline-none resize-none mb-4 focus:ring-2 focus:ring-purple-200" placeholder="例如：对你来说，最重要的是什么？" value={questionDraft} onChange={e => setQuestionDraft(e.target.value)} autoFocus />
+                            <div className="flex gap-3">
+                                <button onClick={() => setShowQuestionModal(false)} className="flex-1 py-3 bg-gray-100 rounded-xl font-bold text-gray-500">取消</button>
+                                <button onClick={() => {
+                                      if(!questionDraft.trim()) return alert("问题不能为空哦！");
+                                      const newQA: QAEntry = { id: Date.now().toString(), question: questionDraft, aiAnswer: "", userAnswer: "这是我提出的问题", date: new Date().toLocaleDateString(), timestamp: Date.now() };
+                                      setContacts(prev => prev.map(c => c.id === targetContact.id ? { ...c, questions: [...(c.questions||[]), newQA] } : c));
+                                      onRelationshipSpaceAction(targetContact.id, `[系统通知] 用户向你提出了一个灵魂拷问：“${questionDraft}”`);
+                                      setQuestionDraft("");
+                                      setShowQuestionModal(false);
+                                      alert("问题已送达！");
+                                  }} className={`flex-1 py-3 rounded-xl font-bold text-white shadow-lg bg-purple-500 shadow-purple-200`}>发送</button>
+                            </div>
+                        </div>
+                    </div>
+                )}
+            </div>
+        );
+    }
 
   return <div className="h-full flex items-center justify-center text-gray-400">Loading...</div>;
 };
