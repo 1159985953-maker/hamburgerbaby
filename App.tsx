@@ -121,44 +121,6 @@ const calculateLifeUpdate = (contact: Contact): Contact => {
 
 
 
-useEffect(() => {
-    const scheduleChecker = () => {
-        if (!isLoaded) return; // 确保数据已加载
-
-        setContacts(prevContacts => {
-            let contactsChanged = false;
-            const updatedContactsPromise = prevContacts.map(async c => {
-                const schedule = c.currentSchedule;
-                // 如果没有行程，或者当前行程已结束，就生成一个新的
-                if (!schedule || (Date.now() - schedule.startDate) > schedule.durationDays * 24 * 60 * 60 * 1000) {
-                    console.log(`[行程系统] ${c.name} 的行程已结束，正在生成新行程...`);
-                    const newSchedule = await generateNewSchedule(c, globalSettings);
-                    if (newSchedule) {
-                        contactsChanged = true;
-                        return { ...c, currentSchedule: newSchedule };
-                    }
-                }
-                return c;
-            });
-
-            // 等所有角色的行程都检查完毕后，再更新状态
-            Promise.all(updatedContactsPromise).then(updatedContacts => {
-                if (contactsChanged) {
-                    setContacts(updatedContacts);
-                }
-            });
-            
-            return prevContacts; // 立即返回旧状态，防止界面闪烁
-        });
-    };
-
-    const intervalId = setInterval(scheduleChecker, 1000 * 60 * 10); // 每10分钟检查一次行程
-    setTimeout(scheduleChecker, 5000); // 启动5秒后检查一次
-    
-    return () => clearInterval(intervalId);
-}, [isLoaded, globalSettings.activePresetId]); // 依赖API配置
-
-
 
 
 
@@ -359,6 +321,51 @@ userName: "Your Name",
 userSignature: "个性签名~",
 userPersona: "A kind and supportive partner.",
 });
+
+
+
+
+
+useEffect(() => {
+    const scheduleChecker = () => {
+        if (!isLoaded) return; // 确保数据已加载
+
+        setContacts(prevContacts => {
+            let contactsChanged = false;
+            const updatedContactsPromise = prevContacts.map(async c => {
+                const schedule = c.currentSchedule;
+                // 如果没有行程，或者当前行程已结束，就生成一个新的
+                if (!schedule || (Date.now() - schedule.startDate) > schedule.durationDays * 24 * 60 * 60 * 1000) {
+                    console.log(`[行程系统] ${c.name} 的行程已结束，正在生成新行程...`);
+                    const newSchedule = await generateNewSchedule(c, globalSettings);
+                    if (newSchedule) {
+                        contactsChanged = true;
+                        return { ...c, currentSchedule: newSchedule };
+                    }
+                }
+                return c;
+            });
+
+            // 等所有角色的行程都检查完毕后，再更新状态
+            Promise.all(updatedContactsPromise).then(updatedContacts => {
+                if (contactsChanged) {
+                    setContacts(updatedContacts);
+                }
+            });
+            
+            return prevContacts; // 立即返回旧状态，防止界面闪烁
+        });
+    };
+
+    const intervalId = setInterval(scheduleChecker, 1000 * 60 * 10); // 每10分钟检查一次行程
+    setTimeout(scheduleChecker, 5000); // 启动5秒后检查一次
+    
+    return () => clearInterval(intervalId);
+}, [isLoaded, globalSettings.activePresetId]); // 依赖API配置
+
+
+
+
 
 // --- 日历功能状态 ---
   const [calendarDate, setCalendarDate] = useState(new Date()); // 当前显示的月份
