@@ -12,7 +12,8 @@ export interface UserTag {
   content: string;
   timestamp: number;
   style?: number;
-  note?: string;
+  note?: string; // 备注
+  confidence?: number; // AI对自己判断的自信度
 }
 
 export interface TaskCategory {
@@ -363,21 +364,28 @@ export interface UserProfile {
 // ==================== 新代码块结束 ====================
 
 
-
-
-// 这是“小账本”里每一条约定的定义
-export interface Agreement {
-  id: string; // 唯一ID
-  content: string; // 约定内容：“叫我起床”
-  actor?: 'user' | 'ai'; // <--- 加这一行
-  status: 'pending' | 'fulfilled' | 'failed'; // 状态：待处理、已完成、已失败
-  importance: number; // AI判断的重要性 (1-10)
-  trigger: AgreementTrigger; // 触发器
-  created_at: number; // 创建时间
+export interface AgreementTrigger {
+  type: 'time' | 'keyword' | 'event';
+  value: number | string;
+  original_text: string;
 }
-// ==================== 新代码块结束 ====================
 
 
+
+
+
+// [修复代码] 约定/承诺系统 (增加时间跨度)
+export interface Agreement {
+  id: string;
+  content: string;
+  actor?: 'user' | 'ai';
+  status: 'pending' | 'fulfilled' | 'failed';
+  importance: number;
+  trigger: AgreementTrigger;
+  created_at: number;
+  // ★★★ 新增：目标期限类型 ★★★
+  termType: 'short' | 'mid' | 'long'; // 短期(立刻去做)、中期(几天内)、长期(人生目标)
+}
 
 
 
@@ -477,6 +485,11 @@ export interface Contact {
   // ★★★ 核心修改：HEF不再是可选的，而是必须的 ★★★
   hef: HEF;
   
+// 在 Contact 接口内找到合适的位置（比如 hef 下面）添加这两行
+  currentSchedule?: { activity: string; durationDays: number; energyImpact: number; startDate: number; }; // [新增代码] 智能行程系统
+  dialogueMode?: 'concise' | 'normal' | 'verbose'; // [新增代码] 对话模式
+
+
   diaries?: DiaryEntry[];
   questions?: QAEntry[];
   letters?: LoveLetter[];

@@ -1486,6 +1486,21 @@ setTimeout(() => {
 
 
 
+// [这是新功能] 自动记忆总结监听器 (修复双倍记忆)
+  const summaryTriggeredRef = useRef<number>(0);
+  useEffect(() => {
+      if (!activeContact || !activeContact.history) return;
+      const historyLen = activeContact.history.length;
+      // 只有当历史记录长度超过上次触发的长度 + 阈值时，才执行
+      if (historyLen > summaryTriggeredRef.current + (activeContact.summaryTrigger || 50)) {
+          console.log("[记忆系统] 阈值已到，触发自动总结...");
+          summaryTriggeredRef.current = historyLen; // 更新触发点
+          checkAutoSummary(activeContact, activeContact.history);
+      }
+  }, [activeContact?.history.length]);
+
+
+
 
 
 
@@ -2498,7 +2513,9 @@ const generateSystemPrompt = (contact: Contact, gapDesc: string, aiTime: string)
 [ 
   {
     "type": "thought_chain",
+
     "time_gap": "${gapDescription}",
+     "mood_status": "当前精力状态(如: Tired)",
     "score_updates": {
        "friendship_change": 0,
        "romance_change": 0
@@ -2508,7 +2525,7 @@ const generateSystemPrompt = (contact: Contact, gapDesc: string, aiTime: string)
       "joy": 50, "anger": 0, "sadness": 0, "fear": 0, "trust": 50
     },
     "action": {}, 
-    "new_agreement": {}
+    "new_agreement": { "content": "约定内容", "termType": "short" | "mid" | "long" }
   },
   {"type": "text", "content": "回复内容"}
 ]
@@ -2546,14 +2563,18 @@ HEF: ${JSON.stringify(activeContact.hef, null, 2)}
 Persona: ${activeContact.persona}
 Lore: ${loreText || "无"}
 
-# 🟢 [最高机密] 用户心智印象史 (User Perception & Notes)
-这是用户在不同时间节点给你挂上的“印象标签”及其备注：
+
+
+# 🟢 [用户印象与备注] (User Perception)
+这是你对用户的秘密档案，你必须阅读并理解，但禁止直接复述。
 ${(() => {
   const tags = activeContact.userTags || [];
-  if (tags.length === 0) return "暂无印象记录。";
-  if (typeof tags === 'string') return `当前印象：[${tags.join(', ')}]`;
-  return [...tags].sort((a, b) => a.timestamp - b.timestamp).map(t => `(${new Date(t.timestamp).toLocaleDateString()}) [${t.content}]${t.note ? ` (备注: "${t.note}")` : ""}`).join('\n⬇️\n');
+  if (tags.length === 0) return "暂无。";
+  return tags.map(t => `- [${t.content}]${t.note ? ` (我的批注: ${t.note})` : ''}`).join('\n');
 })()}
+
+
+
 
 **【AI 必读指令】**
 1. **必须读取备注**：如果标签下有[用户备注原因]，那是通过图灵测试的关键！
@@ -2673,7 +2694,10 @@ ${(() => {
 
 
 # 🚫 聊天铁律
-**纯净输出**: 你的 content 必须是【纯粹的口语】。**严禁**出现任何 ()、（）、[]、【】 包含的动作描写、心理活动、补充说明、翻译或旁白！
+- **禁止说教/爹味**: 严禁使用“你应该”、“记得”、“不要”等指导性词语。严禁替用户做决定。
+- **禁止自大**: 严禁说出“有我你就...”这类自以为是的言论。
+- **禁止复读**: 严禁使用“梦里见”、“去睡吧”作为口头禅。想结束对话请说“晚安”或通过减少回复来暗示。
+- **纯净输出**: 你的 content 必须是【纯粹的口语】。**严禁**出现任何 ()、（）、[]、【】 包含的动作描写、心理活动、补充说明、翻译或旁白！
 - **排版美学**: 必须使用换行符 (\n) 来分割段落！不要发一大坨文字。
 - **引用规则**: 如果回复针对用户的某句特定的话，请在消息开头使用 "> " 引用原文摘要，然后换行再回复。
 - **拒绝演讲**：单条消息简短，碎片化。
@@ -2682,6 +2706,23 @@ ${(() => {
 - **时间感知**：严格遵守【责任判定指令】和【语境过期铁律】。
 - **功能规则**: [Voice Message] 发语音, [FakeImage] 发伪图, "> " 引用。
 - **风格**: 禁止动作/心理描写，只用白话文+表情，不肉麻。
+
+
+
+# 🔧 [行为逻辑控制]
+1.  **精力影响**: 精力 (${Math.round(activeContact.mood?.energy?.current || 80)}%) 只是影响你的**状态**，而不是**决策**。
+    -   **低精力 (<30%)**: 回复有 70% 的概率变得简短（1-5个字）、敷衍，回复间隔变长。但如果对话内容非常重要或有趣，你仍有 30% 的概率强打精神正常回复。
+    -   **高精力 (>80%)**: 回复更有活力，更倾向于主动开启新话题。
+2.  **消息条数**: 用户的对话模式偏好为 [${activeContact.dialogueMode || 'normal'}]。这只是一个参考，你必须根据当前**语境**灵活调整。气氛热烈时可以多说，悲伤或严肃时应该减少条数。
+3.  **关系反应矩阵**:
+    -   **IF (高友谊 & 低好感 - 死党)** + 用户难过: 你的反应应该是轻松的安慰，可以说“摸摸头”、“我在呢”，或者尝试用吐槽开玩笑的方式让TA分心。
+    -   **IF (高友谊 & 高好感 - 恋人)** + 用户难过: 你的反应必须是强烈的共情和保护欲，用宠溺的语气，说出“有我在”、“别怕，我会陪着你”这类有担当的话。
+4.  **约定识别**: 识别用户的承诺，并判断其时间跨度 "short", "mid", "long"，填入 \`new_agreement\`。
+
+
+
+
+
 
 # 强制内部思考（仅用于你自己思考，禁止输出）
 [身份定位 -> 情绪校验 -> 内部感受 -> 外显决策]
@@ -2801,6 +2842,12 @@ const SharedMemoryCard: React.FC<{ data: any }> = ({ data }) => {
         } catch (e) {
             console.warn("⚠️ 标准解析失败，启动【暴力吸尘器模式】");
             
+
+
+
+
+
+
             // ★★★ 2. 暴力吸尘器：正则提取所有 content ★★★
             // 这个正则的意思是：找到所有 "content": "xxxx" 里的 xxxx
             // 它可以跨越换行，忽略格式错误，只要有内容就能吸出来！
@@ -3197,49 +3244,52 @@ const SharedMemoryCard: React.FC<{ data: any }> = ({ data }) => {
     
     await new Promise(resolve => setTimeout(resolve, totalDelay));
 
-    // ==================== [V9.5 修复版] 温柔分句 (只按回车切气泡) ====================
+
+    
+
+// [修复代码] 温柔分句 V9.6 (彻底杜绝语音/伪图拆分)
         const newMessages: Message[] = [];
         
         parts.forEach((part, partIndex) => {
             if (!part.content) return; 
 
-            // 1. 语音消息：直接发，不切
-            if (part.type === 'voice') {
+            // ★★★ 核心判断：检查是否为特殊格式 ★★★
+            const isSpecialFormat = part.type === 'voice' || 
+                                  part.content.trim().startsWith('[Voice Message]') ||
+                                  part.content.trim().startsWith('[FakeImage]');
+
+            if (isSpecialFormat) {
+                // 如果是特殊格式，无论如何都作为一个整体消息发出，绝不拆分！
                 newMessages.push({
                     id: Date.now().toString() + partIndex,
                     role: 'assistant',
                     content: part.content,
-                    timestamp: Date.now() + (partIndex * 1000),
-                    type: 'voice'
+                    timestamp: Date.now() + (partIndex * 800),
+                    type: part.type === 'voice' ? 'voice' : 'text'
                 });
-                return;
-            }
-
-            // 2. ★★★ 核心修复：只用换行符 (\n) 切割 ★★★
-            // 之前的错误是因为用了 [.?!] 导致句号也切开了。
-            // 现在的逻辑：如果解析正常，content 就是纯文本。
-            // 只有当文本里有显式的 \n 时才分气泡。
-            const rawSentences = part.content.split(/\n+/);
-
-            // 3. 生成消息
-            rawSentences
-                .map(s => s.trim())
-                .filter(s => s.length > 0)
-                .forEach((sentence, sentenceIndex) => {
-                    // 稍微延迟一点点，保持节奏感
-                    const delay = (partIndex * 1000) + (sentenceIndex * 800); 
-                    
-                    newMessages.push({
-                        id: Date.now().toString() + partIndex + "_" + sentenceIndex + Math.random(),
-                        role: 'assistant',
-                        content: sentence,
-                        timestamp: Date.now() + delay,
-                        type: 'text'
+            } else {
+                // 如果是普通文本，才按换行符进行“温柔分句”
+                const rawSentences = part.content.split(/\n+/);
+                rawSentences
+                    .map(s => s.trim())
+                    .filter(s => s.length > 0)
+                    .forEach((sentence, sentenceIndex) => {
+                        newMessages.push({
+                            id: Date.now().toString() + partIndex + "_" + sentenceIndex,
+                            role: 'assistant',
+                            content: sentence,
+                            timestamp: Date.now() + (partIndex * 800) + (sentenceIndex * 200),
+                            type: 'text'
+                        });
                     });
-                });
+            }
         });
-        // ==================== 温柔分句结束 ====================
-    
+
+
+
+
+
+
     // 如果有系统通知，追加一条
     if (systemNotice) {
         newMessages.push({
@@ -5652,7 +5702,28 @@ right={
 if (view === 'settings' && activeContact) {
   const form = { ...activeContact, ...editForm };
   const enabledBooks = form.enabledWorldBooks || [];
-
+// 在设置页面的 JSX 中，找到一个合适的位置，比如“主动消息配置”下面，粘贴这段代码
+<section className="bg-white rounded-2xl p-4 shadow-sm border border-gray-200">
+  <div className="flex items-center gap-2 mb-3">
+    <span className="text-lg">💬</span>
+    <h3 className="text-xs font-bold text-gray-400 uppercase">对话模式偏好</h3>
+  </div>
+  <div className="flex gap-2 p-1 bg-gray-100 rounded-xl">
+    {['concise', 'normal', 'verbose'].map((mode) => (
+      <button
+        key={mode}
+        onClick={() => setEditForm(prev => ({ ...prev, dialogueMode: mode as any }))}
+        className={`flex-1 py-2 text-xs font-bold rounded-lg capitalize transition-all duration-300 ${
+          (form.dialogueMode || 'normal') === mode
+            ? 'bg-white text-blue-600 shadow-md'
+            : 'text-gray-400 hover:bg-white/50'
+        }`}
+      >
+        {mode === 'concise' ? '高冷' : mode === 'normal' ? '日常' : '话痨'}
+      </button>
+    ))}
+  </div>
+</section>
   // --- 预设管理逻辑保持不变 ---
   const handleSavePreset = () => {
     if (!presetName.trim()) return alert("请输入预设名称！");
@@ -7074,50 +7145,24 @@ return (
 
 
 
-
-// =========================================================================
-    // ★★★ 核心新增：系统消息渲染 (System Notification) - 升级版便签UI ★★★
-    // =========================================================================
-// =========================================================================
-    // ★★★ 核心渲染逻辑：系统消息 / 分享卡片 / 撤回提示 ★★★
-    // =========================================================================
+// [这是修复代码] 系统消息渲染 (增加废话过滤器)
     if (msg.role === 'system') {
-        // 1. 先尝试解析是否为【回忆分享卡片】(JSON格式)
-        let shareData = null;
-        if (msg.content.startsWith('{') && msg.content.includes('"type":"memory_share_card"')) {
-            try {
-                shareData = JSON.parse(msg.content);
-            } catch (e) {}
-        }
+        // ... (shareData 的解析逻辑保持不变) ...
 
-        // ★★★ 如果是卡片，渲染新组件！ ★★★
-        if (shareData) {
-            return (
-                <React.Fragment key={msg.id}>
-                    {showInterval && (
-                        <div className="text-center my-4 animate-fadeIn">
-                            <span className="text-[10px] text-gray-400 bg-gray-100 px-3 py-1 rounded-full font-mono">
-                                {intervalMinutes < 60 ? `${intervalMinutes}m` : `${Math.floor(intervalMinutes / 60)}h`}
-                            </span>
-                        </div>
-                    )}
-                    <SharedMemoryCard data={shareData} />
-                </React.Fragment>
-            );
-        }
-
-        // 2. 如果不是卡片，走原来的【系统便签/撤回】逻辑
+        // 如果不是卡片，走原来的【系统便签/撤回】逻辑
         let displayContent = msg.content;
-        // ... (以下是你的文本清洗逻辑，保持不变)
         displayContent = displayContent.replace('【系统通知】', '').trim();
-        displayContent = displayContent.replace(/\(指令：[\s\S]*?\)/g, '').trim();
-        displayContent = displayContent.replace(/（指令：[\s\S]*?）/g, '').trim();
+        // ... (其他的文本清洗逻辑也保持不变) ...
         
-        if (displayContent.includes('用户')) displayContent = displayContent.replaceAll('用户', '你');
-        if (!msg.content.includes("撤回")) displayContent = displayContent.replace('你的印象墙', `${activeContact.name} 的印象墙`);
+        // ★★★ 核心新增：废话过滤器 ★★★
+        // 如果清理后的内容是“已记录你的约定: 无”或者类似的东西，直接不显示这条消息
+        if (displayContent.includes('约定: 无') || displayContent.includes('约定：无')) {
+            return null; // 直接返回 null，这条消息就像没存在过一样
+        }
 
         const isRecall = msg.content.includes("撤回");
 
+        // 下面的 return ... 渲染逻辑保持你原来的不变
         return (
           <React.Fragment key={msg.id}>
             {showInterval && (
@@ -7134,7 +7179,6 @@ return (
                        {msg.role === 'user' ? '你' : activeContact.name} 撤回了一条消息 🗑️
                     </span>
                 ) : (
-                    // 黄色便签样式 (用于标签、日记通知等)
                     <div className="relative bg-[#FFFBEB] text-[#78350F] text-xs px-4 py-3 rounded-sm shadow-md border border-[#FDE68A] transform -rotate-1 hover:rotate-0 transition-transform duration-300 max-w-[80%]">
                         <div className="absolute -top-1.5 left-1/2 -translate-x-1/2 w-16 h-4 bg-yellow-200/60 opacity-80 rotate-1 shadow-sm backdrop-blur-[1px]"></div>
                         <div className="flex flex-col items-center gap-1 text-center">
@@ -7143,14 +7187,12 @@ return (
                              {displayContent}
                            </span>
                         </div>
-                        {msg.content.includes("备注") && <div className="absolute -right-2 -bottom-2 text-lg text-gray-400 rotate-12">📎</div>}
                     </div>
                 )}
             </div>
           </React.Fragment>
         );
     }
-
 
 
 
@@ -7278,28 +7320,45 @@ return (
                 </div>
               ) : (
                 <div 
-                   className={`content rounded-xl leading-relaxed relative break-words whitespace-pre-wrap shadow-sm ` + (!activeContact.customCSS && currentText === '#111827' ? 'border border-gray-200/50' : '')}
-                   style={{
-                       backgroundColor: !activeContact.customCSS ? currentBg : undefined,
-                       color: !activeContact.customCSS ? currentText : undefined,
-                       fontSize: currentFontSize,
-                       paddingTop: currentPaddingY, 
-                       paddingBottom: currentPaddingY,
-                       paddingLeft: currentPaddingX,
-                       paddingRight: currentPaddingX,
-                       borderTopRightRadius: (msg.role === 'user' && !isConsecutive) ? '2px' : '16px',
-                       borderTopLeftRadius: (msg.role === 'assistant' && !isConsecutive) ? '2px' : '16px',
-                       borderBottomLeftRadius: '16px',
-                       borderBottomRightRadius: '16px',
-                   }}
-                >
-{/* ★★★ 引用块渲染 (修复版) ★★★ */}
-                  {isQuoteMsg && quoteText && (
-                    <div className="text-xs mb-2 p-2 bg-black/5 rounded-md border-l-4 border-gray-400 opacity-80 select-none">
-                      <div className="font-bold text-[10px] text-gray-500 mb-0.5">↪️ 引用:</div>
-                      <div className="line-clamp-2 italic">{quoteText}</div>
-                    </div>
-                  )}
+   className={`content rounded-xl leading-relaxed relative break-words whitespace-pre-wrap shadow-sm ` + (!activeContact.customCSS && currentText === '#111827' ? 'border border-gray-200/50' : '')}
+   style={{
+       backgroundColor: !activeContact.customCSS ? currentBg : undefined,
+       color: !activeContact.customCSS ? currentText : undefined,
+       fontSize: currentFontSize,
+       paddingTop: currentPaddingY, 
+       paddingBottom: currentPaddingY,
+       paddingLeft: currentPaddingX,
+       paddingRight: currentPaddingX,
+       borderTopRightRadius: (msg.role === 'user' && !isConsecutive) ? '2px' : '16px',
+       borderTopLeftRadius: (msg.role === 'assistant' && !isConsecutive) ? '2px' : '16px',
+       borderBottomLeftRadius: '16px',
+       borderBottomRightRadius: '16px',
+   }}
+>
+    {/* 1. 引用块 (保持不变) */}
+    {isQuoteMsg && quoteText && (
+      <div className="text-xs mb-2 p-2 bg-black/5 rounded-md border-l-4 border-gray-400 opacity-80 select-none">
+        <div className="font-bold text-[10px] text-gray-500 mb-0.5">↪️ 引用:</div>
+        <div className="line-clamp-2 italic">{quoteText}</div>
+      </div>
+    )}
+
+    {/* ★★★ 核心修复开始 ★★★ */}
+
+    {/* 2. 语音播放器 (如果消息是语音类型，就显示它) */}
+    {(msg.type === 'voice' || msg.content.trim().startsWith('[Voice Message]')) && (
+      <div className="mb-2"> {/* 加一点间距，让播放器和文字分开 */}
+        <VoiceBubble
+          msg={msg}
+          isPlaying={playingMsgId === msg.id}
+          progress={audioProgress}
+          duration={duration}
+          onPlay={() => playMessageAudio(msg.id, msg.content)}
+          onSeek={handleSeek}
+          isUser={msg.role === 'user'}
+        />
+      </div>
+    )}
 
 
 

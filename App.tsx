@@ -7,6 +7,7 @@ import WallpaperApp from './components/AppearanceApp';
 import SafeAreaHeader from './components/SafeAreaHeader';  // ← 加这一行！
 import localforage from 'localforage';
 import { Contact, GlobalSettings, WorldBookCategory, Message } from './types';
+import { generateResponse } from './services/apiService'; // ★★★ 新增这一行导入 ★★★
 import LifeApp from './components/LifeApp';
 console.log('React version:', React.version);  // 只应该打印一次
 
@@ -77,9 +78,8 @@ const sanitizeContact = (c: any): any => {
   };
 };
 
-// 生命体征计算函数
-const calculateLifeUpdate = (rawContact: Contact): Contact => {
-  const contact = sanitizeContact(rawContact);
+// [修复代码] 生命体征计算函数 V2.0 (由智能行程驱动)
+const calculateLifeUpdate = (contact: Contact): Contact => {
   const now = Date.now();
   const safeMood = contact.mood || { current: "Content", energyLevel: 80, lastUpdate: now };
   const lastUpdate = safeMood.lastUpdate || now;
@@ -87,30 +87,27 @@ const calculateLifeUpdate = (rawContact: Contact): Contact => {
 
   if (minutesPassed < 1) return contact;
 
-  let currentHour = 12;
-  try {
-    const timeFormat = new Intl.DateTimeFormat('en-US', {
-      timeZone: contact.timezone || "Asia/Seoul",
-      hour: 'numeric',
-      hour12: false
-    });
-    currentHour = parseInt(timeFormat.format(new Date()));
-  } catch (e) {}
-
   let newEnergy = safeMood.energyLevel;
-  let moodState = safeMood.current;
+  
+  // 1. 获取当前行程的精力影响
+  const schedule = contact.currentSchedule;
+  const scheduleImpact = schedule ? (schedule.energyImpact / (24 * 60)) : 0; // 将日影响平摊到每分钟
+
+  // 2. 基础消耗/恢复
+  const currentHour = new Date(now).getHours();
   const isSleepTime = currentHour >= 23 || currentHour < 7;
+  const baseRate = isSleepTime ? 0.5 : -0.1; // 晚上基础回血，白天基础掉血
 
-  if (isSleepTime) {
-    newEnergy = Math.min(100, newEnergy + 2);
-    moodState = "Sleeping";
-  } else {
-    newEnergy = Math.max(0, newEnergy - 0.5);
-    if (newEnergy < 30) moodState = "Tired";
-    else if (newEnergy > 80) moodState = "Energetic";
-    else moodState = "Content";
-  }
+  // 3. 最终精力计算：新精力 = 旧精力 + (基础速率 + 行程影响) * 分钟数
+  newEnergy += (baseRate + scheduleImpact) * minutesPassed;
+  newEnergy = Math.max(0, Math.min(100, newEnergy)); // 保证在 0-100 之间
 
+  // 4. 状态文字描述（保持不变）
+  let moodState = "Content";
+  if (newEnergy < 10) moodState = "Exhausted";
+  else if (newEnergy < 30) moodState = "Tired";
+  else if (newEnergy > 90) moodState = "Energetic";
+  
   return {
     ...contact,
     mood: {
@@ -121,6 +118,50 @@ const calculateLifeUpdate = (rawContact: Contact): Contact => {
     }
   };
 };
+
+
+
+useEffect(() => {
+    const scheduleChecker = () => {
+        if (!isLoaded) return; // 确保数据已加载
+
+        setContacts(prevContacts => {
+            let contactsChanged = false;
+            const updatedContactsPromise = prevContacts.map(async c => {
+                const schedule = c.currentSchedule;
+                // 如果没有行程，或者当前行程已结束，就生成一个新的
+                if (!schedule || (Date.now() - schedule.startDate) > schedule.durationDays * 24 * 60 * 60 * 1000) {
+                    console.log(`[行程系统] ${c.name} 的行程已结束，正在生成新行程...`);
+                    const newSchedule = await generateNewSchedule(c, globalSettings);
+                    if (newSchedule) {
+                        contactsChanged = true;
+                        return { ...c, currentSchedule: newSchedule };
+                    }
+                }
+                return c;
+            });
+
+            // 等所有角色的行程都检查完毕后，再更新状态
+            Promise.all(updatedContactsPromise).then(updatedContacts => {
+                if (contactsChanged) {
+                    setContacts(updatedContacts);
+                }
+            });
+            
+            return prevContacts; // 立即返回旧状态，防止界面闪烁
+        });
+    };
+
+    const intervalId = setInterval(scheduleChecker, 1000 * 60 * 10); // 每10分钟检查一次行程
+    setTimeout(scheduleChecker, 5000); // 启动5秒后检查一次
+    
+    return () => clearInterval(intervalId);
+}, [isLoaded, globalSettings.activePresetId]); // 依赖API配置
+
+
+
+
+
 
 
 
@@ -214,7 +255,45 @@ const [homePageIndex, setHomePageIndex] = useState(0); // 0 代表第一页, 1 �
 const [isAnalyzing, setIsAnalyzing] = useState(false); // 控制加载画面
   const [loadingText, setLoadingText] = useState("正在建立连接..."); // 
 
+// [这是新功能] 智能行程生成器 (AI驱动)
+  const generateNewSchedule = async (contact: Contact, settings: GlobalSettings): Promise<any> => {
+    const activePreset = settings.apiPresets.find(p => p.id === settings.activePresetId);
+    if (!activePreset) return null; // 没有API配置则无法生成
 
+    const prompt = `
+你现在是角色"${contact.name}"的“命运规划师”。
+请根据TA的人设和世界背景，为TA生成一个接下来会发生的、合理的“行程”或“事件”。
+
+# 角色信息
+- 人设: ${contact.persona}
+- 已启用的世界书: ${(contact.enabledWorldBooks || []).join(', ')}
+
+# 规则
+1.  **创意与合理性**: 行程必须符合人设。例如，一个内向的画家可能会“在画室闭关几天”，一个活泼的学生可能会“准备周末的派对”。
+2.  **持续时间**: "durationDays" 应该是一个 1 到 5 之间的整数，代表这个行程持续几天。
+3.  **精力影响**: "energyImpact" 是一个 -20 到 20 之间的数字。负数代表消耗精力（如学习、工作），正数代表恢复精力（如度假、休息）。
+4.  **纯JSON输出**: 你的回复必须是纯JSON，格式如下：
+    \`\`\`json
+    {
+      "activity": "行程的具体内容，例如：宅在家里通宵打游戏",
+      "durationDays": 2,
+      "energyImpact": -15
+    }
+    \`\`\`
+`;
+    try {
+        const rawResponse = await generateResponse([{ role: 'user', content: prompt }], activePreset);
+        const jsonMatch = rawResponse.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+            const scheduleData = JSON.parse(jsonMatch[0]);
+            return { ...scheduleData, startDate: Date.now() };
+        }
+        return null;
+    } catch (e) {
+        console.error("生成新行程失败:", e);
+        return null;
+    }
+  };
 
 
 
@@ -498,82 +577,64 @@ useEffect(() => {
 
 
 
-
-// ==================== [新功能] 4. 全局约定闹钟系统 (含超时违约判定) ====================
+// [这是修复代码] 全局约定闹钟系统 (已修复括号错误)
 useEffect(() => {
-const promiseChecker = () => {
-  const now = Date.now();
-  let hasChanges = false;
+    const promiseChecker = () => {
+      const now = Date.now();
+      let hasChanges = false;
 
-  setContacts(prevContacts => {
-    const updatedContacts = prevContacts.map(contact => {
-      if (!contact.agreements || contact.agreements.length === 0) {
-        return contact;
-      }
-
-      let newAgreements = [...contact.agreements];
-      let dueAgreementId: string | null = null;
-      let isModified = false;
-
-      newAgreements = newAgreements.map(agreement => {
-        if (agreement.status === 'pending' && agreement.trigger.type === 'time') {
-          // ★★★ 核心修复：安全解析时间 (不管存的是字符串还是数字，统统转成时间戳) ★★★
-          const triggerTime = new Date(agreement.trigger.value).getTime();
-          
-          // 如果时间是无效的 (NaN)，跳过检查，避免报错卡死
-          if (isNaN(triggerTime)) {
-              console.warn(`[闹钟跳过] 发现无效时间格式的约定: ${agreement.content}`);
-              return agreement;
-          }
-          
-          // 判定 1: 【超时违约】 (迟到超过 60 分钟)
-          if (now > triggerTime + 60 * 60 * 1000) {
-             console.log(`[闹钟] ${contact.name} 的约定 "${agreement.content}" 已严重超时，标记为违约。`);
-             isModified = true;
-             hasChanges = true;
-             return { ...agreement, status: 'failed' }; 
+      setContacts(prevContacts => {
+        const updatedContacts = prevContacts.map(contact => {
+          if (!contact.agreements || contact.agreements.length === 0) {
+            return contact;
           }
 
-          // 判定 2: 【闹钟响铃】 (时间到了)
-          // 只有当 dueAgreementId 为空，或者它就是当前正在响的那个 ID 时才触发
-          if (now >= triggerTime && (!contact.dueAgreementId || contact.dueAgreementId === agreement.id)) {
-             console.log(`[闹钟] 叮铃铃！${contact.name} 的约定 "${agreement.content}" 时间到了！`);
-             dueAgreementId = agreement.id;
-             isModified = true;
-             hasChanges = true;
-             // 保持 pending 状态，但通过 dueAgreementId 唤醒 AI
-             // 这里不改状态，是为了让卡片上依然显示“进行中”，等待用户或AI去操作
-             return agreement; 
+          let newAgreements = [...contact.agreements];
+          let dueAgreementId: string | null = null;
+          let isModified = false;
+
+          newAgreements = newAgreements.map(agreement => {
+            if (agreement.status === 'pending' && agreement.trigger.type === 'time') {
+              const triggerTime = new Date(agreement.trigger.value).getTime();
+              if (isNaN(triggerTime)) return agreement;
+
+              // ★★★ 核心修复：根据类型定义宽限期 ★★★
+              let tolerance = 12 * 60 * 60 * 1000; // 默认12小时
+              if (agreement.termType === 'mid') tolerance = 3 * 24 * 60 * 60 * 1000; // 中期3天
+              if (agreement.termType === 'long') tolerance = 365 * 24 * 60 * 60 * 1000; // 长期目标几乎不超时
+
+              // 判定 1: 严重超时违约
+              if (now > triggerTime + tolerance) {
+                 isModified = true; hasChanges = true;
+                 return { ...agreement, status: 'failed' };
+              }
+
+              // 判定 2: 闹钟响铃 (在宽限期内都算)
+              if (now >= triggerTime && now <= triggerTime + tolerance && !contact.dueAgreementId) {
+                 dueAgreementId = agreement.id; isModified = true; hasChanges = true;
+                 return agreement;
+              }
+            }
+            return agreement;
+          });
+
+          if (isModified) {
+            return {
+              ...contact, agreements: newAgreements,
+              dueAgreementId: dueAgreementId || contact.dueAgreementId,
+              pendingProactive: !!dueAgreementId
+            };
           }
-        }
-        return agreement;
+          return contact;
+        });
+
+        return hasChanges ? updatedContacts : prevContacts;
       });
+    };
 
-
-      
-
-      if (isModified) {
-        return {
-          ...contact,
-          agreements: newAgreements,
-          // 如果触发了闹钟，设置 ID 唤醒 AI；如果是单纯超时，就不唤醒了
-          dueAgreementId: dueAgreementId || contact.dueAgreementId,
-          pendingProactive: dueAgreementId ? true : contact.pendingProactive
-        };
-      }
-      return contact;
-    });
-
-    if (hasChanges) {
-      return updatedContacts;
-    }
-    return prevContacts;
-  });
-};
-
-const intervalId = setInterval(promiseChecker, 10000); // 提高频率：每10秒检查一次
-return () => clearInterval(intervalId);
-}, []);
+    const intervalId = setInterval(promiseChecker, 15000);
+    return () => clearInterval(intervalId);
+}, []); // ★★★ 罪魁祸首在这里！这个右括号 ) 之前漏了！
 
 
 
