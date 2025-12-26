@@ -600,6 +600,1447 @@ const VoiceBubble: React.FC<{
 
 
 
+
+
+
+
+
+
+
+
+
+// 这是一组代码：【ChatApp.tsx】新的“标签创建”弹窗组件
+const TagCreationModal: React.FC<{
+  isOpen: boolean;
+  onClose: () => void;
+  onSubmit: (data: { content: string; isPublic: boolean; note: string }) => void;
+}> = ({ isOpen, onClose, onSubmit }) => {
+  const [content, setContent] = useState("");
+  const [isPublic, setIsPublic] = useState(true);
+  const [note, setNote] = useState("");
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm animate-fadeIn" onClick={onClose}>
+      <div className="bg-white w-[85%] max-w-sm rounded-3xl shadow-2xl p-6 animate-scaleIn flex flex-col gap-4" onClick={e => e.stopPropagation()}>
+        
+        {/* 标题 */}
+        <div className="text-center">
+          <div className="text-4xl mb-2">🏷️</div>
+          <h3 className="text-lg font-bold text-gray-800">贴个新标签</h3>
+          <p className="text-xs text-gray-400">你对TA的印象是...</p>
+        </div>
+
+        {/* 输入框：标签名 */}
+        <div>
+           <label className="text-xs font-bold text-gray-500 ml-1">标签内容 (8字以内)</label>
+           <input 
+             autoFocus
+             type="text" 
+             value={content}
+             onChange={e => setContent(e.target.value.slice(0, 8))}
+             placeholder="例：笨蛋 / 天使"
+             className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-lg font-bold text-center outline-none focus:ring-2 focus:ring-blue-100 transition"
+           />
+        </div>
+
+        {/* 开关：公开 vs 私密 */}
+        <div className="bg-gray-50 p-1 rounded-xl flex">
+           <button 
+             onClick={() => setIsPublic(true)}
+             className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all ${isPublic ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400'}`}
+           >
+             📢 公开给TA看
+           </button>
+           <button 
+             onClick={() => setIsPublic(false)}
+             className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all ${!isPublic ? 'bg-white text-purple-600 shadow-sm' : 'text-gray-400'}`}
+           >
+             🔒 只有我知道
+           </button>
+        </div>
+
+        {/* 提示文案 */}
+        <p className="text-[10px] text-center text-gray-400 h-4">
+          {isPublic ? "TA会立刻收到通知，并对这个评价做出反应" : "这是你心底的秘密，TA不会知道"}
+        </p>
+
+        {/* 输入框：理由/备注 */}
+        <div>
+           <label className="text-xs font-bold text-gray-500 ml-1">备注 / 理由 (可选)</label>
+           <textarea 
+             value={note}
+             onChange={e => setNote(e.target.value)}
+             placeholder={isPublic ? "告诉TA为什么这么觉得..." : "记录下这个瞬间..."}
+             className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-xs outline-none resize-none h-20 focus:bg-white transition"
+           />
+        </div>
+
+        {/* 按钮 */}
+        <button 
+          disabled={!content.trim()}
+          onClick={() => {
+            onSubmit({ content, isPublic, note });
+            setContent(""); setNote(""); setIsPublic(true); // 重置
+          }}
+          className={`w-full py-3 rounded-xl font-bold text-white shadow-lg transition active:scale-95 ${content.trim() ? 'bg-gradient-to-r from-blue-500 to-purple-500' : 'bg-gray-300'}`}
+        >
+          贴上去！
+        </button>
+      </div>
+    </div>
+  );
+};
+
+
+
+
+
+
+
+
+
+
+
+
+
+const PersonaPanel = ({ 
+  contact, 
+  onClose, 
+  onRefineMemory, 
+  globalSettings = {}, 
+  setContacts, 
+  playMessageAudio, 
+  onNavigateToSettings, 
+  activeTab,
+  setActiveTab,
+  memoryTab,
+  setMemoryTab,
+  sampleText,
+  setSampleText
+}: any) => {
+  // ==================== [状态修复] 把多选相关的状态放回这里！ ====================
+  const [isMultiSelect, setIsMultiSelect] = useState(false);
+  const [selectedMemIds, setSelectedMemIds] = useState<string[]>([]);
+  const [viewingTag, setViewingTag] = useState<any>(null);
+
+
+// 这是一组代码：【ChatApp.tsx】为 PersonaPanel 添加新状态和新函数
+  // ★★★ 新增：控制新建标签弹窗 ★★★
+  const [showTagCreate, setShowTagCreate] = useState(false);
+
+// 【ChatApp.tsx 更新：私密标签不通知 + 生成乱序参数】
+  const handleTagSubmit = (data: { content: string; isPublic: boolean; note: string }) => {
+     const timestamp = Date.now();
+     
+     // ★★★ 生成乱序样式数据 ★★★
+     // 旋转角度：-15度 到 15度
+     const randomRotation = Math.floor(Math.random() * 30) - 15; 
+     // 顶部偏移：0px 到 30px (制造高低错落感)
+     const randomMargin = Math.floor(Math.random() * 30); 
+
+     const newTag: UserTag = {
+        id: timestamp.toString(),
+        content: data.content,
+        timestamp: timestamp,
+        note: data.note,
+        author: 'user',
+        isPublic: data.isPublic,
+        isUnlocked: true,
+        // 保存这些乱序数据
+        rotation: randomRotation, 
+        strength: randomMargin, // 借用 strength 字段存 margin，或者你在 UserTag 类型里加一个 style 字段也可以，这里暂用 strength 存 margin
+        userQuote: '', 
+        aiReasoning: '' 
+     };
+
+     setContacts((prev: any) => prev.map((c: any) => {
+        if (c.id === contact.id) {
+            let newHistory = [...c.history];
+            
+            // ★★★ 核心修复：只有 isPublic 为 true 时，才发系统通知！ ★★★
+            if (data.isPublic) {
+                newHistory.push({
+                    id: "sys_tag_" + timestamp,
+                    role: 'system',
+                    content: `【系统通知】用户给你贴了一个新标签：[${data.content}]${data.note ? `\n备注：“${data.note}”` : ''}`,
+                    timestamp: timestamp,
+                    type: 'text'
+                });
+            }
+            
+            const currentUserTags = Array.isArray(c.userTags) ? c.userTags : [];
+            return { ...c, userTags: [...currentUserTags, newTag], history: newHistory };
+        }
+        return c;
+     }));
+     
+     setShowTagCreate(false);
+  };
+
+
+
+
+
+
+
+  // 处理解锁标签
+  const handleUnlockTag = (tag: any) => {
+      const cost = tag.unlockCost || 50;
+      const currentPoints = contact.interventionPoints || 0;
+
+      if (currentPoints < cost) {
+          alert(`点数不足！\n需要: ${cost}\n拥有: ${currentPoints}`);
+          return;
+      }
+
+      if (confirm(`🔓 解锁这个私密印象需要消耗 ${cost} 点数。\n(当前拥有: ${currentPoints})\n\n确定解锁吗？`)) {
+          setContacts((prev: any) => prev.map((c: any) => {
+              if (c.id === contact.id) {
+                  const currentAiTags = Array.isArray(c.aiTagsForUser) ? c.aiTagsForUser : [];
+                  return {
+                      ...c,
+                      interventionPoints: c.interventionPoints - cost,
+                      aiTagsForUser: currentAiTags.map((t: any) => 
+                          t.id === tag.id ? { ...t, isUnlocked: true } : t
+                      )
+                  };
+              }
+              return c;
+          }));
+          alert("解锁成功！终于看到了TA的真实想法...");
+      }
+  };
+
+
+  // ==================== [组件修复] 把雷达图函数放回这里！ ====================
+  const renderRadar = () => {
+    const hef = contact?.hef || {};
+    const iv = hef.INDIVIDUAL_VARIATION || {};
+    const big5 = iv.personality_big5 || { openness: 5, conscientiousness: 5, extraversion: 5, agreeableness: 5, neuroticism: 5 };
+
+    const getPoint = (value: number, angle: number) => {
+      const val = Math.max(0, Math.min(10, value || 5));
+      const radius = (val / 10) * 40;
+      const x = 50 + radius * Math.cos((angle - 90) * Math.PI / 180);
+      const y = 50 + radius * Math.sin((angle - 90) * Math.PI / 180);
+      return `${x},${y}`;
+    };
+
+    const p1 = getPoint(big5.openness, 0);
+    const p2 = getPoint(big5.extraversion, 72);
+    const p3 = getPoint(big5.agreeableness, 144);
+    const p4 = getPoint(big5.neuroticism, 216);
+    const p5 = getPoint(big5.conscientiousness, 288);
+
+    return (
+      <div className="relative w-full h-64 flex items-center justify-center my-2 select-none">
+        <div className="absolute top-4 left-1/2 -translate-x-1/2 flex flex-col items-center"><span className="text-[10px] font-bold text-gray-500 bg-white/80 px-1 rounded backdrop-blur">开放性</span><span className="text-[9px] text-blue-400 font-mono">{big5.openness}</span></div>
+        <div className="absolute top-16 right-6 flex flex-col items-center"><span className="text-[10px] font-bold text-gray-500 bg-white/80 px-1 rounded backdrop-blur">外向性</span><span className="text-[9px] text-blue-400 font-mono">{big5.extraversion}</span></div>
+        <div className="absolute bottom-8 right-10 flex flex-col items-center"><span className="text-[10px] font-bold text-gray-500 bg-white/80 px-1 rounded backdrop-blur">宜人性</span><span className="text-[9px] text-blue-400 font-mono">{big5.agreeableness}</span></div>
+        <div className="absolute bottom-8 left-10 flex flex-col items-center"><span className="text-[10px] font-bold text-gray-500 bg-white/80 px-1 rounded backdrop-blur">敏感度</span><span className="text-[9px] text-blue-400 font-mono">{big5.neuroticism}</span></div>
+        <div className="absolute top-16 left-6 flex flex-col items-center"><span className="text-[10px] font-bold text-gray-500 bg-white/80 px-1 rounded backdrop-blur">尽责性</span><span className="text-[9px] text-blue-400 font-mono">{big5.conscientiousness}</span></div>
+        <div className="w-40 h-40 relative">
+          <svg className="absolute inset-0 w-full h-full overflow-visible" viewBox="0 0 100 100">
+             <polygon points="50,10 88,38 74,82 26,82 12,38" fill="#f3f4f6" stroke="#e5e7eb" strokeWidth="1" />
+             <polygon points="50,30 69,44 62,66 38,66 31,44" fill="none" stroke="#e5e7eb" strokeWidth="1" strokeDasharray="2 2" />
+             <line x1="50" y1="50" x2="50" y2="10" stroke="#e5e7eb" strokeWidth="0.5" /><line x1="50" y1="50" x2="88" y2="38" stroke="#e5e7eb" strokeWidth="0.5" /><line x1="50" y1="50" x2="74" y2="82" stroke="#e5e7eb" strokeWidth="0.5" /><line x1="50" y1="50" x2="26" y2="82" stroke="#e5e7eb" strokeWidth="0.5" /><line x1="50" y1="50" x2="12" y2="38" stroke="#e5e7eb" strokeWidth="0.5" />
+             <polygon points={`${p1} ${p2} ${p3} ${p4} ${p5}`} fill="rgba(59, 130, 246, 0.4)" stroke="#3b82f6" strokeWidth="2" className="drop-shadow-sm transition-all duration-700 ease-out" />
+             <circle cx={p1.split(',')[0]} cy={p1.split(',')[1]} r="1.5" fill="#2563eb" /><circle cx={p2.split(',')[0]} cy={p2.split(',')[1]} r="1.5" fill="#2563eb" /><circle cx={p3.split(',')[0]} cy={p3.split(',')[1]} r="1.5" fill="#2563eb" /><circle cx={p4.split(',')[0]} cy={p4.split(',')[1]} r="1.5" fill="#2563eb" /><circle cx={p5.split(',')[0]} cy={p5.split(',')[1]} r="1.5" fill="#2563eb" />
+          </svg>
+        </div>
+      </div>
+    );
+  };
+  // ==================== [修复结束] ====================
+
+  // --- 辅助函数也放回来 ---
+  const toggleSelect = (id: string) => {
+    setSelectedMemIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+  };
+  // ==================== [修复结束] ====================
+
+
+
+  // ★★★ 核心修复：正确读取新的 mood 结构 ★★★
+  const mood = contact?.mood || { current: "Calm" };
+  // 优先读取新的 energy 对象，没有则兜底
+  const energy = mood.energy || { current: 50, max: 100, status: 'Awake' };
+  
+  const longTermMemories = contact?.longTermMemories || [];
+  const hef = contact?.hef || {};
+  const iv = hef.INDIVIDUAL_VARIATION || {};
+  const big5 = iv.personality_big5 || { openness: 5, conscientiousness: 5, extraversion: 5, agreeableness: 5, neuroticism: 5 };
+
+
+
+
+
+
+
+
+
+
+
+
+// ==================== [新组件] 手账档案条目UI ====================
+const TraitItem: React.FC<{ label: string; traits?: ProfileTrait[]; icon: string; isInitiallyOpen?: boolean }> = ({ label, traits, icon, isInitiallyOpen = false }) => {
+  if (!traits || traits.length === 0) return null;
+  
+  // 修复 Invalid Date 的核心
+  const formatDate = (timestamp: number) => {
+    if (!timestamp || isNaN(timestamp)) return "未知日期";
+    return new Date(timestamp).toLocaleDateString();
+  };
+
+  return (
+    <details open={isInitiallyOpen} className="bg-white/60 border border-gray-200/50 rounded-xl group transition-all duration-300 open:shadow-lg open:bg-white/80 mb-2 last:mb-0">
+      <summary className="px-4 py-3 text-sm font-bold text-gray-700 select-none cursor-pointer list-none flex items-center justify-between group-open:border-b">
+        <span className="flex items-center gap-2">{icon} {label}</span>
+        <span className="text-xs text-gray-400 transition-transform group-open:rotate-180">▼</span>
+      </summary>
+      <div className="p-3 space-y-2">
+        {traits.map(trait => (
+          <div key={trait.timestamp} className="bg-gray-50/70 p-2 rounded-lg border">
+            <p className="text-sm font-medium text-gray-800">{trait.value}</p>
+            <details className="text-xs mt-1">
+              <summary className="cursor-pointer text-gray-400 hover:text-gray-600 select-none">显示证据</summary>
+              <div className="mt-1 p-2 bg-white rounded-md">
+                <p className="italic text-purple-600">“{trait.quote}”</p>
+                <p className="text-[10px] text-gray-400 mt-1">记录于: {formatDate(trait.timestamp)}</p>
+              </div>
+            </details>
+          </div>
+        ))}
+      </div>
+    </details>
+  );
+};
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  const resetMultiSelect = () => {
+    setIsMultiSelect(false);
+    setSelectedMemIds([]);
+  };
+
+
+
+
+
+
+
+
+
+
+  // ★★★ 新增：手动多选合并功能（真正实现！）★★★
+  const handleMultiMerge = async () => {
+    if (selectedMemIds.length < 2) return;
+    
+    const confirmed = confirm(`确定将选中的 ${selectedMemIds.length} 张便签合并为 1 张核心记忆吗？\n旧便签将被删除，此操作不可撤销！`);
+    if (!confirmed) return;
+
+    const selectedMems = longTermMemories.filter((m: any) => selectedMemIds.includes(m.id));
+    const memoryContent = selectedMems.map((mem: any) => `- ${mem.content}`).join('\n');
+
+    const activePreset = globalSettings.apiPresets?.find((p: any) => p.id === globalSettings.activePresetId);
+    if (!activePreset) {
+      alert("API 预设未找到，请检查设置！");
+      return;
+    }
+
+    alert("AI 正在精炼选中的记忆，请稍候...");
+    
+    try {
+      const today = new Date().toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric' });
+      const prompt = `
+你就是角色“${contact.name}”。请将以下选中的 ${selectedMemIds.length} 张长期记忆精炼整合成 1 条更连贯的核心记忆摘要。
+
+要求：
+1. 使用第一人称（“我”）视角。
+2. 保留关键事件、情感变化、决定和计划。
+3. 长度控制在 120 字左右。
+4. 输出纯文本，不要任何 JSON 或额外说明。
+
+待精炼记忆：
+${memoryContent}
+
+今天是：${today}
+      `;
+
+      const refinedSummary = await generateResponse([{ role: 'user', content: prompt }], activePreset);
+
+      if (!refinedSummary?.trim()) throw new Error("AI 返回空内容");
+
+      const newCoreMem = {
+        id: Date.now().toString(),
+        content: refinedSummary.trim(),
+        date: new Date().toLocaleDateString(),
+        importance: 10,
+        meta: { source: 'multi-merge' }
+      };
+
+      // 删除旧的，添加新的
+      setContacts((prev: any) => prev.map((c: any) =>
+        c.id === contact.id
+          ? { ...c, longTermMemories: [...c.longTermMemories.filter((m: any) => !selectedMemIds.includes(m.id)), newCoreMem] }
+          : c
+      ));
+
+      alert(`成功！已将 ${selectedMemIds.length} 张便签合并为 1 张核心记忆～`);
+      resetMultiSelect();
+    } catch (err) {
+      console.error(err);
+      alert("合并失败，请检查网络或 API 设置");
+    }
+  };
+
+  return (
+    <div className="absolute inset-0 z-50 flex items-end sm:items-center justify-center animate-fadeIn pointer-events-none">
+      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm pointer-events-auto" onClick={() => { onClose(); resetMultiSelect(); }} />
+      <div
+        className="bg-white w-full sm:w-[90%] h-[85%] sm:h-[80%] rounded-t-3xl sm:rounded-3xl shadow-2xl flex flex-col overflow-hidden animate-slideUp relative z-10 pointer-events-auto"
+        onClick={(e) => e.stopPropagation()}
+      >
+       {/* Header */}
+        <div className="p-4 border-b flex justify-between items-center bg-gray-50">
+          <div className="flex items-center gap-3">
+            <img src={contact?.avatar || ''} className="w-10 h-10 rounded-full border-2 border-white" alt="avatar"/>
+            <div>
+              <h2 className="font-bold text-lg leading-none">{contact?.name}</h2>
+              <div className="flex items-center gap-2 mt-1">
+                 <p className="text-[10px] text-gray-400">Soul Interface</p>
+                 <span className="text-[10px] bg-yellow-100 text-yellow-700 px-1.5 py-0.5 rounded-full font-bold border border-yellow-200">🪙 {contact.interventionPoints || 0}</span>
+              </div>
+            </div>
+          </div>
+          <button onClick={onClose} className="w-8 h-8 bg-gray-200 rounded-full text-gray-500">✕</button>
+        </div>
+
+        {/* Tabs */}
+        <div className="flex p-2 bg-gray-100 m-4 rounded-xl">
+{['emotion', 'persona', 'memory', 'agreement'].map(t => (
+            <button key={t} onClick={() => setActiveTab(t)} className={`flex-1 py-2 text-xs font-bold rounded-lg capitalize transition-colors duration-200 ${activeTab === t ? 'bg-white text-blue-600 shadow' : 'text-gray-400'}`}>
+              {t === 'emotion' ? '❤️ 情绪' : t === 'persona' ? '🧬 人格' : t === 'memory' ? '🧠 记忆' : '📝 约定'}
+            </button>
+          ))}
+        </div>
+
+        {/* Content */}
+        <div className="flex-1 overflow-y-auto p-4 space-y-6">
+          {/* 这是一组代码：修复版情绪面板 (解决“睁眼说瞎话”的显示Bug) */}
+{/* ==================== [究极融合版] 情绪控制台 ==================== */}
+          {activeTab === 'emotion' && (
+            <div className="space-y-6 animate-fadeIn">
+              
+              {/* 1. 顶部：炼金术状态显示 (大表情 + 文字状态) */}
+              <div className="text-center">
+                <div className="text-6xl mb-2 transition-transform hover:scale-110 duration-300 cursor-default">
+                  {/* 调用炼金术计算表情 */}
+                  {(() => {
+                     const state = calculateComplexState(energy, contact?.hef);
+                     return state.emoji;
+                  })()}
+                </div>
+                
+                {/* 状态文字 (如: 又累又气) */}
+                <h3 className="text-xl font-bold text-gray-800">
+                  {calculateComplexState(energy, contact?.hef).text.split(' ')[0]}
+                </h3>
+                
+                {/* 关系状态胶囊 */}
+                <span className={`text-xs font-bold px-2 py-1 rounded-full mt-1 inline-block ${
+                   (contact?.affectionScore ?? 50) < 0 ? 'bg-gray-200 text-gray-600' : 'bg-pink-100 text-pink-600'
+                }`}>
+                   {contact?.relationshipStatus || 'Friend'}
+                </span>
+              </div>
+
+              <div className="bg-white border border-gray-100 p-5 rounded-2xl space-y-5 shadow-sm">
+                
+                {/* 2. ⚡ 能量条区域 (保留你的旧功能) */}
+                <div>
+                  <div className="flex justify-between text-xs font-bold text-gray-500 mb-1">
+                    <span className="flex items-center gap-1">
+                        ⚡ 能量 
+                        <span className={`text-[9px] px-1.5 rounded-sm uppercase tracking-wider ${
+                            energy.status === 'Sleeping' ? 'bg-indigo-100 text-indigo-500' : 
+                            energy.status === 'Awake' ? 'bg-green-100 text-green-500' : 
+                            energy.status === 'Tired' ? 'bg-yellow-100 text-yellow-600' :
+                            'bg-red-100 text-red-500'
+                        }`}>
+                            {energy.status}
+                        </span>
+                    </span>
+                    <span>{Math.round(energy.current)}%</span>
+                  </div>
+                  <div className="w-full h-2.5 bg-gray-100 rounded-full overflow-hidden">
+                    <div 
+                      className={`h-full transition-all duration-700 ease-out ${
+                          energy.status === 'Sleeping' ? 'bg-indigo-400' : 
+                          energy.current < 20 ? 'bg-red-500' : 
+                          energy.current < 50 ? 'bg-yellow-400' :
+                          'bg-gradient-to-r from-yellow-400 to-orange-500'
+                      }`}
+                      style={{width: `${Math.max(5, energy.current)}%`}}
+                    ></div>
+                  </div>
+                  {energy.status === 'Sleeping' && (
+                      <p className="text-[9px] text-indigo-400 mt-1 text-center animate-pulse">💤 正在回血中...</p>
+                  )}
+                </div>
+
+                {/* 3. ❤️ 爱意条 (Romance - 红轴) */}
+                <div>
+                  <div className="flex justify-between text-xs font-bold mb-1">
+                    <span className="text-rose-500">❤️ 爱意 (Romance)</span>
+                    <span className={(contact?.affectionScore ?? 50) < 0 ? "text-gray-600" : "text-rose-500"}>
+                      {contact?.affectionScore ?? 50}
+                    </span>
+                  </div>
+                  <div className="w-full h-2.5 bg-gray-100 rounded-full overflow-hidden relative">
+                    <div className="absolute left-1/2 top-0 bottom-0 w-0.5 bg-white z-10 opacity-50"></div>
+                    <div 
+                      className={`h-full transition-all duration-700 ease-out ${
+                        (contact?.affectionScore ?? 50) < 0 ? 'bg-gradient-to-r from-gray-800 to-gray-500' : 'bg-gradient-to-r from-pink-300 to-rose-500'
+                      }`}
+                      style={{ width: `${Math.max(0, Math.min(100, ((contact?.affectionScore ?? 50) + 100) / 2))}%` }}
+                    ></div>
+                  </div>
+                </div>
+
+                {/* 4. 🤝 友谊条 (Friendship - 蓝轴) */}
+                <div>
+                  <div className="flex justify-between text-xs font-bold mb-1">
+                    <span className="text-sky-500">🤝 友谊 (Trust)</span>
+                    <span className="text-sky-500">
+                      {contact?.friendshipScore ?? 50}
+                    </span>
+                  </div>
+                  <div className="w-full h-2.5 bg-gray-100 rounded-full overflow-hidden relative">
+                    <div className="absolute left-1/2 top-0 bottom-0 w-0.5 bg-white z-10 opacity-50"></div>
+                    <div 
+                      className="h-full transition-all duration-700 ease-out bg-gradient-to-r from-sky-300 to-blue-500"
+                      style={{ width: `${Math.max(0, Math.min(100, ((contact?.friendshipScore ?? 50) + 100) / 2))}%` }}
+                    ></div>
+                  </div>
+                  <div className="flex justify-between text-[9px] text-gray-300 mt-1 font-mono">
+                    <span>-100</span><span>0</span><span>+100</span>
+                  </div>
+                </div>
+
+              </div>
+            </div>
+          )}
+
+
+
+
+
+
+{/* 这是一组代码：【终极档案室】交互式人格面板 (含照片/录音/贴标签互动) */}
+          {activeTab === 'persona' && (
+            <div className="space-y-5 animate-slideUp pb-10">
+
+
+
+
+
+
+           {/* // 1. 顶部：身份卡片 (ID Card Style) */}
+              <div className="bg-white border border-gray-200 p-4 rounded-2xl shadow-sm relative overflow-hidden group">
+                 {/* 装饰背景纹理 */}
+                 <div className="absolute top-0 right-0 w-32 h-32 bg-blue-50 rounded-full blur-3xl -z-10 opacity-50"></div>
+                 
+                 <div className="flex gap-4">
+                    {/* 左侧：拍立得风格头像 */}
+                    <div className="flex-shrink-0 relative">
+                       <div className="w-20 h-24 bg-white border border-gray-200 shadow-md p-1 rotate-[-2deg] transition-transform group-hover:rotate-0">
+                          <img src={contact.avatar} className="w-full h-full object-cover grayscale-[20%] group-hover:grayscale-0 transition-all" alt="ID" />
+                       </div>
+                       {/* 别针装饰 */}
+                       <div className="absolute -top-2 left-1/2 -translate-x-1/2 text-gray-300 text-xl">📎</div>
+                    </div>
+
+
+
+
+
+                    {/* 右侧：基本信息 + 声音样本输入 */}
+                    <div className="flex-1 flex flex-col justify-center min-w-0">
+                       <div className="flex justify-between items-start">
+                           <div>
+                               <h2 className="text-xl font-black text-gray-800 tracking-tight leading-none">{contact.name}</h2>
+                               <p className="text-[10px] text-gray-400 font-mono mt-1 mb-2">ID: {contact.id.slice(0, 8).toUpperCase()}</p>
+                           </div>
+                           
+                         {/* ★★★ 播放按钮 (带跳转逻辑) ★★★ */}
+                           <button 
+                               onClick={(e) => {
+                                  e.stopPropagation();
+                                  
+                                  // 1. 检查 API Key
+                                  if (!globalSettings.minimax?.apiKey || !globalSettings.minimax?.groupId) {
+                                      // ★★★★★ 传送门入口！就是这里！ ★★★★★
+                                      if (confirm("⚠️ 还没配置语音服务哦！\n\n是否【立即前往设置页】填入 API Key？")) {
+                                          onClose(); // 1. 关掉面板
+                                          // 2. 呼叫 App.tsx 里的 onOpenSettings 来切换页面
+                                          if (onNavigateToSettings) {
+                                              onNavigateToSettings(); 
+                                          }
+                                      }
+                                      return; // 结束，不往下执行播放
+                                  }
+
+                                  // 2. 如果 Key 存在，就播放
+                                  const textToPlay = (contact.voiceSampleText || "").trim() || `你好，我是${contact.name}。这是我的声音样本。`;
+                                  playMessageAudio(`demo-${Date.now()}`, textToPlay);
+                               }}
+                               className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center shadow-md transition active:scale-90 ${
+                                   globalSettings.minimax?.apiKey ? 'bg-gray-900 text-white hover:bg-gray-700' : 'bg-gray-200 text-gray-400'
+                               }`}
+                           >
+                               <span className={globalSettings.minimax?.apiKey ? "ml-0.5" : ""}>▶</span>
+                           </button>
+                       </div>
+                       
+                       {/* ★★★ 输入框 (带自动保存) ★★★ */}
+                       <div className="relative mt-2">
+                           <input 
+                               type="text" 
+                               defaultValue={contact.voiceSampleText || ""}
+                               placeholder="在此输入台词 (自动保存)..."
+                               className="w-full text-[10px] bg-gray-50 border border-gray-100 rounded-lg px-2 py-1.5 text-gray-600 focus:bg-white focus:border-blue-300 outline-none transition placeholder-gray-300"
+                               onClick={(e) => e.stopPropagation()} 
+                               onBlur={(e) => {
+                                   const newText = e.target.value;
+                                   if (newText !== contact.voiceSampleText) {
+                                       setContacts((prev: any[]) => prev.map((c: any) => 
+                                           c.id === contact.id 
+                                           ? { ...c, voiceSampleText: newText } 
+                                           : c
+                                       ));
+                                   }
+                               }}
+                               onKeyDown={(e) => {
+                                   if (e.key === 'Enter') {
+                                       (e.target as HTMLInputElement).blur();
+                                   }
+                               }}
+                           />
+                       </div>
+                    </div>
+                 </div>
+              </div>
+
+              {/* 2. 核心数据区：MBTI + 雷达图 */}
+              <div className="grid grid-cols-3 gap-3">
+                 {/* 左边：MBTI 芯片 */}
+                 <div className="col-span-1 bg-gray-50 rounded-xl p-3 border border-gray-100 flex flex-col items-center justify-center">
+                    {(() => {
+                        const { openness: O, conscientiousness: C, extraversion: E, agreeableness: A } = big5;
+                        const mbti = `${E>5?'E':'I'}${O>5?'N':'S'}${A>5?'F':'T'}${C>5?'J':'P'}`;
+                        return (
+                           <>
+                             <span className="text-[9px] font-bold text-gray-400 uppercase">Type</span>
+                             <span className="text-lg font-black text-blue-600 mt-1">{mbti}</span>
+                           </>
+                        );
+                    })()}
+                 </div>
+                 
+                 {/* 右边：雷达图容器 */}
+                 <div className="col-span-2 bg-white border border-gray-100 rounded-xl p-2 relative overflow-hidden">
+                    <div className="scale-75 -mt-6 -mb-6">
+                        {renderRadar()}
+                    </div>
+                    <div className="absolute bottom-1 right-2 text-[9px] text-gray-300 font-mono">PSYCHO-METRICS</div>
+                 </div>
+              </div>
+
+
+
+
+
+
+
+              {/* ★★★ 印象轨迹 (你对AI的印象) ★★★ */}
+              <div className="mt-4 relative">
+                 <div className="flex justify-between items-end mb-2 px-1">
+                    <h3 className="text-xs font-bold text-gray-500 uppercase flex items-center gap-1">你对TA的印象 (Tags)</h3>
+                    <button onClick={() => setShowTagCreate(true)} className="text-[10px] bg-blue-50 text-blue-600 px-3 py-1 rounded-full font-bold hover:bg-blue-100 transition shadow-sm">
+                      + 贴新标签
+                    </button>
+                 </div>
+{/* 【ChatApp.tsx 更新：标签错落摆放 + 点击修改删除】 */}
+                 <div className="w-full bg-gray-50/50 border-y border-gray-200 h-40 relative overflow-x-auto overflow-y-hidden custom-scrollbar">
+                    {/* 绳子装饰 */}
+                    <div className="absolute top-4 left-0 w-[200%] h-0.5 bg-yellow-700/30 border-t border-yellow-800/20 shadow-sm z-0"></div>
+                    
+                    <div className="flex items-start gap-4 px-6 pt-3 min-w-max h-full">
+                        {(!contact.userTags || contact.userTags.length === 0) && (
+                           <div className="text-[10px] text-gray-400 italic mt-8 ml-4">
+                              还没给TA贴过标签...
+                           </div>
+                        )}
+               {/* 渲染用户贴的标签 (已修复：显示AI申请红点) */}
+                        {(contact.userTags || []).map((tag: any) => {
+                           const isPrivate = tag.isPublic === false; 
+                           const rotation = tag.rotation || (Math.random() * 10 - 5); 
+                           const marginTop = tag.strength || 0; 
+
+                          return (
+                             <div 
+                                key={tag.id} 
+                                className="relative group flex flex-col items-center flex-shrink-0 cursor-pointer hover:z-20 transition-all duration-300 ease-out" 
+                                style={{ 
+                                    transform: `rotate(${rotation}deg)`, 
+                                    marginTop: `${marginTop}px`,
+                                    marginLeft: '-5px',
+                                    marginRight: '-5px' 
+                                }} 
+                                onClick={() => setViewingTag(tag)}
+                             >
+                                {/* 夹子 */}
+                                <div className="w-2 h-4 bg-amber-700 rounded-sm mb-[-6px] z-20 shadow-md relative border-l border-white/20"></div>
+                                
+                                {/* 标签纸 */}
+                                <div className={`relative ${isPrivate ? 'bg-purple-100 text-purple-900 border-purple-200' : 'bg-yellow-100 text-yellow-900 border-yellow-200'} border px-3 pt-3 pb-5 min-w-[70px] max-w-[110px] text-center shadow-lg transition-transform hover:scale-110 hover:rotate-0 z-10 flex flex-col justify-between min-h-[80px]`} style={{ borderRadius: "2px 2px 20px 2px" }}>
+                                   
+                                   {/* ★★★ 如果有申请，显示跳动的红点/问号 ★★★ */}
+                                   {tag.aiRequestPending && (
+                                       <div className="absolute -top-2 -right-2 w-6 h-6 bg-red-500 text-white rounded-full flex items-center justify-center font-bold text-xs border-2 border-white shadow-sm animate-bounce z-30">
+                                           ?
+                                       </div>
+                                   )}
+
+                                   <span className="text-sm font-black leading-tight break-words font-sans mb-2">{tag.content}</span>
+                                   <div className="mt-auto pt-2 border-t border-black/10 w-full flex justify-end"><span className="text-[9px] font-mono opacity-60 tracking-tighter">Me</span></div>
+                                </div>
+                             </div>
+                           );
+                        })}
+                    </div>
+                 </div>
+
+                 {/* ★★★ 标签详情/删除弹窗 (更新版) ★★★ */}
+                 {viewingTag && (
+                   <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/20 backdrop-blur-sm animate-fadeIn" onClick={() => setViewingTag(null)}>
+                      <div className="bg-white w-[85%] max-w-xs rounded-2xl shadow-2xl p-5 animate-scaleIn" onClick={e => e.stopPropagation()}>
+                         <div className="text-center mb-4">
+                            <span className="text-xs text-gray-400 font-bold uppercase tracking-widest">{viewingTag.isPublic ? '📢 公开标签' : '🔒 私密标签'}</span>
+                            <h3 className="text-2xl font-black text-gray-800 mt-1">#{viewingTag.content}</h3>
+                            <p className="text-[10px] text-gray-400 font-mono mt-1">From: Me</p>
+                         </div>
+                         <div className="bg-yellow-50 p-3 rounded-xl border border-yellow-200 mb-4">
+                            <label className="text-[9px] font-bold text-yellow-700 uppercase mb-1 block">我的备注</label>
+                            <p className="text-sm text-gray-700 whitespace-pre-wrap">{viewingTag.note || "无"}</p>
+                         </div>
+                        
+                         <div className="flex gap-2">
+                             {/* 删除按钮 */}
+                             <button 
+                                onClick={() => {
+                                    if(confirm("确定撕掉这个标签吗？")) {
+                                        setContacts((prev: any) => prev.map((c: any) => 
+                                            c.id === contact.id 
+                                            ? { ...c, userTags: c.userTags.filter((t: any) => t.id !== viewingTag.id) } 
+                                            : c
+                                        ));
+                                        setViewingTag(null);
+                                    }
+                                }}
+                                className="flex-1 bg-red-50 text-red-500 py-2 rounded-xl font-bold text-xs border border-red-100"
+                             >
+                                🗑️ 撕掉
+                             </button>
+                             <button onClick={() => setViewingTag(null)} className="flex-1 bg-gray-900 text-white py-2 rounded-xl font-bold text-xs">关闭</button>
+                         </div>
+                      </div>
+                   </div>
+                 )}
+
+
+
+
+
+
+
+{/* 标签详情弹窗 (终极版：含申请处理 + 修改/删除/公开 三大金刚) */}
+                 {viewingTag && (
+                   <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/20 backdrop-blur-sm animate-fadeIn" onClick={() => setViewingTag(null)}>
+                      <div className="bg-white w-[85%] max-w-sm rounded-3xl shadow-2xl p-6 animate-scaleIn flex flex-col gap-4" onClick={e => e.stopPropagation()}>
+                         
+                         {/* === 场景一：AI 正在申请查看这个私密标签 === */}
+                         {viewingTag.aiRequestPending ? (
+                             <div className="text-center space-y-4">
+                                 <div className="text-5xl animate-bounce">🥺</div>
+                                 <h3 className="text-xl font-black text-gray-800">AI 想要看这个！</h3>
+                                 <p className="text-sm text-gray-500 px-4">
+                                     {contact.name} 察觉到了这个私密标签的存在，并向你发起了查看申请。要给TA看吗？
+                                 </p>
+                                 <div className="bg-purple-50 p-3 rounded-xl border border-purple-100 mx-4">
+                                     <span className="text-xs font-bold text-purple-400 uppercase block mb-1">标签内容</span>
+                                     <span className="text-lg font-black text-purple-700">#{viewingTag.content}</span>
+                                 </div>
+                                 
+                                 <div className="flex gap-3 pt-2">
+                                     <button 
+                                        onClick={() => {
+                                            // 拒绝：直接把 pending 状态去掉
+                                            setContacts((prev: any) => prev.map((c: any) => 
+                                                c.id === contact.id ? { 
+                                                    ...c, 
+                                                    userTags: c.userTags.map((t: any) => t.id === viewingTag.id ? { ...t, aiRequestPending: false } : t)
+                                                } : c
+                                            ));
+                                            setViewingTag(null);
+                                        }}
+                                        className="flex-1 py-3 bg-gray-100 text-gray-500 rounded-xl font-bold hover:bg-gray-200"
+                                     >
+                                         残忍拒绝
+                                     </button>
+                                     <button 
+                                        onClick={() => {
+                                            // 同意：转为公开 + 去掉 pending + 发系统通知
+                                            const timestamp = Date.now();
+                                            setContacts((prev: any) => prev.map((c: any) => {
+                                                if(c.id === contact.id) {
+                                                    return { 
+                                                        ...c, 
+                                                        userTags: c.userTags.map((t: any) => t.id === viewingTag.id ? { ...t, isPublic: true, aiRequestPending: false } : t),
+                                                        history: [...c.history, {
+                                                            id: "sys_reveal_" + timestamp,
+                                                            role: 'system',
+                                                            content: `【系统通知】你同意了 ${c.name} 的申请，标签 [${viewingTag.content}] 已公开！\n(指令: 请立刻对这个标签做出反应，就像你刚看到它一样)`,
+                                                            timestamp: timestamp,
+                                                            type: 'text'
+                                                        }]
+                                                    };
+                                                }
+                                                return c;
+                                            }));
+                                            setViewingTag(null);
+                                            // 这里可以触发一次 AI 回复 (handleAiReplyTrigger)，看你的需求
+                                        }}
+                                        className="flex-1 py-3 bg-blue-500 text-white rounded-xl font-bold shadow-lg hover:bg-blue-600"
+                                     >
+                                         ✅ 同意并公开
+                                     </button>
+                                 </div>
+                             </div>
+                         ) : (
+                             /* === 场景二：正常管理 (AI标签 或 你的标签) === */
+                             <>
+                                 <div className="text-center">
+                                    <span className={`text-xs font-bold uppercase tracking-widest px-2 py-0.5 rounded ${viewingTag.author === 'ai' ? 'bg-blue-100 text-blue-600' : (viewingTag.isPublic ? 'bg-green-100 text-green-600' : 'bg-purple-100 text-purple-600')}`}>
+                                       {viewingTag.author === 'ai' ? '🤖 AI 的印象' : (viewingTag.isPublic ? '📢 公开标签' : '🔒 私密标签')}
+                                    </span>
+                                    
+                                    {/* 如果是编辑模式，显示输入框 */}
+                                    {/* 这里为了简化，我们做成点击修改按钮后弹出 prompt，或者直接复用 TagCreationModal，但最快的方式是直接用 Prompt */}
+                                    <h3 className="text-3xl font-black text-gray-800 mt-3 mb-1">#{viewingTag.content}</h3>
+                                    
+                                    <div className="text-xs text-gray-400 font-mono flex justify-center gap-2">
+                                        <span>From: {viewingTag.author === 'ai' ? contact.name : 'Me'}</span>
+                                        <span>•</span>
+                                        <span>{new Date(viewingTag.timestamp).toLocaleDateString()}</span>
+                                    </div>
+                                 </div>
+
+                                 <div className="bg-gray-50 p-4 rounded-2xl border border-gray-100 text-center">
+                                    <label className="text-[9px] font-bold text-gray-400 uppercase mb-2 block">
+                                        {viewingTag.author === 'ai' ? 'AI Reason' : 'My Note'}
+                                    </label>
+                                    <p className="text-sm text-gray-700 italic">
+                                       “{viewingTag.aiReasoning || viewingTag.note || "暂无备注"}”
+                                    </p>
+                                 </div>
+
+                                 {/* === 你的标签：三大金刚按钮 === */}
+                                 {viewingTag.author === 'user' && (
+                                     <div className="grid grid-cols-3 gap-3 mt-2">
+                                         {/* 1. 修改按钮 */}
+                                         <button 
+                                            onClick={() => {
+                                                // 简单的修改逻辑：弹窗输入
+                                                const newContent = prompt("修改标签内容:", viewingTag.content);
+                                                const newNote = prompt("修改备注:", viewingTag.note);
+                                                if (newContent !== null) {
+                                                    setContacts((prev: any) => prev.map((c: any) => 
+                                                        c.id === contact.id ? { 
+                                                            ...c, 
+                                                            userTags: c.userTags.map((t: any) => t.id === viewingTag.id ? { ...t, content: newContent || t.content, note: newNote !== null ? newNote : t.note } : t)
+                                                        } : c
+                                                    ));
+                                                    setViewingTag(null);
+                                                }
+                                            }}
+                                            className="flex flex-col items-center justify-center py-3 rounded-2xl bg-blue-50 text-blue-600 hover:bg-blue-100 transition"
+                                         >
+                                             <span className="text-xl mb-1">✏️</span>
+                                             <span className="text-xs font-bold">修改</span>
+                                         </button>
+
+                                         {/* 2. 公开/私密切换按钮 */}
+                                         <button 
+                                            onClick={() => {
+                                                const willBePublic = !viewingTag.isPublic;
+                                                const timestamp = Date.now();
+                                                setContacts((prev: any) => prev.map((c: any) => {
+                                                    if (c.id === contact.id) {
+                                                        let newHistory = [...c.history];
+                                                        // 如果从私密 -> 公开，通知 AI
+                                                        if (willBePublic) {
+                                                            newHistory.push({
+                                                                id: "sys_reveal_" + timestamp,
+                                                                role: 'system',
+                                                                content: `【系统通知】用户将标签 [${viewingTag.content}] 设为了公开！\n备注：${viewingTag.note || "无"}`,
+                                                                timestamp: timestamp,
+                                                                type: 'text'
+                                                            });
+                                                        }
+                                                        return {
+                                                            ...c,
+                                                            history: newHistory,
+                                                            userTags: c.userTags.map((t: any) => t.id === viewingTag.id ? { ...t, isPublic: willBePublic } : t)
+                                                        };
+                                                    }
+                                                    return c;
+                                                }));
+                                                setViewingTag(null);
+                                            }}
+                                            className={`flex flex-col items-center justify-center py-3 rounded-2xl transition ${viewingTag.isPublic ? 'bg-purple-50 text-purple-600 hover:bg-purple-100' : 'bg-green-50 text-green-600 hover:bg-green-100'}`}
+                                         >
+                                             <span className="text-xl mb-1">{viewingTag.isPublic ? '🔒' : '📢'}</span>
+                                             <span className="text-xs font-bold">{viewingTag.isPublic ? '转私密' : '转公开'}</span>
+                                         </button>
+
+                                         {/* 3. 摘除按钮 */}
+                                         <button 
+                                            onClick={() => {
+                                                if(confirm("确定撕掉这个标签吗？")) {
+                                                    setContacts((prev: any) => prev.map((c: any) => 
+                                                        c.id === contact.id ? { ...c, userTags: c.userTags.filter((t: any) => t.id !== viewingTag.id) } : c
+                                                    ));
+                                                    setViewingTag(null);
+                                                }
+                                            }}
+                                            className="flex flex-col items-center justify-center py-3 rounded-2xl bg-red-50 text-red-500 hover:bg-red-100 transition"
+                                         >
+                                             <span className="text-xl mb-1">🗑️</span>
+                                             <span className="text-xs font-bold">摘除</span>
+                                         </button>
+                                     </div>
+                                 )}
+
+                                 <button onClick={() => setViewingTag(null)} className="w-full py-3 mt-2 text-gray-400 font-bold text-xs hover:text-gray-600">
+                                     关闭
+                                 </button>
+                             </>
+                         )}
+                      </div>
+                   </div>
+                 )}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                 
+                 {/* 新建弹窗的调用 (逻辑不变) */}
+                 <TagCreationModal 
+                   isOpen={showTagCreate} 
+                   onClose={() => setShowTagCreate(false)} 
+                   onSubmit={handleTagSubmit} 
+                 />
+              </div>
+
+
+
+
+
+
+              {/* 4. 详细人设 (折叠在底部) */}
+              <details className="group">
+                 <summary className="text-xs font-bold text-gray-400 cursor-pointer list-none flex items-center justify-center gap-2 py-2 hover:text-gray-600 transition">
+                    <span>▼ 查看核心设定代码 (机密)</span>
+                 </summary>
+                 <div className="bg-gray-900 text-green-400 font-mono text-[10px] p-4 rounded-xl mt-2 leading-relaxed shadow-inner overflow-hidden">
+                    <div className="opacity-50 mb-2 border-b border-gray-700 pb-1">CONFIDENTIAL_FILE_V1.0</div>
+                    {contact?.persona}
+                 </div>
+              </details>
+
+            </div>
+          )}
+
+
+
+
+{/* ==================== [重制版] AI 的誓约备忘录 (分层级/无打卡) ==================== */}
+          {activeTab === 'agreement' && (
+            <div className="animate-fadeIn h-full flex flex-col p-4 bg-gray-50/50">
+              
+              {/* 标题区 */}
+              <div className="mb-4 text-center">
+                <h4 className="text-sm font-black text-gray-700 tracking-widest uppercase">My Promises</h4>
+                <p className="text-[10px] text-gray-400 mt-1">那些我说过，且一定要为你做到的事</p>
+              </div>
+
+              <div className="flex-1 overflow-y-auto custom-scrollbar space-y-6 pb-10">
+                
+                {(!contact.agreements || contact.agreements.filter((a: any) => a.actor === 'ai').length === 0) ? (
+                   <div className="text-center text-gray-400 py-20 opacity-50">
+                      <div className="text-4xl mb-2">🍃</div>
+                      <p className="text-xs">风还没有吹来任何约定...</p>
+                   </div>
+                ) : (
+                  <>
+                    {/* 1. 近期事项 (Short-term) - 红色加急便签风 */}
+                    {(() => {
+                        const shortTerms = contact.agreements.filter((a: any) => a.actor === 'ai' && a.termType === 'short');
+                        if (shortTerms.length === 0) return null;
+                        return (
+                            <div className="relative group">
+                                <div className="absolute -left-1 top-2 bottom-2 w-1 bg-red-400 rounded-full"></div>
+                                <div className="pl-4">
+                                    <h5 className="text-xs font-bold text-red-500 mb-2 flex items-center gap-1">
+                                        <span>🔥</span> 近期提要 (这两天)
+                                    </h5>
+                                    <div className="space-y-2">
+                                        {shortTerms.map((a: any) => (
+                                            <div key={a.id} className="bg-white p-3 rounded-lg shadow-sm border-l-4 border-red-200 text-sm text-gray-700 leading-relaxed relative hover:scale-[1.01] transition-transform">
+                                                {/* 删除按钮 (仅悬停显示) */}
+                                                <button 
+                                                    onClick={() => {
+                                                        if(confirm("AI: 诶？这件事不需要我记着了吗？")) {
+                                                            setContacts((prev: any) => prev.map((c: any) => c.id === contact.id ? { ...c, agreements: c.agreements.filter((x: any) => x.id !== a.id) } : c));
+                                                        }
+                                                    }}
+                                                    className="absolute top-1 right-1 text-gray-200 hover:text-red-400 p-1"
+                                                >×</button>
+                                                “{a.content}”
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            </div>
+                        );
+                    })()}
+
+                    {/* 2. 中期计划 (Mid-term) - 蓝色手账风 */}
+                    {(() => {
+                        const midTerms = contact.agreements.filter((a: any) => a.actor === 'ai' && a.termType === 'mid');
+                        if (midTerms.length === 0) return null;
+                        return (
+                            <div className="relative group">
+                                <div className="absolute -left-1 top-2 bottom-2 w-1 bg-blue-400 rounded-full"></div>
+                                <div className="pl-4">
+                                    <h5 className="text-xs font-bold text-blue-500 mb-2 flex items-center gap-1">
+                                        <span>📅</span> 记在心上 (本月)
+                                    </h5>
+                                    <div className="grid gap-2">
+                                        {midTerms.map((a: any) => (
+                                            <div key={a.id} className="bg-blue-50/50 p-3 rounded-lg border border-blue-100 text-sm text-blue-900 font-medium relative">
+                                                 <button 
+                                                    onClick={() => {
+                                                        if(confirm("确定删除这条计划吗？")) {
+                                                            setContacts((prev: any) => prev.map((c: any) => c.id === contact.id ? { ...c, agreements: c.agreements.filter((x: any) => x.id !== a.id) } : c));
+                                                        }
+                                                    }}
+                                                    className="absolute top-1 right-2 text-blue-200 hover:text-blue-400"
+                                                >×</button>
+                                                <span className="opacity-50 mr-2">●</span> {a.content}
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            </div>
+                        );
+                    })()}
+
+                    {/* 3. 长期愿景 (Long-term) - 星空梦想风 */}
+                    {(() => {
+                        const longTerms = contact.agreements.filter((a: any) => a.actor === 'ai' && a.termType === 'long');
+                        if (longTerms.length === 0) return null;
+                        return (
+                            <div className="relative mt-2">
+                                <div className="flex items-center gap-2 mb-3 justify-center opacity-50">
+                                    <div className="h-px bg-purple-200 flex-1"></div>
+                                    <span className="text-[10px] text-purple-400 font-bold uppercase tracking-widest">Future & Dreams</span>
+                                    <div className="h-px bg-purple-200 flex-1"></div>
+                                </div>
+                                <div className="space-y-3">
+                                    {longTerms.map((a: any) => (
+                                        <div key={a.id} className="relative group overflow-hidden bg-gradient-to-r from-purple-50 to-indigo-50 p-4 rounded-xl border border-purple-100 shadow-sm text-center">
+                                            <div className="absolute top-0 right-0 w-10 h-10 bg-purple-100 rounded-full blur-xl -z-10"></div>
+                                             <button 
+                                                onClick={() => {
+                                                    if(confirm("要忘记这个未来的约定吗？")) {
+                                                        setContacts((prev: any) => prev.map((c: any) => c.id === contact.id ? { ...c, agreements: c.agreements.filter((x: any) => x.id !== a.id) } : c));
+                                                    }
+                                                }}
+                                                className="absolute top-2 right-2 text-purple-200 hover:text-purple-500 opacity-0 group-hover:opacity-100 transition"
+                                            >×</button>
+                                            <p className="text-sm font-bold text-purple-800 italic">“ {a.content} ”</p>
+                                            <p className="text-[9px] text-purple-400 mt-2 font-mono">以后...</p>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        );
+                    })()}
+                  </>
+                )}
+              </div>
+            </div>
+          )}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+{/* ==================== [新UI] 记忆手账 (含事件簿 & 印象集) ==================== */}
+          {activeTab === 'memory' && (
+            <div className="animate-fadeIn h-full flex flex-col">
+              {/* --- 手账内部的标签页切换 --- */}
+              <div className="flex p-1 bg-gray-100 rounded-lg mx-4 mb-4 flex-shrink-0">
+                <button 
+                  onClick={() => setMemoryTab('events')}
+                  className={`flex-1 py-2 text-xs font-bold rounded-md transition-all ${memoryTab === 'events' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500'}`}
+                >
+                  事件簿 (Events)
+                </button>
+                <button 
+                  onClick={() => setMemoryTab('impressions')}
+                  className={`flex-1 py-2 text-xs font-bold rounded-md transition-all ${memoryTab === 'impressions' ? 'bg-white text-purple-600 shadow-sm' : 'text-gray-500'}`}
+                >
+                  印象集 (Impressions)
+                </button>
+              </div>
+
+              {/* --- 事件簿页面 --- */}
+              {memoryTab === 'events' && (
+                <div className="h-full flex flex-col px-4">
+                  {/* 这里是原来“记忆面板”的所有内容，我们马上把它填回来 */}
+                 <>
+                    <div className="flex justify-between items-center mb-4">
+                      <h4 className="text-sm font-bold text-gray-600">🧠 长期记忆便签墙</h4>
+                      <span className="text-xs text-gray-400">{longTermMemories.length} 张便签</span>
+                    </div>
+                    {/* 多选控制栏 */}
+                    <div className="flex justify-between items-center mb-4">
+                      <button onClick={() => { setIsMultiSelect(!isMultiSelect); if (isMultiSelect) setSelectedMemIds([]); }} className={`px-4 py-2 rounded-lg font-bold text-sm ${isMultiSelect ? 'bg-blue-500 text-white' : 'bg-gray-200 text-gray-600'}`}>
+                        {isMultiSelect ? '✓ 完成选择' : '☑️ 多选合并'}
+                      </button>
+                      {isMultiSelect && selectedMemIds.length >= 2 && (
+                        <button onClick={handleMultiMerge} className="px-4 py-2 bg-purple-500 text-white rounded-lg font-bold text-sm shadow hover:bg-purple-600 transition">
+                          🔄 合并 {selectedMemIds.length} 张
+                        </button>
+                      )}
+                    </div>
+                    {/* 便签列表 */}
+                    <div className="flex-1 overflow-y-auto space-y-3 pb-20 custom-scrollbar">
+                      {longTermMemories.length === 0 ? (
+                        <div className="text-center text-gray-400 py-10"><span className="text-4xl mb-4 block">📝</span><p className="text-sm">还没有形成长期记忆哦</p><p className="text-xs mt-2">多聊一会儿就会自动总结啦～</p></div>
+                      ) : (
+                        longTermMemories.slice().reverse().map((mem: any, idx: number) => (
+                          <MemoryNote key={mem.id || idx} mem={mem} idx={idx} total={longTermMemories.length} contact={contact} setContacts={setContacts} isMultiSelect={isMultiSelect} isSelected={selectedMemIds.includes(mem.id)} onToggleSelect={toggleSelect} />
+                        ))
+                      )}
+                    </div>
+                    {/* 底部一键精炼 */}
+                    <div className="mt-auto pt-4 pb-4 flex-shrink-0">
+                      {longTermMemories.length >= 2 && (
+                        <button onClick={onRefineMemory} className="w-full bg-purple-500 text-white py-3 rounded-xl font-bold shadow-lg hover:bg-purple-600 transition active:scale-95">
+                          🔄 精炼全部记忆
+                        </button>
+                      )}
+                    </div>
+                  </>
+                </div>
+              )}
+
+{/* --- 印象集页面 (V7.2 "究极拟物手账" 最终完整版) --- */}
+              {memoryTab === 'impressions' && (() => {
+                const profile = contact.userProfile || {};
+                const themeColor = profile.themeColor || '#f3e8ff';
+
+
+
+
+// --- 辅助组件：可更换的拍立得相框 (V3.1 - 完整逻辑+装饰找回版) ---
+                const PhotoFrame: React.FC<{ id: string; className: string; defaultImage: string; }> = ({ id, className, defaultImage }) => {
+                  const photo = (profile as any)[id] || defaultImage;
+                  return (
+                    <label className={`absolute bg-white p-1.5 rounded-sm shadow-lg border border-gray-200 cursor-pointer group hover:z-20 transition-transform duration-300 ${className}`}>
+                      <img 
+                        src={photo} 
+                        className="w-full h-full object-cover rounded-sm" 
+                        alt={`frame-${id}`} 
+                      />
+                      <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white text-xs font-bold">更换</div>
+                      <input type="file" className="hidden" accept="image/*"
+                        onClick={(e) => (e.target as any).value = null} // 允许重复上传同一张
+                        onChange={async (e) => {
+                          if (e.target.files && e.target.files[0]) {
+                            const base64 = await fileToBase64(e.target.files[0]);
+                            // ★★★ 核心修复：直接操作 contact ID ★★★
+                            setContacts((prev: any[]) => prev.map((c: any) => 
+                                c.id === contact.id 
+                                ? { ...c, userProfile: { ...(c.userProfile || {}), [id]: base64 } } 
+                                : c
+                            ));
+                          }
+                        }}
+                      />
+                    </label>
+                  );
+                };
+
+                return (
+                  <div className="h-full flex flex-col relative rounded-b-2xl" style={{ backgroundColor: themeColor }}>
+                    {/* --- 背景纹理 & 自定义背景图 --- */}
+                    <div className="absolute inset-0 bg-repeat bg-center opacity-20 pointer-events-none rounded-b-2xl" style={{ 
+                        backgroundImage: profile.background_image ? `url(${profile.background_image})` : `url('data:image/svg+xml,%3Csvg width="60" height="60" viewBox="0 0 60 60" xmlns="http://www.w3.org/2000/svg"%3E%3Cg fill="none" fill-rule="evenodd"%3E%3Cg fill="%239C92AC" fill-opacity="0.4"%3E%3Cpath d="M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z"/%3E%3C/g%3E%3C/g%3E%3C/svg%3E')`, 
+                        backgroundSize: profile.background_image ? 'cover' : 'auto',
+                      }}/>
+                    
+                    <div className="flex-1 overflow-y-auto p-4 space-y-6 custom-scrollbar z-10 relative">
+                      
+                      {/* ★★★ 散落的拍立得照片 (可保存) ★★★ */}
+                      <PhotoFrame id="scattered_photo_1" className="top-16 -left-8 w-24 h-28 transform -rotate-12 hover:rotate-0 hover:scale-125" defaultImage="https://picsum.photos/200/300?random=1" />
+                      <PhotoFrame id="scattered_photo_2" className="bottom-10 -right-10 w-60 h-60 transform rotate-15 hover:rotate-0 hover:scale-125" defaultImage="https://picsum.photos/200/300?random=2" />
+                      <PhotoFrame id="scattered_photo_3" className="bottom-10 -left-6 w-20 h-24 transform rotate-10 hover:rotate-0 hover:scale-125" defaultImage="https://picsum.photos/200/300?random=4" />
+                      
+                      {/* 主笔记本区域 */}
+                      <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-lg border border-white/50 p-6 relative flex flex-col items-center min-h-[300px]">
+                        
+                        {/* ★★★ 这里的 Emoji 装饰全都找回来了！ ★★★ */}
+                        <div className="absolute -top-8 -right-4 text-5xl opacity-80 transform rotate-12 pointer-events-none">✏️</div>
+                        <div className="absolute top-14 right-40 text-5xl opacity-80 transform rotate-12 pointer-events-none">💚</div>
+                        <div className="absolute top-16 -left-4 text-3xl opacity-70 transform -rotate-45 pointer-events-none">📎</div>
+                        <div className="absolute top-20 left-40 text-3xl opacity-70 transform -rotate-45 pointer-events-none">⭐️</div>
+                        
+                        {/* 胶带装饰 */}
+                        <div className="absolute -top-2 left-1/2 -translate-x-1/2 w-24 h-6 bg-yellow-200/70 transform -rotate-2 shadow-sm" style={{ clipPath: 'polygon(0 0, 100% 0, 100% 100%, 0% 100%)' }}></div>
+                        
+                        <h4 className="text-sm font-bold text-gray-700 mb-4">{contact.name} 的秘密手账</h4>
+                        
+                        {/* ★★★ 中心照片 (User Profile Photo) ★★★ */}
+                        <div className="relative mb-6 flex-shrink-0 z-10">
+                            <svg className="absolute -inset-3 w-[calc(100%+1.5rem)] h-[calc(100%+1.5rem)] opacity-60 pointer-events-none" viewBox="0 0 100 120">
+                                <path d="M 5,5 C 2,2 98,2 95,5 L 95,115 C 98,118 2,118 5,115 L 5,5 Z" stroke="#888" strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round" style={{ strokeDasharray: "5, 5" }}/>
+                            </svg>
+                           
+                            <label className="relative block w-28 h-36 bg-white p-2 rounded-sm shadow-xl border border-gray-200 cursor-pointer group transform rotate-2 hover:rotate-0 hover:scale-105 transition-transform duration-300">
+                              <img
+                                src={profile.photo || "https://picsum.photos/200/300?random=3"}
+                                className="w-full h-full rounded-sm block"
+                                style={{ objectFit: "cover" }} 
+                                alt="main profile"
+                              />
+                              <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white text-xs font-bold rounded-sm">
+                                📷 更换
+                              </div>
+                              <input type="file" className="hidden" accept="image/*"
+                                onChange={async (e) => {
+                                  if (e.target.files && e.target.files[0]) {
+                                    const base64 = await fileToBase64(e.target.files[0]);
+                                    setContacts((prev: any[]) => prev.map((c: any) => 
+                                        c.id === contact.id 
+                                        ? { ...c, userProfile: { ...(c.userProfile || {}), photo: base64 } } 
+                                        : c
+                                    ));
+                                  }
+                                }}
+                              />
+                            </label>
+                        </div>
+
+                        {/* 档案条目 */}
+                        {(!profile.personality_traits && !profile.preferences && !profile.habits) && (<div className="text-center text-gray-400 py-4"><p className="text-xs">正在努力了解你...</p></div>)}
+                        <TraitItem icon="🎭" label="性格特点" traits={profile.personality_traits} />
+                        <TraitItem icon="💖" label="喜欢的东西" traits={profile.preferences?.likes} />
+                        <TraitItem icon="💔" label="讨厌的东西" traits={profile.preferences?.dislikes} />
+                        <TraitItem icon="🕰️" label="行为习惯" traits={profile.habits} />
+                      </div>
+
+                      {/* ★★★ 找回了！AI给用户打的标签 (绳索UI) ★★★ */}
+                      <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-lg border border-white/50 p-4">
+                        <h5 className="text-sm font-bold mb-3 flex items-center gap-2 text-gray-600"><span>🏷️</span> {contact.name} 对你的印象标签</h5>
+                        <div className="w-full bg-gray-50/50 border-y border-gray-200 h-80 relative overflow-x-auto overflow-y-hidden custom-scrollbar rounded-lg">
+                          {/* 绳子 */}
+                          <div className="absolute top-4 left-0 w-[200%] h-0.5 bg-yellow-700/30 border-t border-yellow-800/20 shadow-sm z-0"></div>
+                          <div className="flex items-start gap-6 px-6 pt-3 min-w-max h-full">
+                            {(!contact.aiTagsForUser || contact.aiTagsForUser.length === 0) && (<div className="text-[10px] text-gray-400 italic mt-8 ml-4">绳子上空空如也...</div>)}
+                            
+{/* 渲染 AI 标签 (修改版：大号明信片模式，直接显示备注，不用点) */}
+                            {(contact.aiTagsForUser || []).map((tag: any) => (
+                              <div 
+                                key={tag.id} 
+                                className="relative group flex flex-col items-center flex-shrink-0 animate-fadeIn hover:z-20 transition-all duration-300"
+                                // 移除 onClick，因为内容直接显示了
+                                style={{ 
+                                    transform: `rotate(${(tag.style || (Math.random()*6-3))}deg)`, 
+                                    marginTop: `${Math.abs(tag.style || 0) + 10}px`,
+                                    marginLeft: '5px',
+                                    marginRight: '5px'
+                                }}
+                              >
+                                {/* 顶部：木头夹子 */}
+                                <div className="w-3 h-5 bg-amber-800 rounded-sm mb-[-8px] z-20 shadow-md relative border-l border-white/20"></div>
+                                
+                                {/* 核心：大号便签纸 */}
+                                <div className="relative bg-white border border-gray-200 p-3 w-40 min-h-[120px] shadow-lg flex flex-col rotate-0 hover:scale-105 transition-transform duration-200" style={{ borderRadius: "4px" }}>
+                                    
+                                    {/* 装饰：顶部胶带效果 */}
+                                    <div className="absolute -top-3 left-1/2 -translate-x-1/2 w-16 h-4 bg-blue-100/50 -rotate-1"></div>
+
+                                    {/* 1. 标签内容 (大字) */}
+                                    <div className="text-center mt-2 mb-2">
+                                        <span className="text-base font-black text-gray-800 bg-yellow-100 px-2 py-0.5 box-decoration-clone">
+                                            #{tag.content}
+                                        </span>
+                                    </div>
+
+                                    {/* 2. AI 的理由 (直接显示在这里！) */}
+                                    <div className="flex-1 bg-gray-50 rounded-lg p-2 border border-gray-100 mb-1">
+                                        <span className="text-[9px] font-bold text-blue-500 block mb-0.5"> {contact.name} 悄悄说:</span>
+                                        <p className="text-[10px] text-gray-600 leading-relaxed font-sans text-justify">
+                                            {/* 如果没有理由，就显示默认文案 */}
+                                            {tag.aiReasoning || tag.note || "（它似乎对你印象很深，但没写下原因...）"}
+                                        </p>
+                                    </div>
+                                    
+                                    {/* 3. 底部时间 */}
+                                    <div className="text-right border-t border-gray-100 pt-1 mt-1">
+                                        <span className="text-[9px] font-mono text-gray-300">
+                                           {new Date(tag.timestamp).toLocaleDateString([], {month: '2-digit', day: '2-digit'})}
+                                        </span>
+                                    </div>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+
+                    </div>
+                    
+                    {/* 底部工具栏 */}
+                    <div className="flex-shrink-0 p-2 flex justify-center items-center gap-4 bg-white/50 border-t border-white/50 z-20">
+                       <label className="flex flex-col items-center gap-1 cursor-pointer text-xs text-gray-600 hover:text-purple-600 transition-colors">
+                           <span className="text-lg">🖼️</span><span className="text-[10px] font-bold">换背景</span>
+                           <input type="file" className="hidden" accept="image/*" onChange={async (e) => { if (e.target.files && e.target.files[0]) { const base64 = await fileToBase64(e.target.files[0]); setContacts((prev: any[]) => prev.map((c: any) => c.id === contact.id ? { ...c, userProfile: { ...(c.userProfile || {}), background_image: base64 } } : c)); } }}/>
+                       </label>
+                       <label className="flex flex-col items-center gap-1 cursor-pointer text-xs text-gray-600 hover:text-purple-600 transition-colors">
+                           <span className="w-6 h-6 rounded-full border-2 border-white shadow-md" style={{ backgroundColor: themeColor }}></span><span className="text-[10px] font-bold">换颜色</span>
+                           <input type="color" className="absolute opacity-0" defaultValue={themeColor} onChange={(e) => setContacts((prev: any[]) => prev.map((c: any) => c.id === contact.id ? { ...c, userProfile: { ...(c.userProfile || {}), themeColor: e.target.value } } : c))}/>
+                       </label>
+                    </div>
+                  </div>
+                );
+              })()}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 const ChatApp: React.FC<ChatAppProps> = ({
   contacts,
   setContacts,
@@ -1211,6 +2652,71 @@ const handleClearChat = () => {
 
 
 
+// 【新增函数】：彻底重置角色数据
+const handleResetCharacter = () => {
+  if (!activeContact) return;
+
+  // 1. 弹出更严厉的警告！
+  const confirmation = confirm(
+    `【☢️ 终极警告 ☢️】\n\n你确定要彻底重置角色 "${activeContact.name}" 吗？\n\n此操作将删除以下所有数据，且不可恢复：\n\n- 全部聊天记录\n- 全部长期记忆便签\n- 全部约定\n- 全部印象标签 (AI对你的/你对AI的)\n- 全部人格档案 (手账)\n- 所有好感度与关系状态\n\n角色将恢复到【初始创建状态】。`
+  );
+
+  // 2. 如果用户取消，就什么都不做
+  if (!confirmation) {
+    return;
+  }
+
+  // 3. 如果用户确认，开始重置！
+  setContacts(prev => prev.map(c => {
+    if (c.id === activeContact.id) {
+      // 返回一个几乎全新的对象，只保留核心ID、名字、人设等基础信息
+      return {
+        ...c, // 保留 id, name, avatar, persona, userName, userPersona 等基础设定
+        
+        // ★★★ 以下是需要清空/重置的数据 ★★★
+        history: [],                             // 1. 清空聊天记录
+        longTermMemories: [],                    // 2. 清空长期记忆
+        agreements: [],                          // 3. 清空约定
+        userTags: [],                            // 4. 清空你贴的标签
+        aiTagsForUser: [],                       // 5. 清空AI贴的标签
+        userProfile: {},                         // 6. 清空人格档案手账
+        
+        // 7. 重置关系和状态
+        affectionScore: 50,                      // 好感度回到初始50
+        friendshipScore: 50,                     // 友谊值回到初始50
+        relationshipStatus: 'Acquaintance',      // 关系回到“认识”
+        isAffectionLocked: false,                // 解锁关系，可以重新校准
+        interventionPoints: 0,                   // 点数清零
+        chatCountForPoint: 0,                    // 计数器清零
+        
+        // 8. 重置其他运行时数据
+        unread: 0,
+        summary: "",
+        diaries: [],
+        questions: [],
+        letters: [],
+        mood: { // 重置心情和精力
+            current: "Calm",
+            energyLevel: 80,
+            lastUpdate: Date.now(),
+            energy: {
+                current: 80,
+                max: 100,
+                status: 'Awake',
+                lastUpdate: Date.now()
+            }
+        }
+      };
+    }
+    return c;
+  }));
+  
+  // 4. 给出操作完成的提示
+  alert(`角色 "${activeContact.name}" 已被彻底重置。`);
+};
+
+
+
 
 
 
@@ -1774,9 +3280,8 @@ ${historyText}
 
 
 
-// 【ChatApp.tsx 更新：副AI更智能，捕捉特质而不是流水账】
 const updateUserProfile = async (currentContact: Contact, highlightQuote: string) => {
-  console.log(`[人格档案引擎 V5.0] 深度分析模式触发: "${highlightQuote}"`);
+  console.log(`[人格档案引擎 V7.0] 注入人设版触发: "${highlightQuote}"`);
 
   const activePreset = globalSettings.apiPresets.find((p: any) => p.id === globalSettings.activePresetId);
   if (!activePreset) return;
@@ -1784,38 +3289,60 @@ const updateUserProfile = async (currentContact: Contact, highlightQuote: string
   try {
     const existingProfileText = JSON.stringify(currentContact.userProfile || {}, null, 2);
 
-    // ★★★ 核心修改：提示词大升级，要求“截取多点信息”和“总结特质” ★★★
+    // 1. ★★★ 紧急修复：获取世界书 (Lore) ★★★
+    // 我们用最近的聊天记录来检索相关的世界书条目，防止 AI 忘记设定
+    const recentHistory = currentContact.history.slice(-5);
+    const relevantLore = findRelevantWorldBookEntries(
+        recentHistory, 
+        worldBooks, 
+        currentContact.enabledWorldBooks || []
+    );
+    const loreText = relevantLore.map(e => `[设定] ${e.keys.join(', ')}: ${e.content}`).join('\n');
+
+    // 2. ★★★ 紧急修复：构建包含人设的 Prompt ★★★
     const systemPrompt = `
-# 你的身份
-你是一位敏锐的【心理侧写师】兼【幕后观察者】。你的工作不是简单的记录员，而是透过现象看本质。
+# 核心指令
+你【不是】一个通用的AI助手。
+你【必须】完全扮演以下角色，用【该角色的思维方式】来审视用户。
 
-# 你的任务
-用户刚刚说了一句意味深长的话：“${highlightQuote}”。
-请结合这句话，以及你对用户之前的了解，更新TA的【心理侧写档案】。
+# 角色绑定 (Persona)
+名字：${currentContact.name}
+**性格设定 (必须严格遵守)**：
+${currentContact.persona}
 
-# 核心要求
-1. **不要流水账**：不要只记录“用户说他喜欢吃苹果”，要分析出“用户偏好健康饮食/口味清淡”。
-2. **总结特质**：从这句话中提炼出用户的性格关键词（如：缺乏安全感、控制欲强、温柔体贴、傲娇）。
-3. **截取更多信息**：如果这句话不仅包含喜好，还暴露了TA的过去或价值观，请一并记录在 \`userProfile\` 中。
-4. **生成印象标签**：如果这句话让你对用户产生了一个强烈的形容词（标签），请填入 \`suggested_tag\`。
+# 世界观/背景设定 (Lore)
+${loreText || "（暂无特殊世界观触发）"}
 
-# 标签系统 (Public vs Private)
-你需要决定这个新标签是“贴在脑门上让TA看到的(Public)”还是“藏在心里偷偷标记的(Private)”。
-- **Private (私密)**: 腹黑的吐槽、羞涩的暗恋、看透了TA的弱点。这部分更有趣！
-- **Public (公开)**: 正常的夸奖、昵称。
+# 当前任务
+用户刚才说了一句：“${highlightQuote}”
+请基于你的**性格设定**，更新你对用户的心理档案，并给TA贴一个标签。
+
+# ★★★ 语气铁律 (违反必死) ★★★
+1. **绝对禁止 OOC (角色崩坏)**：如果你是高冷角色，就不要写“我好心疼”这种话！要写“麻烦的家伙”。如果你是傲娇，要写“才不是关心他”。
+2. **禁止玛丽苏/油腻**：严禁出现“眼神让我沉醉”、“命都给你”、“让我喉咙发紧”这种烂俗描写。
+3. **强制碎碎念**：ai_reason 必须是【你在心里的默念】，可以比较萌地描述，可爱清淡地描述比较好。
+4. **极简短**：**30字以内**！像随手写的便利贴，遵循【外语（中文）】的格式！！！
+
+# 语气示范 (根据你的人设自我调整)
+- (若你是高冷): "幼稚。"
+- (若你是傲娇): "也就这点能耐。哼。"
+- (若你是温柔): "有点可爱呢，好想ta……"
+- (若你是疯批): "想把他藏起来..."
+- (若你是逗比): "哈哈哈哈什么鬼。"
+
 
 # 现有档案
 \`\`\`json
 ${existingProfileText}
 \`\`\`
 
-# JSON输出 (严格格式)
+# JSON输出
 {
-  "userProfile": { ...基于推断更新后的完整档案... },
-  "suggested_tag": "爱操心", // 8字以内
-  "is_public": false,        // true=公开, false=私密 (尽量多生成私密的)
-  "unlock_cost": 50,         // 私密标签查看需要的点数
-  "ai_reason": "TA总是反复确认细节，说明内心缺乏安全感，想保护……" // 你的深度分析
+  "userProfile": { ...更新后的档案... },
+  "suggested_tag": "标签名(8字内)",
+  "is_public": false, 
+  "unlock_cost": 50,
+  "ai_reason": "这里写你的内心独白，必须符合你的人设语气！不要超过30字！" 
 }
 `;
 
@@ -1839,7 +3366,6 @@ ${existingProfileText}
           if (suggestedTag) {
             const timestamp = Date.now();
             
-            // ★★★ 只有公开标签才发系统通知，私密的绝对不发！ ★★★
             if (isPublic) {
                 newHistory.push({ 
                     id: `sys_tag_${timestamp}`, 
@@ -1848,9 +3374,6 @@ ${existingProfileText}
                     timestamp: timestamp, 
                     type: 'text' 
                 });
-            } else {
-                // 私密标签虽然不发通知，但可以给一个极其隐晦的提示（可选，这里先不发，满足你的需求“不收集特质”）
-                // 或者在日记里偷偷写一笔，这里只存入 aiTagsForUser
             }
 
             newAiTags.push({
@@ -1858,7 +3381,8 @@ ${existingProfileText}
               content: suggestedTag,
               timestamp: timestamp,
               style: Math.random() * 10 - 5,
-              aiReason: result.ai_reason || highlightQuote, // 记录AI的深度思考
+              // 双重保险：截断废话
+              aiReasoning: (result.ai_reason || highlightQuote).slice(0, 30), 
               note: result.ai_reason || "无", 
               author: 'ai',
               isPublic: isPublic,
@@ -2398,6 +3922,19 @@ const getEnergyInstruction = (mood: CharacterMood | undefined): string => {
       : (activeContact.history || []); // 确保是数组
 
     // 准备 Lore 和 Persona
+    // ... 原有的 Lore 代码 ...
+
+    
+    // ★★★ [新增]：整理 AI 的承诺清单，准备注入记忆 ★★★
+    // 只提取 actor === 'ai' 的，并且按类型分类
+    const aiPromises = (activeContact.agreements || []).filter(a => a.actor === 'ai');
+    
+    const shortPromises = aiPromises.filter(a => a.termType === 'short').map(a => `[近期要办]: ${a.content}`).join('\n');
+    const midPromises = aiPromises.filter(a => a.termType === 'mid').map(a => `[本月计划]: ${a.content}`).join('\n');
+    const longPromises = aiPromises.filter(a => a.termType === 'long').map(a => `[未来愿景]: ${a.content}`).join('\n');
+
+    const promiseContext = [shortPromises, midPromises, longPromises].filter(Boolean).join('\n');
+    const promiseInjection = promiseContext ? `\n# 📜 我对用户的有效承诺 (必须牢记)\n${promiseContext}\n(指令: 短期承诺请尽快寻找时机履行；长期承诺是你们共同的梦想，请在合适的时候提及以增加羁绊)` : "";
     const relevantLore = findRelevantWorldBookEntries(currentHistory, worldBooks, activeContact.enabledWorldBooks || []);
     const loreText = relevantLore.map(e => `- ${e.keys.join(', ')}: ${e.content}`).join('\n');
     
@@ -2694,6 +4231,7 @@ const generateSystemPrompt = (contact: Contact, gapDesc: string, aiTime: string)
 HEF: ${JSON.stringify(activeContact.hef, null, 2)}
 Persona: ${activeContact.persona}
 Lore: ${loreText || "无"}
+承诺：${promiseInjection}  // <--- 加在这里！！！
 
 
 
@@ -2753,6 +4291,10 @@ ${(() => {
 - 🔵 友谊值: ${activeContact.friendshipScore || 50}
 - 🔴 爱意值: ${activeContact.affectionScore}
 - 用户名字：${currentUserName}
+- **用户设定/特征**: ${currentUserPersona}
+
+
+
 
 **检测“自尊心防御 (Ego Defense)”**:
 - 场景：用户回复很短、隔了很久才回、语气冷淡。
@@ -3408,6 +4950,56 @@ if (extractedThought.new_agreement && Object.keys(extractedThought.new_agreement
       }
     }
 
+
+
+
+
+
+// =================================================================
+    // ★★★ [新增] AI 好奇心模块：申请查看私密标签 ★★★
+    // =================================================================
+    // 只有当：不是在处理历史消息 + 真的有私密标签 + 随机概率命中 时触发
+    if (!historyOverride && activeContact.userTags) {
+        const privateTags = activeContact.userTags.filter(t => !t.isPublic && !t.aiRequestPending && t.author === 'user');
+        
+        // 10% 的概率触发好奇心 (你可以调高这个 0.1 来测试)
+        if (privateTags.length > 0 && Math.random() < 0.1) {
+            const targetTag = privateTags[Math.floor(Math.random() * privateTags.length)];
+            console.log(`[好奇心] AI 察觉到了私密标签: ${targetTag.content}，发起申请！`);
+            
+            // 1. 标记该标签为“申请中” (通过更新 extractedThought 或直接修改 setContacts 都可以，这里我们直接追加副作用)
+            // 我们利用最后的 setContacts 来一起更新，这里先插入一条 AI 的“好奇发言”
+            
+            const curiosityText = [
+                "哎？你是不是在我身上贴了什么奇怪的备注？给我看看嘛！",
+                "总感觉你在偷偷评价我... 是什么？快给我解锁！",
+                "盯——你刚才是不是写我坏话了？我要看！",
+                "那个标签是什么意思？居然设为私密，太狡猾了！申请查看！"
+            ];
+            const randomAsk = curiosityText[Math.floor(Math.random() * curiosityText.length)];
+
+            // 把这个请求加到消息队列最后
+            newMessages.push({
+                id: Date.now().toString() + "_ask",
+                role: 'assistant',
+                content: randomAsk,
+                timestamp: Date.now() + 1000,
+                type: 'text'
+            });
+
+            // 标记要在最后的 setContacts 里更新状态
+            // 这是一个临时标记，我们在下面的 setContacts 里处理它
+            (window as any)._temp_tag_request_id = targetTag.id;
+        }
+    }
+
+
+
+
+
+
+
+
     // 5. ★★★ 终极状态更新 (双轴 + 精力 + HEF) ★★★
     setContacts(prev => prev.map(c => {
       if (c.id === activeContact.id) {
@@ -3452,6 +5044,27 @@ const newStatus = getAdvancedRelationshipStatus(c.relationshipStatus, newRomance
             ['joy', 'anger', 'sadness', 'fear', 'trust'].forEach(k => { if (typeof hefUpdateData[k] === 'number') updatedHef[k] = Math.max(0, Math.min(100, hefUpdateData[k])); });
         }
 
+
+
+
+
+        // --- 处理 AI 的标签申请 ---
+        let updatedUserTags = c.userTags;
+        const requestId = (window as any)._temp_tag_request_id;
+        if (requestId && c.id === activeContact.id) {
+            updatedUserTags = (c.userTags || []).map((t: any) => 
+                t.id === requestId ? { ...t, aiRequestPending: true } : t
+            );
+            // 用完即焚
+            (window as any)._temp_tag_request_id = null;
+        }
+
+
+
+
+
+
+
         return { 
           ...c, 
           history: [...currentHistory, ...newMessages], 
@@ -3463,6 +5076,8 @@ const newStatus = getAdvancedRelationshipStatus(c.relationshipStatus, newRomance
           hef: updatedHef 
         };
       }
+
+
       return c;
     }));
 
@@ -4154,1253 +5769,18 @@ const MemoryNote: React.FC<{
 
 
 
-// 这是一组代码：【ChatApp.tsx】新的“标签创建”弹窗组件
-const TagCreationModal: React.FC<{
-  isOpen: boolean;
-  onClose: () => void;
-  onSubmit: (data: { content: string; isPublic: boolean; note: string }) => void;
-}> = ({ isOpen, onClose, onSubmit }) => {
-  const [content, setContent] = useState("");
-  const [isPublic, setIsPublic] = useState(true);
-  const [note, setNote] = useState("");
 
-  if (!isOpen) return null;
 
-  return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm animate-fadeIn" onClick={onClose}>
-      <div className="bg-white w-[85%] max-w-sm rounded-3xl shadow-2xl p-6 animate-scaleIn flex flex-col gap-4" onClick={e => e.stopPropagation()}>
-        
-        {/* 标题 */}
-        <div className="text-center">
-          <div className="text-4xl mb-2">🏷️</div>
-          <h3 className="text-lg font-bold text-gray-800">贴个新标签</h3>
-          <p className="text-xs text-gray-400">你对TA的印象是...</p>
-        </div>
 
-        {/* 输入框：标签名 */}
-        <div>
-           <label className="text-xs font-bold text-gray-500 ml-1">标签内容 (8字以内)</label>
-           <input 
-             autoFocus
-             type="text" 
-             value={content}
-             onChange={e => setContent(e.target.value.slice(0, 8))}
-             placeholder="例：傲娇怪 / 小天使"
-             className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-lg font-bold text-center outline-none focus:ring-2 focus:ring-blue-100 transition"
-           />
-        </div>
 
-        {/* 开关：公开 vs 私密 */}
-        <div className="bg-gray-50 p-1 rounded-xl flex">
-           <button 
-             onClick={() => setIsPublic(true)}
-             className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all ${isPublic ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400'}`}
-           >
-             📢 公开给TA看
-           </button>
-           <button 
-             onClick={() => setIsPublic(false)}
-             className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all ${!isPublic ? 'bg-white text-purple-600 shadow-sm' : 'text-gray-400'}`}
-           >
-             🔒 只有我知道
-           </button>
-        </div>
 
-        {/* 提示文案 */}
-        <p className="text-[10px] text-center text-gray-400 h-4">
-          {isPublic ? "TA会立刻收到通知，并对这个评价做出反应" : "这是你心底的秘密，TA不会知道"}
-        </p>
 
-        {/* 输入框：理由/备注 */}
-        <div>
-           <label className="text-xs font-bold text-gray-500 ml-1">备注 / 理由 (可选)</label>
-           <textarea 
-             value={note}
-             onChange={e => setNote(e.target.value)}
-             placeholder={isPublic ? "告诉TA为什么这么觉得..." : "记录下这个瞬间..."}
-             className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-xs outline-none resize-none h-20 focus:bg-white transition"
-           />
-        </div>
 
-        {/* 按钮 */}
-        <button 
-          disabled={!content.trim()}
-          onClick={() => {
-            onSubmit({ content, isPublic, note });
-            setContent(""); setNote(""); setIsPublic(true); // 重置
-          }}
-          className={`w-full py-3 rounded-xl font-bold text-white shadow-lg transition active:scale-95 ${content.trim() ? 'bg-gradient-to-r from-blue-500 to-purple-500' : 'bg-gray-300'}`}
-        >
-          贴上去！
-        </button>
-      </div>
-    </div>
-  );
-};
 
 
 
 
 
-
-
-
-
-
-
-
-const PersonaPanel = ({ 
-  contact, 
-  onClose, 
-  onRefineMemory, 
-  globalSettings = {}, 
-  setContacts, 
-  playMessageAudio, 
-  onNavigateToSettings, 
-  activeTab,
-  setActiveTab,
-  memoryTab,
-  setMemoryTab,
-  sampleText,
-  setSampleText
-}: any) => {
-  // ==================== [状态修复] 把多选相关的状态放回这里！ ====================
-  const [isMultiSelect, setIsMultiSelect] = useState(false);
-  const [selectedMemIds, setSelectedMemIds] = useState<string[]>([]);
-  const [viewingTag, setViewingTag] = useState<any>(null);
-
-
-// 这是一组代码：【ChatApp.tsx】为 PersonaPanel 添加新状态和新函数
-  // ★★★ 新增：控制新建标签弹窗 ★★★
-  const [showTagCreate, setShowTagCreate] = useState(false);
-
-// 【ChatApp.tsx 更新：私密标签不通知 + 生成乱序参数】
-  const handleTagSubmit = (data: { content: string; isPublic: boolean; note: string }) => {
-     const timestamp = Date.now();
-     
-     // ★★★ 生成乱序样式数据 ★★★
-     // 旋转角度：-15度 到 15度
-     const randomRotation = Math.floor(Math.random() * 30) - 15; 
-     // 顶部偏移：0px 到 30px (制造高低错落感)
-     const randomMargin = Math.floor(Math.random() * 30); 
-
-     const newTag: UserTag = {
-        id: timestamp.toString(),
-        content: data.content,
-        timestamp: timestamp,
-        note: data.note,
-        author: 'user',
-        isPublic: data.isPublic,
-        isUnlocked: true,
-        // 保存这些乱序数据
-        rotation: randomRotation, 
-        strength: randomMargin, // 借用 strength 字段存 margin，或者你在 UserTag 类型里加一个 style 字段也可以，这里暂用 strength 存 margin
-        userQuote: '', 
-        aiReasoning: '' 
-     };
-
-     setContacts((prev: any) => prev.map((c: any) => {
-        if (c.id === contact.id) {
-            let newHistory = [...c.history];
-            
-            // ★★★ 核心修复：只有 isPublic 为 true 时，才发系统通知！ ★★★
-            if (data.isPublic) {
-                newHistory.push({
-                    id: "sys_tag_" + timestamp,
-                    role: 'system',
-                    content: `【系统通知】用户给你贴了一个新标签：[${data.content}]${data.note ? `\n备注：“${data.note}”` : ''}`,
-                    timestamp: timestamp,
-                    type: 'text'
-                });
-            }
-            
-            const currentUserTags = Array.isArray(c.userTags) ? c.userTags : [];
-            return { ...c, userTags: [...currentUserTags, newTag], history: newHistory };
-        }
-        return c;
-     }));
-     
-     setShowTagCreate(false);
-  };
-
-
-
-
-
-
-
-  // 处理解锁标签
-  const handleUnlockTag = (tag: any) => {
-      const cost = tag.unlockCost || 50;
-      const currentPoints = contact.interventionPoints || 0;
-
-      if (currentPoints < cost) {
-          alert(`点数不足！\n需要: ${cost}\n拥有: ${currentPoints}`);
-          return;
-      }
-
-      if (confirm(`🔓 解锁这个私密印象需要消耗 ${cost} 点数。\n(当前拥有: ${currentPoints})\n\n确定解锁吗？`)) {
-          setContacts((prev: any) => prev.map((c: any) => {
-              if (c.id === contact.id) {
-                  const currentAiTags = Array.isArray(c.aiTagsForUser) ? c.aiTagsForUser : [];
-                  return {
-                      ...c,
-                      interventionPoints: c.interventionPoints - cost,
-                      aiTagsForUser: currentAiTags.map((t: any) => 
-                          t.id === tag.id ? { ...t, isUnlocked: true } : t
-                      )
-                  };
-              }
-              return c;
-          }));
-          alert("解锁成功！终于看到了TA的真实想法...");
-      }
-  };
-
-
-  // ==================== [组件修复] 把雷达图函数放回这里！ ====================
-  const renderRadar = () => {
-    const hef = contact?.hef || {};
-    const iv = hef.INDIVIDUAL_VARIATION || {};
-    const big5 = iv.personality_big5 || { openness: 5, conscientiousness: 5, extraversion: 5, agreeableness: 5, neuroticism: 5 };
-
-    const getPoint = (value: number, angle: number) => {
-      const val = Math.max(0, Math.min(10, value || 5));
-      const radius = (val / 10) * 40;
-      const x = 50 + radius * Math.cos((angle - 90) * Math.PI / 180);
-      const y = 50 + radius * Math.sin((angle - 90) * Math.PI / 180);
-      return `${x},${y}`;
-    };
-
-    const p1 = getPoint(big5.openness, 0);
-    const p2 = getPoint(big5.extraversion, 72);
-    const p3 = getPoint(big5.agreeableness, 144);
-    const p4 = getPoint(big5.neuroticism, 216);
-    const p5 = getPoint(big5.conscientiousness, 288);
-
-    return (
-      <div className="relative w-full h-64 flex items-center justify-center my-2 select-none">
-        <div className="absolute top-4 left-1/2 -translate-x-1/2 flex flex-col items-center"><span className="text-[10px] font-bold text-gray-500 bg-white/80 px-1 rounded backdrop-blur">开放性</span><span className="text-[9px] text-blue-400 font-mono">{big5.openness}</span></div>
-        <div className="absolute top-16 right-6 flex flex-col items-center"><span className="text-[10px] font-bold text-gray-500 bg-white/80 px-1 rounded backdrop-blur">外向性</span><span className="text-[9px] text-blue-400 font-mono">{big5.extraversion}</span></div>
-        <div className="absolute bottom-8 right-10 flex flex-col items-center"><span className="text-[10px] font-bold text-gray-500 bg-white/80 px-1 rounded backdrop-blur">宜人性</span><span className="text-[9px] text-blue-400 font-mono">{big5.agreeableness}</span></div>
-        <div className="absolute bottom-8 left-10 flex flex-col items-center"><span className="text-[10px] font-bold text-gray-500 bg-white/80 px-1 rounded backdrop-blur">敏感度</span><span className="text-[9px] text-blue-400 font-mono">{big5.neuroticism}</span></div>
-        <div className="absolute top-16 left-6 flex flex-col items-center"><span className="text-[10px] font-bold text-gray-500 bg-white/80 px-1 rounded backdrop-blur">尽责性</span><span className="text-[9px] text-blue-400 font-mono">{big5.conscientiousness}</span></div>
-        <div className="w-40 h-40 relative">
-          <svg className="absolute inset-0 w-full h-full overflow-visible" viewBox="0 0 100 100">
-             <polygon points="50,10 88,38 74,82 26,82 12,38" fill="#f3f4f6" stroke="#e5e7eb" strokeWidth="1" />
-             <polygon points="50,30 69,44 62,66 38,66 31,44" fill="none" stroke="#e5e7eb" strokeWidth="1" strokeDasharray="2 2" />
-             <line x1="50" y1="50" x2="50" y2="10" stroke="#e5e7eb" strokeWidth="0.5" /><line x1="50" y1="50" x2="88" y2="38" stroke="#e5e7eb" strokeWidth="0.5" /><line x1="50" y1="50" x2="74" y2="82" stroke="#e5e7eb" strokeWidth="0.5" /><line x1="50" y1="50" x2="26" y2="82" stroke="#e5e7eb" strokeWidth="0.5" /><line x1="50" y1="50" x2="12" y2="38" stroke="#e5e7eb" strokeWidth="0.5" />
-             <polygon points={`${p1} ${p2} ${p3} ${p4} ${p5}`} fill="rgba(59, 130, 246, 0.4)" stroke="#3b82f6" strokeWidth="2" className="drop-shadow-sm transition-all duration-700 ease-out" />
-             <circle cx={p1.split(',')[0]} cy={p1.split(',')[1]} r="1.5" fill="#2563eb" /><circle cx={p2.split(',')[0]} cy={p2.split(',')[1]} r="1.5" fill="#2563eb" /><circle cx={p3.split(',')[0]} cy={p3.split(',')[1]} r="1.5" fill="#2563eb" /><circle cx={p4.split(',')[0]} cy={p4.split(',')[1]} r="1.5" fill="#2563eb" /><circle cx={p5.split(',')[0]} cy={p5.split(',')[1]} r="1.5" fill="#2563eb" />
-          </svg>
-        </div>
-      </div>
-    );
-  };
-  // ==================== [修复结束] ====================
-
-  // --- 辅助函数也放回来 ---
-  const toggleSelect = (id: string) => {
-    setSelectedMemIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
-  };
-  // ==================== [修复结束] ====================
-
-
-
-  // ★★★ 核心修复：正确读取新的 mood 结构 ★★★
-  const mood = contact?.mood || { current: "Calm" };
-  // 优先读取新的 energy 对象，没有则兜底
-  const energy = mood.energy || { current: 50, max: 100, status: 'Awake' };
-  
-  const longTermMemories = contact?.longTermMemories || [];
-  const hef = contact?.hef || {};
-  const iv = hef.INDIVIDUAL_VARIATION || {};
-  const big5 = iv.personality_big5 || { openness: 5, conscientiousness: 5, extraversion: 5, agreeableness: 5, neuroticism: 5 };
-
-
-
-
-
-
-
-
-
-
-
-
-// ==================== [新组件] 手账档案条目UI ====================
-const TraitItem: React.FC<{ label: string; traits?: ProfileTrait[]; icon: string; isInitiallyOpen?: boolean }> = ({ label, traits, icon, isInitiallyOpen = false }) => {
-  if (!traits || traits.length === 0) return null;
-  
-  // 修复 Invalid Date 的核心
-  const formatDate = (timestamp: number) => {
-    if (!timestamp || isNaN(timestamp)) return "未知日期";
-    return new Date(timestamp).toLocaleDateString();
-  };
-
-  return (
-    <details open={isInitiallyOpen} className="bg-white/60 border border-gray-200/50 rounded-xl group transition-all duration-300 open:shadow-lg open:bg-white/80 mb-2 last:mb-0">
-      <summary className="px-4 py-3 text-sm font-bold text-gray-700 select-none cursor-pointer list-none flex items-center justify-between group-open:border-b">
-        <span className="flex items-center gap-2">{icon} {label}</span>
-        <span className="text-xs text-gray-400 transition-transform group-open:rotate-180">▼</span>
-      </summary>
-      <div className="p-3 space-y-2">
-        {traits.map(trait => (
-          <div key={trait.timestamp} className="bg-gray-50/70 p-2 rounded-lg border">
-            <p className="text-sm font-medium text-gray-800">{trait.value}</p>
-            <details className="text-xs mt-1">
-              <summary className="cursor-pointer text-gray-400 hover:text-gray-600 select-none">显示证据</summary>
-              <div className="mt-1 p-2 bg-white rounded-md">
-                <p className="italic text-purple-600">“{trait.quote}”</p>
-                <p className="text-[10px] text-gray-400 mt-1">记录于: {formatDate(trait.timestamp)}</p>
-              </div>
-            </details>
-          </div>
-        ))}
-      </div>
-    </details>
-  );
-};
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-  const resetMultiSelect = () => {
-    setIsMultiSelect(false);
-    setSelectedMemIds([]);
-  };
-
-
-
-
-
-
-
-
-
-
-  // ★★★ 新增：手动多选合并功能（真正实现！）★★★
-  const handleMultiMerge = async () => {
-    if (selectedMemIds.length < 2) return;
-    
-    const confirmed = confirm(`确定将选中的 ${selectedMemIds.length} 张便签合并为 1 张核心记忆吗？\n旧便签将被删除，此操作不可撤销！`);
-    if (!confirmed) return;
-
-    const selectedMems = longTermMemories.filter((m: any) => selectedMemIds.includes(m.id));
-    const memoryContent = selectedMems.map((mem: any) => `- ${mem.content}`).join('\n');
-
-    const activePreset = globalSettings.apiPresets?.find((p: any) => p.id === globalSettings.activePresetId);
-    if (!activePreset) {
-      alert("API 预设未找到，请检查设置！");
-      return;
-    }
-
-    alert("AI 正在精炼选中的记忆，请稍候...");
-    
-    try {
-      const today = new Date().toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric' });
-      const prompt = `
-你就是角色“${contact.name}”。请将以下选中的 ${selectedMemIds.length} 张长期记忆精炼整合成 1 条更连贯的核心记忆摘要。
-
-要求：
-1. 使用第一人称（“我”）视角。
-2. 保留关键事件、情感变化、决定和计划。
-3. 长度控制在 120 字左右。
-4. 输出纯文本，不要任何 JSON 或额外说明。
-
-待精炼记忆：
-${memoryContent}
-
-今天是：${today}
-      `;
-
-      const refinedSummary = await generateResponse([{ role: 'user', content: prompt }], activePreset);
-
-      if (!refinedSummary?.trim()) throw new Error("AI 返回空内容");
-
-      const newCoreMem = {
-        id: Date.now().toString(),
-        content: refinedSummary.trim(),
-        date: new Date().toLocaleDateString(),
-        importance: 10,
-        meta: { source: 'multi-merge' }
-      };
-
-      // 删除旧的，添加新的
-      setContacts((prev: any) => prev.map((c: any) =>
-        c.id === contact.id
-          ? { ...c, longTermMemories: [...c.longTermMemories.filter((m: any) => !selectedMemIds.includes(m.id)), newCoreMem] }
-          : c
-      ));
-
-      alert(`成功！已将 ${selectedMemIds.length} 张便签合并为 1 张核心记忆～`);
-      resetMultiSelect();
-    } catch (err) {
-      console.error(err);
-      alert("合并失败，请检查网络或 API 设置");
-    }
-  };
-
-  return (
-    <div className="absolute inset-0 z-50 flex items-end sm:items-center justify-center animate-fadeIn pointer-events-none">
-      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm pointer-events-auto" onClick={() => { onClose(); resetMultiSelect(); }} />
-      <div
-        className="bg-white w-full sm:w-[90%] h-[85%] sm:h-[80%] rounded-t-3xl sm:rounded-3xl shadow-2xl flex flex-col overflow-hidden animate-slideUp relative z-10 pointer-events-auto"
-        onClick={(e) => e.stopPropagation()}
-      >
-       {/* Header */}
-        <div className="p-4 border-b flex justify-between items-center bg-gray-50">
-          <div className="flex items-center gap-3">
-            <img src={contact?.avatar || ''} className="w-10 h-10 rounded-full border-2 border-white" alt="avatar"/>
-            <div>
-              <h2 className="font-bold text-lg leading-none">{contact?.name}</h2>
-              <div className="flex items-center gap-2 mt-1">
-                 <p className="text-[10px] text-gray-400">Soul Interface</p>
-                 <span className="text-[10px] bg-yellow-100 text-yellow-700 px-1.5 py-0.5 rounded-full font-bold border border-yellow-200">🪙 {contact.interventionPoints || 0}</span>
-              </div>
-            </div>
-          </div>
-          <button onClick={onClose} className="w-8 h-8 bg-gray-200 rounded-full text-gray-500">✕</button>
-        </div>
-
-        {/* Tabs */}
-        <div className="flex p-2 bg-gray-100 m-4 rounded-xl">
-{['emotion', 'persona', 'memory', 'agreement'].map(t => (
-            <button key={t} onClick={() => setActiveTab(t)} className={`flex-1 py-2 text-xs font-bold rounded-lg capitalize transition-colors duration-200 ${activeTab === t ? 'bg-white text-blue-600 shadow' : 'text-gray-400'}`}>
-              {t === 'emotion' ? '❤️ 情绪' : t === 'persona' ? '🧬 人格' : t === 'memory' ? '🧠 记忆' : '📝 约定'}
-            </button>
-          ))}
-        </div>
-
-        {/* Content */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-6">
-          {/* 这是一组代码：修复版情绪面板 (解决“睁眼说瞎话”的显示Bug) */}
-{/* ==================== [究极融合版] 情绪控制台 ==================== */}
-          {activeTab === 'emotion' && (
-            <div className="space-y-6 animate-fadeIn">
-              
-              {/* 1. 顶部：炼金术状态显示 (大表情 + 文字状态) */}
-              <div className="text-center">
-                <div className="text-6xl mb-2 transition-transform hover:scale-110 duration-300 cursor-default">
-                  {/* 调用炼金术计算表情 */}
-                  {(() => {
-                     const state = calculateComplexState(energy, contact?.hef);
-                     return state.emoji;
-                  })()}
-                </div>
-                
-                {/* 状态文字 (如: 又累又气) */}
-                <h3 className="text-xl font-bold text-gray-800">
-                  {calculateComplexState(energy, contact?.hef).text.split(' ')[0]}
-                </h3>
-                
-                {/* 关系状态胶囊 */}
-                <span className={`text-xs font-bold px-2 py-1 rounded-full mt-1 inline-block ${
-                   (contact?.affectionScore ?? 50) < 0 ? 'bg-gray-200 text-gray-600' : 'bg-pink-100 text-pink-600'
-                }`}>
-                   {contact?.relationshipStatus || 'Friend'}
-                </span>
-              </div>
-
-              <div className="bg-white border border-gray-100 p-5 rounded-2xl space-y-5 shadow-sm">
-                
-                {/* 2. ⚡ 能量条区域 (保留你的旧功能) */}
-                <div>
-                  <div className="flex justify-between text-xs font-bold text-gray-500 mb-1">
-                    <span className="flex items-center gap-1">
-                        ⚡ 能量 
-                        <span className={`text-[9px] px-1.5 rounded-sm uppercase tracking-wider ${
-                            energy.status === 'Sleeping' ? 'bg-indigo-100 text-indigo-500' : 
-                            energy.status === 'Awake' ? 'bg-green-100 text-green-500' : 
-                            energy.status === 'Tired' ? 'bg-yellow-100 text-yellow-600' :
-                            'bg-red-100 text-red-500'
-                        }`}>
-                            {energy.status}
-                        </span>
-                    </span>
-                    <span>{Math.round(energy.current)}%</span>
-                  </div>
-                  <div className="w-full h-2.5 bg-gray-100 rounded-full overflow-hidden">
-                    <div 
-                      className={`h-full transition-all duration-700 ease-out ${
-                          energy.status === 'Sleeping' ? 'bg-indigo-400' : 
-                          energy.current < 20 ? 'bg-red-500' : 
-                          energy.current < 50 ? 'bg-yellow-400' :
-                          'bg-gradient-to-r from-yellow-400 to-orange-500'
-                      }`}
-                      style={{width: `${Math.max(5, energy.current)}%`}}
-                    ></div>
-                  </div>
-                  {energy.status === 'Sleeping' && (
-                      <p className="text-[9px] text-indigo-400 mt-1 text-center animate-pulse">💤 正在回血中...</p>
-                  )}
-                </div>
-
-                {/* 3. ❤️ 爱意条 (Romance - 红轴) */}
-                <div>
-                  <div className="flex justify-between text-xs font-bold mb-1">
-                    <span className="text-rose-500">❤️ 爱意 (Romance)</span>
-                    <span className={(contact?.affectionScore ?? 50) < 0 ? "text-gray-600" : "text-rose-500"}>
-                      {contact?.affectionScore ?? 50}
-                    </span>
-                  </div>
-                  <div className="w-full h-2.5 bg-gray-100 rounded-full overflow-hidden relative">
-                    <div className="absolute left-1/2 top-0 bottom-0 w-0.5 bg-white z-10 opacity-50"></div>
-                    <div 
-                      className={`h-full transition-all duration-700 ease-out ${
-                        (contact?.affectionScore ?? 50) < 0 ? 'bg-gradient-to-r from-gray-800 to-gray-500' : 'bg-gradient-to-r from-pink-300 to-rose-500'
-                      }`}
-                      style={{ width: `${Math.max(0, Math.min(100, ((contact?.affectionScore ?? 50) + 100) / 2))}%` }}
-                    ></div>
-                  </div>
-                </div>
-
-                {/* 4. 🤝 友谊条 (Friendship - 蓝轴) */}
-                <div>
-                  <div className="flex justify-between text-xs font-bold mb-1">
-                    <span className="text-sky-500">🤝 友谊 (Trust)</span>
-                    <span className="text-sky-500">
-                      {contact?.friendshipScore ?? 50}
-                    </span>
-                  </div>
-                  <div className="w-full h-2.5 bg-gray-100 rounded-full overflow-hidden relative">
-                    <div className="absolute left-1/2 top-0 bottom-0 w-0.5 bg-white z-10 opacity-50"></div>
-                    <div 
-                      className="h-full transition-all duration-700 ease-out bg-gradient-to-r from-sky-300 to-blue-500"
-                      style={{ width: `${Math.max(0, Math.min(100, ((contact?.friendshipScore ?? 50) + 100) / 2))}%` }}
-                    ></div>
-                  </div>
-                  <div className="flex justify-between text-[9px] text-gray-300 mt-1 font-mono">
-                    <span>-100</span><span>0</span><span>+100</span>
-                  </div>
-                </div>
-
-              </div>
-            </div>
-          )}
-
-
-
-
-
-
-{/* 这是一组代码：【终极档案室】交互式人格面板 (含照片/录音/贴标签互动) */}
-          {activeTab === 'persona' && (
-            <div className="space-y-5 animate-slideUp pb-10">
-
-
-
-
-
-
-           {/* // 1. 顶部：身份卡片 (ID Card Style) */}
-              <div className="bg-white border border-gray-200 p-4 rounded-2xl shadow-sm relative overflow-hidden group">
-                 {/* 装饰背景纹理 */}
-                 <div className="absolute top-0 right-0 w-32 h-32 bg-blue-50 rounded-full blur-3xl -z-10 opacity-50"></div>
-                 
-                 <div className="flex gap-4">
-                    {/* 左侧：拍立得风格头像 */}
-                    <div className="flex-shrink-0 relative">
-                       <div className="w-20 h-24 bg-white border border-gray-200 shadow-md p-1 rotate-[-2deg] transition-transform group-hover:rotate-0">
-                          <img src={contact.avatar} className="w-full h-full object-cover grayscale-[20%] group-hover:grayscale-0 transition-all" alt="ID" />
-                       </div>
-                       {/* 别针装饰 */}
-                       <div className="absolute -top-2 left-1/2 -translate-x-1/2 text-gray-300 text-xl">📎</div>
-                    </div>
-
-
-
-
-
-                    {/* 右侧：基本信息 + 声音样本输入 */}
-                    <div className="flex-1 flex flex-col justify-center min-w-0">
-                       <div className="flex justify-between items-start">
-                           <div>
-                               <h2 className="text-xl font-black text-gray-800 tracking-tight leading-none">{contact.name}</h2>
-                               <p className="text-[10px] text-gray-400 font-mono mt-1 mb-2">ID: {contact.id.slice(0, 8).toUpperCase()}</p>
-                           </div>
-                           
-                         {/* ★★★ 播放按钮 (带跳转逻辑) ★★★ */}
-                           <button 
-                               onClick={(e) => {
-                                  e.stopPropagation();
-                                  
-                                  // 1. 检查 API Key
-                                  if (!globalSettings.minimax?.apiKey || !globalSettings.minimax?.groupId) {
-                                      // ★★★★★ 传送门入口！就是这里！ ★★★★★
-                                      if (confirm("⚠️ 还没配置语音服务哦！\n\n是否【立即前往设置页】填入 API Key？")) {
-                                          onClose(); // 1. 关掉面板
-                                          // 2. 呼叫 App.tsx 里的 onOpenSettings 来切换页面
-                                          if (onNavigateToSettings) {
-                                              onNavigateToSettings(); 
-                                          }
-                                      }
-                                      return; // 结束，不往下执行播放
-                                  }
-
-                                  // 2. 如果 Key 存在，就播放
-                                  const textToPlay = (contact.voiceSampleText || "").trim() || `你好，我是${contact.name}。这是我的声音样本。`;
-                                  playMessageAudio(`demo-${Date.now()}`, textToPlay);
-                               }}
-                               className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center shadow-md transition active:scale-90 ${
-                                   globalSettings.minimax?.apiKey ? 'bg-gray-900 text-white hover:bg-gray-700' : 'bg-gray-200 text-gray-400'
-                               }`}
-                           >
-                               <span className={globalSettings.minimax?.apiKey ? "ml-0.5" : ""}>▶</span>
-                           </button>
-                       </div>
-                       
-                       {/* ★★★ 输入框 (带自动保存) ★★★ */}
-                       <div className="relative mt-2">
-                           <input 
-                               type="text" 
-                               defaultValue={contact.voiceSampleText || ""}
-                               placeholder="在此输入台词 (自动保存)..."
-                               className="w-full text-[10px] bg-gray-50 border border-gray-100 rounded-lg px-2 py-1.5 text-gray-600 focus:bg-white focus:border-blue-300 outline-none transition placeholder-gray-300"
-                               onClick={(e) => e.stopPropagation()} 
-                               onBlur={(e) => {
-                                   const newText = e.target.value;
-                                   if (newText !== contact.voiceSampleText) {
-                                       setContacts((prev: any[]) => prev.map((c: any) => 
-                                           c.id === contact.id 
-                                           ? { ...c, voiceSampleText: newText } 
-                                           : c
-                                       ));
-                                   }
-                               }}
-                               onKeyDown={(e) => {
-                                   if (e.key === 'Enter') {
-                                       (e.target as HTMLInputElement).blur();
-                                   }
-                               }}
-                           />
-                       </div>
-                    </div>
-                 </div>
-              </div>
-
-              {/* 2. 核心数据区：MBTI + 雷达图 */}
-              <div className="grid grid-cols-3 gap-3">
-                 {/* 左边：MBTI 芯片 */}
-                 <div className="col-span-1 bg-gray-50 rounded-xl p-3 border border-gray-100 flex flex-col items-center justify-center">
-                    {(() => {
-                        const { openness: O, conscientiousness: C, extraversion: E, agreeableness: A } = big5;
-                        const mbti = `${E>5?'E':'I'}${O>5?'N':'S'}${A>5?'F':'T'}${C>5?'J':'P'}`;
-                        return (
-                           <>
-                             <span className="text-[9px] font-bold text-gray-400 uppercase">Type</span>
-                             <span className="text-lg font-black text-blue-600 mt-1">{mbti}</span>
-                           </>
-                        );
-                    })()}
-                 </div>
-                 
-                 {/* 右边：雷达图容器 */}
-                 <div className="col-span-2 bg-white border border-gray-100 rounded-xl p-2 relative overflow-hidden">
-                    <div className="scale-75 -mt-6 -mb-6">
-                        {renderRadar()}
-                    </div>
-                    <div className="absolute bottom-1 right-2 text-[9px] text-gray-300 font-mono">PSYCHO-METRICS</div>
-                 </div>
-              </div>
-
-
-
-
-
-
-
-              {/* ★★★ 印象轨迹 (你对AI的印象) ★★★ */}
-              <div className="mt-4 relative">
-                 <div className="flex justify-between items-end mb-2 px-1">
-                    <h3 className="text-xs font-bold text-gray-500 uppercase flex items-center gap-1">你对TA的印象 (Tags)</h3>
-                    <button onClick={() => setShowTagCreate(true)} className="text-[10px] bg-blue-50 text-blue-600 px-3 py-1 rounded-full font-bold hover:bg-blue-100 transition shadow-sm">
-                      + 贴新标签
-                    </button>
-                 </div>
-{/* 【ChatApp.tsx 更新：标签错落摆放 + 点击修改删除】 */}
-                 <div className="w-full bg-gray-50/50 border-y border-gray-200 h-40 relative overflow-x-auto overflow-y-hidden custom-scrollbar">
-                    {/* 绳子装饰 */}
-                    <div className="absolute top-4 left-0 w-[200%] h-0.5 bg-yellow-700/30 border-t border-yellow-800/20 shadow-sm z-0"></div>
-                    
-                    <div className="flex items-start gap-4 px-6 pt-3 min-w-max h-full">
-                        {(!contact.userTags || contact.userTags.length === 0) && (
-                           <div className="text-[10px] text-gray-400 italic mt-8 ml-4">
-                              还没给TA贴过标签...
-                           </div>
-                        )}
-                        {(contact.userTags || []).map((tag: any) => {
-                           const isPrivate = tag.isPublic === false; 
-                           // 读取我们在 submit 时生成的乱序数据
-                           const rotation = tag.rotation || (Math.random() * 10 - 5); 
-                           const marginTop = tag.strength || 0; // 之前把 margin 存进了 strength
-
-                          return (
-                             <div 
-                                key={tag.id} 
-                                className="relative group flex flex-col items-center flex-shrink-0 cursor-pointer hover:z-20 transition-all duration-300 ease-out" 
-                                // ★★★ 核心样式：应用旋转和错落高度 ★★★
-                                style={{ 
-                                    transform: `rotate(${rotation}deg)`, 
-                                    marginTop: `${marginTop}px`,
-                                    marginLeft: '-5px', // 稍微重叠一点点更自然
-                                    marginRight: '-5px' 
-                                }} 
-                                onClick={() => setViewingTag(tag)} // 点击查看详情/修改/删除
-                             >
-                                {/* 夹子 UI */}
-                                <div className="w-2 h-4 bg-amber-700 rounded-sm mb-[-6px] z-20 shadow-md relative border-l border-white/20"></div>
-                                
-                                {/* 标签纸 UI */}
-                                <div className={`relative ${isPrivate ? 'bg-purple-100 text-purple-900 border-purple-200' : 'bg-yellow-100 text-yellow-900 border-yellow-200'} border px-3 pt-3 pb-5 min-w-[70px] max-w-[110px] text-center shadow-lg transition-transform hover:scale-110 hover:rotate-0 z-10 flex flex-col justify-between min-h-[80px]`} style={{ borderRadius: "2px 2px 20px 2px" }}>
-                                   <span className="text-sm font-black leading-tight break-words font-sans mb-2">{tag.content}</span>
-                                   <div className="mt-auto pt-2 border-t border-black/10 w-full flex justify-end"><span className="text-[9px] font-mono opacity-60 tracking-tighter">Me</span></div>
-                                </div>
-                             </div>
-                           );
-                        })}
-                    </div>
-                 </div>
-
-                 {/* ★★★ 标签详情/删除弹窗 (更新版) ★★★ */}
-                 {viewingTag && (
-                   <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/20 backdrop-blur-sm animate-fadeIn" onClick={() => setViewingTag(null)}>
-                      <div className="bg-white w-[85%] max-w-xs rounded-2xl shadow-2xl p-5 animate-scaleIn" onClick={e => e.stopPropagation()}>
-                         <div className="text-center mb-4">
-                            <span className="text-xs text-gray-400 font-bold uppercase tracking-widest">{viewingTag.isPublic ? '📢 公开标签' : '🔒 私密标签'}</span>
-                            <h3 className="text-2xl font-black text-gray-800 mt-1">#{viewingTag.content}</h3>
-                            <p className="text-[10px] text-gray-400 font-mono mt-1">From: Me</p>
-                         </div>
-                         <div className="bg-yellow-50 p-3 rounded-xl border border-yellow-200 mb-4">
-                            <label className="text-[9px] font-bold text-yellow-700 uppercase mb-1 block">我的备注</label>
-                            <p className="text-sm text-gray-700 whitespace-pre-wrap">{viewingTag.note || "无"}</p>
-                         </div>
-                        
-                         <div className="flex gap-2">
-                             {/* 删除按钮 */}
-                             <button 
-                                onClick={() => {
-                                    if(confirm("确定撕掉这个标签吗？")) {
-                                        setContacts((prev: any) => prev.map((c: any) => 
-                                            c.id === contact.id 
-                                            ? { ...c, userTags: c.userTags.filter((t: any) => t.id !== viewingTag.id) } 
-                                            : c
-                                        ));
-                                        setViewingTag(null);
-                                    }
-                                }}
-                                className="flex-1 bg-red-50 text-red-500 py-2 rounded-xl font-bold text-xs border border-red-100"
-                             >
-                                🗑️ 撕掉
-                             </button>
-                             <button onClick={() => setViewingTag(null)} className="flex-1 bg-gray-900 text-white py-2 rounded-xl font-bold text-xs">关闭</button>
-                         </div>
-                      </div>
-                   </div>
-                 )}
-
-
-
-
-
-
-
-
-{/* 标签详情弹窗 (升级版：支持显示 AI 备注) */}
-                 {viewingTag && (
-                   <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/20 backdrop-blur-sm animate-fadeIn" onClick={() => setViewingTag(null)}>
-                      <div className="bg-white w-[85%] max-w-xs rounded-2xl shadow-2xl p-5 animate-scaleIn" onClick={e => e.stopPropagation()}>
-                         
-                         {/* 头部信息 */}
-                         <div className="text-center mb-4">
-                            <span className={`text-xs font-bold uppercase tracking-widest px-2 py-0.5 rounded ${viewingTag.author === 'ai' ? 'bg-blue-100 text-blue-600' : 'bg-gray-100 text-gray-400'}`}>
-                               {viewingTag.author === 'ai' ? '🤖 AI 的印象' : (viewingTag.isPublic ? '📢 公开标签' : '🔒 私密标签')}
-                            </span>
-                            <h3 className="text-2xl font-black text-gray-800 mt-2">#{viewingTag.content}</h3>
-                            <p className="text-[10px] text-gray-400 font-mono mt-1">
-                               From: {viewingTag.author === 'ai' ? contact.name : 'Me'}
-                            </p>
-                         </div>
-
-                         {/* 备注/理由显示区 */}
-                         <div className={`p-3 rounded-xl border mb-4 ${viewingTag.author === 'ai' ? 'bg-blue-50 border-blue-100' : 'bg-yellow-50 border-yellow-200'}`}>
-                            <label className={`text-[9px] font-bold uppercase mb-1 block ${viewingTag.author === 'ai' ? 'text-blue-600' : 'text-yellow-700'}`}>
-                               {viewingTag.author === 'ai' ? '🧠 AI 的内心独白 (理由)' : '📝 我的备注'}
-                            </label>
-                            <p className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">
-                               {/* 优先显示 aiReasoning，没有就显示 note，再没有就显示无 */}
-                               {viewingTag.aiReasoning || viewingTag.note || "（这家伙什么也没写...）"}
-                            </p>
-                         </div>
-                        
-                         {/* 按钮区 */}
-                         <div className="flex gap-2">
-                             {/* 只有用户自己的标签才能删除，AI贴的不能删（或者是为了好玩可以留着） */}
-                             {viewingTag.author !== 'ai' ? (
-                                 <button 
-                                    onClick={() => {
-                                        if(confirm("确定撕掉这个标签吗？")) {
-                                            setContacts((prev: any) => prev.map((c: any) => 
-                                                c.id === contact.id 
-                                                ? { ...c, userTags: c.userTags.filter((t: any) => t.id !== viewingTag.id) } 
-                                                : c
-                                            ));
-                                            setViewingTag(null);
-                                        }
-                                    }}
-                                    className="flex-1 bg-red-50 text-red-500 py-2 rounded-xl font-bold text-xs border border-red-100 hover:bg-red-100 transition"
-                                 >
-                                    🗑️ 撕掉
-                                 </button>
-                             ) : (
-                                 <button className="flex-1 bg-gray-100 text-gray-400 py-2 rounded-xl font-bold text-xs cursor-not-allowed">
-                                    🔒 来自AI的评价
-                                 </button>
-                             )}
-                             
-                             <button onClick={() => setViewingTag(null)} className="flex-1 bg-gray-900 text-white py-2 rounded-xl font-bold text-xs hover:bg-gray-800 transition">
-                                关闭
-                             </button>
-                         </div>
-                      </div>
-                   </div>
-                 )}
-
-
-
-
-
-
-                 
-                 
-                 {/* 新建弹窗的调用 (逻辑不变) */}
-                 <TagCreationModal 
-                   isOpen={showTagCreate} 
-                   onClose={() => setShowTagCreate(false)} 
-                   onSubmit={handleTagSubmit} 
-                 />
-              </div>
-
-
-
-
-
-
-              {/* 4. 详细人设 (折叠在底部) */}
-              <details className="group">
-                 <summary className="text-xs font-bold text-gray-400 cursor-pointer list-none flex items-center justify-center gap-2 py-2 hover:text-gray-600 transition">
-                    <span>▼ 查看核心设定代码 (机密)</span>
-                 </summary>
-                 <div className="bg-gray-900 text-green-400 font-mono text-[10px] p-4 rounded-xl mt-2 leading-relaxed shadow-inner overflow-hidden">
-                    <div className="opacity-50 mb-2 border-b border-gray-700 pb-1">CONFIDENTIAL_FILE_V1.0</div>
-                    {contact?.persona}
-                 </div>
-              </details>
-
-            </div>
-          )}
-
-
-
-
-{/* ==================== [修复版] 约定备忘录 (已修复Invalid Date) ==================== */}
-          {activeTab === 'agreement' && (
-            <div className="animate-fadeIn h-full flex flex-col p-4 space-y-3">
-              <div className="flex justify-between items-center mb-2 flex-shrink-0">
-                <h4 className="text-sm font-bold text-gray-600">🤝 我们的约定</h4>
-                <div className="flex gap-2 text-[10px]">
-                   <span className="bg-blue-100 text-blue-600 px-2 py-0.5 rounded">用户承诺</span>
-                   <span className="bg-white border text-gray-600 px-2 py-0.5 rounded">AI承诺</span>
-                </div>
-              </div>
-
-              {/* 约定列表 */}
-              <div className="flex-1 overflow-y-auto space-y-4 pb-10 custom-scrollbar p-1">
-                {(!contact.agreements || contact.agreements.length === 0) ? (
-                  <div className="text-center text-gray-400 py-10 h-full flex flex-col items-center justify-center">
-                    <span className="text-4xl mb-4 block">🤙</span>
-                    <p className="text-sm">还没有立下约定哦</p>
-                    <p className="text-xs mt-2">试着说“我明天要去跑步”看看？</p>
-                  </div>
-                ) : (
-                  contact.agreements.slice().reverse().map((agreement: any) => {
-                    const isUserPromise = agreement.actor !== 'ai';
-
-                    const getStatusInfo = (status: string) => {
-                      switch (status) {
-                        case 'pending': return { icon: '⏳', text: '进行中', color: isUserPromise ? 'text-blue-500 bg-blue-50' : 'text-gray-500 bg-gray-100' };
-                        case 'fulfilled': return { icon: '✅', text: '已达成', color: 'text-green-600 bg-green-50' };
-                        case 'failed': return { icon: '❌', text: '已违约/失效', color: 'text-red-500 bg-red-50' };
-                        default: return { icon: '❓', text: '未知', color: 'text-gray-500 bg-gray-50' };
-                      }
-                    };
-                    const statusInfo = getStatusInfo(agreement.status);
-                    
-                    // ★★★ 核心修复：安全的时间显示逻辑 ★★★
-                    // 如果 value 是数字且有效，显示时间；否则显示原始文本
-                    let triggerTimeStr = "无具体时间";
-                    const rawValue = agreement.trigger.value;
-                    const isValidTimestamp = typeof rawValue === 'number' && !isNaN(rawValue) && rawValue > 0;
-
-                    if (agreement.trigger.type === 'time' && isValidTimestamp) {
-                        triggerTimeStr = new Date(rawValue).toLocaleString([], {month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit'});
-                    } else {
-                        // 如果是 Invalid Date 或者关键词触发，显示原文
-                        triggerTimeStr = agreement.trigger.original_text || (typeof rawValue === 'string' ? rawValue : "文字触发");
-                    }
-
-                    // 检查是否已经超时 (辅助显示)
-                    const isOverdue = agreement.status === 'pending' && isValidTimestamp && Date.now() > rawValue;
-
-                    return (
-                      <div 
-                        key={agreement.id} 
-                        className={`relative p-4 rounded-2xl shadow-sm border transition-all ${
-                            isUserPromise 
-                            ? 'bg-blue-50/50 border-blue-100 ml-4' 
-                            : 'bg-white border-gray-200 mr-4'
-                        } ${agreement.status === 'failed' ? 'opacity-60 grayscale-[0.5]' : ''}`}
-                      >
-                        {/* 顶部标签 */}
-                        <div className={`absolute -top-2 ${isUserPromise ? '-right-2' : '-left-2'} px-2 py-0.5 rounded text-[10px] font-bold shadow-sm ${isUserPromise ? 'bg-blue-500 text-white' : 'bg-gray-700 text-white'}`}>
-                            {isUserPromise ? '🙋 你的承诺' : `🤖 ${contact.name}的承诺`}
-                        </div>
-
-                        {/* 删除按钮 */}
-                        <button 
-                          onClick={(e) => {
-                            e.stopPropagation(); // 防止冒泡
-                            if (confirm(`确定要删除这条约定吗？`)) {
-                              setContacts((prev: any[]) => prev.map((c: any) => 
-                                c.id === contact.id 
-                                ? { ...c, agreements: (c.agreements || []).filter((a: any) => a.id !== agreement.id) } 
-                                : c
-                              ));
-                            }
-                          }}
-                          className="absolute top-2 right-2 w-5 h-5 text-gray-300 hover:text-red-500 transition flex items-center justify-center"
-                        >
-                          ×
-                        </button>
-
-                        <div className="flex items-center gap-2 mb-2">
-                            <div className={`text-xs font-bold inline-flex items-center gap-1 px-2 py-0.5 rounded-full ${statusInfo.color}`}>
-                              {statusInfo.icon} {statusInfo.text}
-                            </div>
-                            {isOverdue && <span className="text-[10px] text-red-500 font-bold bg-red-100 px-1 rounded">已超时</span>}
-                        </div>
-
-                        {/* 核心内容 */}
-                        <p className={`text-sm leading-relaxed mb-3 font-medium ${isUserPromise ? 'text-blue-900' : 'text-gray-800'}`}>
-                          {agreement.content}
-                        </p>
-
-                        {/* ★★★ 显眼的时间展示区 ★★★ */}
-                        <div className="bg-black/5 rounded-lg p-2 mb-2 flex items-center justify-between">
-                            <span className="text-[10px] text-gray-500 font-bold">⏰ 目标时间</span>
-                            <span className="text-xs font-mono font-bold text-gray-700 truncate max-w-[120px]">
-                                {triggerTimeStr}
-                            </span>
-                        </div>
-
-                        <div className="flex justify-between items-end border-t border-black/5 pt-2">
-                           <div className="text-[10px] text-gray-400">
-                              创建于: {new Date(agreement.created_at).toLocaleDateString()}
-                           </div>
-                           
-                           {/* 履行按钮 */}
-                           {agreement.status === 'pending' && (
-                             <button
-                               onClick={(e) => {
-                                  e.stopPropagation(); // 防止冒泡
-                                  setContacts((prev: any[]) => prev.map((c: any) => {
-                                      if (c.id === contact.id) {
-                                          let sysNoticeContent = "";
-                                          if (isUserPromise) {
-                                              sysNoticeContent = `【系统通知】用户点击了“我做到了”！\n完成了约定：“${agreement.content}”。\n(指令：请立刻大力夸奖用户，表现出惊喜和开心！)`;
-                                          } else {
-                                              sysNoticeContent = `【系统通知】用户确认了你(AI)完成了约定：“${agreement.content}”。\n(指令：请表现出“说到做到”的得意或温柔，感谢用户的信任)`;
-                                          }
-
-                                          return {
-                                              ...c,
-                                              agreements: c.agreements.map((a: any) => a.id === agreement.id ? { ...a, status: 'fulfilled' } : a),
-                                              history: [...c.history, {
-                                                  id: Date.now().toString(),
-                                                  role: 'system',
-                                                  content: sysNoticeContent,
-                                                  timestamp: Date.now(),
-                                                  type: 'text'
-                                              }]
-                                          };
-                                      }
-                                      return c;
-                                  }));
-                               }}
-                               className={`px-3 py-1.5 rounded-lg text-xs font-bold shadow transition flex items-center gap-1 ${
-                                   isUserPromise 
-                                   ? 'bg-blue-500 hover:bg-blue-600 text-white' 
-                                   : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50'
-                               }`}
-                             >
-                               {isUserPromise ? '✅ 我做到了' : '💮 你做到了'}
-                             </button>
-                           )}
-                        </div>
-                      </div>
-                    );
-                  })
-                )}
-              </div>
-            </div>
-          )}
-
-
-
-
-
-
-
-{/* ==================== [新UI] 记忆手账 (含事件簿 & 印象集) ==================== */}
-          {activeTab === 'memory' && (
-            <div className="animate-fadeIn h-full flex flex-col">
-              {/* --- 手账内部的标签页切换 --- */}
-              <div className="flex p-1 bg-gray-100 rounded-lg mx-4 mb-4 flex-shrink-0">
-                <button 
-                  onClick={() => setMemoryTab('events')}
-                  className={`flex-1 py-2 text-xs font-bold rounded-md transition-all ${memoryTab === 'events' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500'}`}
-                >
-                  事件簿 (Events)
-                </button>
-                <button 
-                  onClick={() => setMemoryTab('impressions')}
-                  className={`flex-1 py-2 text-xs font-bold rounded-md transition-all ${memoryTab === 'impressions' ? 'bg-white text-purple-600 shadow-sm' : 'text-gray-500'}`}
-                >
-                  印象集 (Impressions)
-                </button>
-              </div>
-
-              {/* --- 事件簿页面 --- */}
-              {memoryTab === 'events' && (
-                <div className="h-full flex flex-col px-4">
-                  {/* 这里是原来“记忆面板”的所有内容，我们马上把它填回来 */}
-                 <>
-                    <div className="flex justify-between items-center mb-4">
-                      <h4 className="text-sm font-bold text-gray-600">🧠 长期记忆便签墙</h4>
-                      <span className="text-xs text-gray-400">{longTermMemories.length} 张便签</span>
-                    </div>
-                    {/* 多选控制栏 */}
-                    <div className="flex justify-between items-center mb-4">
-                      <button onClick={() => { setIsMultiSelect(!isMultiSelect); if (isMultiSelect) setSelectedMemIds([]); }} className={`px-4 py-2 rounded-lg font-bold text-sm ${isMultiSelect ? 'bg-blue-500 text-white' : 'bg-gray-200 text-gray-600'}`}>
-                        {isMultiSelect ? '✓ 完成选择' : '☑️ 多选合并'}
-                      </button>
-                      {isMultiSelect && selectedMemIds.length >= 2 && (
-                        <button onClick={handleMultiMerge} className="px-4 py-2 bg-purple-500 text-white rounded-lg font-bold text-sm shadow hover:bg-purple-600 transition">
-                          🔄 合并 {selectedMemIds.length} 张
-                        </button>
-                      )}
-                    </div>
-                    {/* 便签列表 */}
-                    <div className="flex-1 overflow-y-auto space-y-3 pb-20 custom-scrollbar">
-                      {longTermMemories.length === 0 ? (
-                        <div className="text-center text-gray-400 py-10"><span className="text-4xl mb-4 block">📝</span><p className="text-sm">还没有形成长期记忆哦</p><p className="text-xs mt-2">多聊一会儿就会自动总结啦～</p></div>
-                      ) : (
-                        longTermMemories.slice().reverse().map((mem: any, idx: number) => (
-                          <MemoryNote key={mem.id || idx} mem={mem} idx={idx} total={longTermMemories.length} contact={contact} setContacts={setContacts} isMultiSelect={isMultiSelect} isSelected={selectedMemIds.includes(mem.id)} onToggleSelect={toggleSelect} />
-                        ))
-                      )}
-                    </div>
-                    {/* 底部一键精炼 */}
-                    <div className="mt-auto pt-4 pb-4 flex-shrink-0">
-                      {longTermMemories.length >= 2 && (
-                        <button onClick={onRefineMemory} className="w-full bg-purple-500 text-white py-3 rounded-xl font-bold shadow-lg hover:bg-purple-600 transition active:scale-95">
-                          🔄 精炼全部记忆
-                        </button>
-                      )}
-                    </div>
-                  </>
-                </div>
-              )}
-
-{/* --- 印象集页面 (V7.2 "究极拟物手账" 最终完整版) --- */}
-              {memoryTab === 'impressions' && (() => {
-                const profile = contact.userProfile || {};
-                const themeColor = profile.themeColor || '#f3e8ff';
-
-
-
-
-// --- 辅助组件：可更换的拍立得相框 (V3.1 - 完整逻辑+装饰找回版) ---
-                const PhotoFrame: React.FC<{ id: string; className: string; defaultImage: string; }> = ({ id, className, defaultImage }) => {
-                  const photo = (profile as any)[id] || defaultImage;
-                  return (
-                    <label className={`absolute bg-white p-1.5 rounded-sm shadow-lg border border-gray-200 cursor-pointer group hover:z-20 transition-transform duration-300 ${className}`}>
-                      <img 
-                        src={photo} 
-                        className="w-full h-full object-cover rounded-sm" 
-                        alt={`frame-${id}`} 
-                      />
-                      <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white text-xs font-bold">更换</div>
-                      <input type="file" className="hidden" accept="image/*"
-                        onClick={(e) => (e.target as any).value = null} // 允许重复上传同一张
-                        onChange={async (e) => {
-                          if (e.target.files && e.target.files[0]) {
-                            const base64 = await fileToBase64(e.target.files[0]);
-                            // ★★★ 核心修复：直接操作 contact ID ★★★
-                            setContacts((prev: any[]) => prev.map((c: any) => 
-                                c.id === contact.id 
-                                ? { ...c, userProfile: { ...(c.userProfile || {}), [id]: base64 } } 
-                                : c
-                            ));
-                          }
-                        }}
-                      />
-                    </label>
-                  );
-                };
-
-                return (
-                  <div className="h-full flex flex-col relative rounded-b-2xl" style={{ backgroundColor: themeColor }}>
-                    {/* --- 背景纹理 & 自定义背景图 --- */}
-                    <div className="absolute inset-0 bg-repeat bg-center opacity-20 pointer-events-none rounded-b-2xl" style={{ 
-                        backgroundImage: profile.background_image ? `url(${profile.background_image})` : `url('data:image/svg+xml,%3Csvg width="60" height="60" viewBox="0 0 60 60" xmlns="http://www.w3.org/2000/svg"%3E%3Cg fill="none" fill-rule="evenodd"%3E%3Cg fill="%239C92AC" fill-opacity="0.4"%3E%3Cpath d="M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z"/%3E%3C/g%3E%3C/g%3E%3C/svg%3E')`, 
-                        backgroundSize: profile.background_image ? 'cover' : 'auto',
-                      }}/>
-                    
-                    <div className="flex-1 overflow-y-auto p-4 space-y-6 custom-scrollbar z-10 relative">
-                      
-                      {/* ★★★ 散落的拍立得照片 (可保存) ★★★ */}
-                      <PhotoFrame id="scattered_photo_1" className="top-16 -left-8 w-24 h-28 transform -rotate-12 hover:rotate-0 hover:scale-125" defaultImage="https://picsum.photos/200/300?random=1" />
-                      <PhotoFrame id="scattered_photo_2" className="bottom-10 -right-10 w-60 h-60 transform rotate-15 hover:rotate-0 hover:scale-125" defaultImage="https://picsum.photos/200/300?random=2" />
-                      <PhotoFrame id="scattered_photo_3" className="bottom-10 -left-6 w-20 h-24 transform rotate-10 hover:rotate-0 hover:scale-125" defaultImage="https://picsum.photos/200/300?random=4" />
-                      
-                      {/* 主笔记本区域 */}
-                      <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-lg border border-white/50 p-6 relative flex flex-col items-center min-h-[300px]">
-                        
-                        {/* ★★★ 这里的 Emoji 装饰全都找回来了！ ★★★ */}
-                        <div className="absolute -top-8 -right-4 text-5xl opacity-80 transform rotate-12 pointer-events-none">✏️</div>
-                        <div className="absolute top-14 right-40 text-5xl opacity-80 transform rotate-12 pointer-events-none">💚</div>
-                        <div className="absolute top-16 -left-4 text-3xl opacity-70 transform -rotate-45 pointer-events-none">📎</div>
-                        <div className="absolute top-20 left-40 text-3xl opacity-70 transform -rotate-45 pointer-events-none">⭐️</div>
-                        
-                        {/* 胶带装饰 */}
-                        <div className="absolute -top-2 left-1/2 -translate-x-1/2 w-24 h-6 bg-yellow-200/70 transform -rotate-2 shadow-sm" style={{ clipPath: 'polygon(0 0, 100% 0, 100% 100%, 0% 100%)' }}></div>
-                        
-                        <h4 className="text-sm font-bold text-gray-700 mb-4">{contact.name} 的秘密手账</h4>
-                        
-                        {/* ★★★ 中心照片 (User Profile Photo) ★★★ */}
-                        <div className="relative mb-6 flex-shrink-0 z-10">
-                            <svg className="absolute -inset-3 w-[calc(100%+1.5rem)] h-[calc(100%+1.5rem)] opacity-60 pointer-events-none" viewBox="0 0 100 120">
-                                <path d="M 5,5 C 2,2 98,2 95,5 L 95,115 C 98,118 2,118 5,115 L 5,5 Z" stroke="#888" strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round" style={{ strokeDasharray: "5, 5" }}/>
-                            </svg>
-                           
-                            <label className="relative block w-28 h-36 bg-white p-2 rounded-sm shadow-xl border border-gray-200 cursor-pointer group transform rotate-2 hover:rotate-0 hover:scale-105 transition-transform duration-300">
-                              <img
-                                src={profile.photo || "https://picsum.photos/200/300?random=3"}
-                                className="w-full h-full rounded-sm block"
-                                style={{ objectFit: "cover" }} 
-                                alt="main profile"
-                              />
-                              <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white text-xs font-bold rounded-sm">
-                                📷 更换
-                              </div>
-                              <input type="file" className="hidden" accept="image/*"
-                                onChange={async (e) => {
-                                  if (e.target.files && e.target.files[0]) {
-                                    const base64 = await fileToBase64(e.target.files[0]);
-                                    setContacts((prev: any[]) => prev.map((c: any) => 
-                                        c.id === contact.id 
-                                        ? { ...c, userProfile: { ...(c.userProfile || {}), photo: base64 } } 
-                                        : c
-                                    ));
-                                  }
-                                }}
-                              />
-                            </label>
-                        </div>
-
-                        {/* 档案条目 */}
-                        {(!profile.personality_traits && !profile.preferences && !profile.habits) && (<div className="text-center text-gray-400 py-4"><p className="text-xs">等待 AI 记录中...</p></div>)}
-                        <TraitItem icon="🎭" label="性格特点" traits={profile.personality_traits} />
-                        <TraitItem icon="💖" label="喜欢的东西" traits={profile.preferences?.likes} />
-                        <TraitItem icon="💔" label="讨厌的东西" traits={profile.preferences?.dislikes} />
-                        <TraitItem icon="🕰️" label="行为习惯" traits={profile.habits} />
-                      </div>
-
-                      {/* ★★★ 找回了！AI给用户打的标签 (绳索UI) ★★★ */}
-                      <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-lg border border-white/50 p-4">
-                        <h5 className="text-sm font-bold mb-3 flex items-center gap-2 text-gray-600"><span>🏷️</span> {contact.name} 对你的印象标签</h5>
-                        <div className="w-full bg-gray-50/50 border-y border-gray-200 h-36 relative overflow-x-auto overflow-y-hidden custom-scrollbar rounded-lg">
-                          {/* 绳子 */}
-                          <div className="absolute top-4 left-0 w-[200%] h-0.5 bg-yellow-700/30 border-t border-yellow-800/20 shadow-sm z-0"></div>
-                          <div className="flex items-start gap-6 px-6 pt-3 min-w-max h-full">
-                            {(!contact.aiTagsForUser || contact.aiTagsForUser.length === 0) && (<div className="text-[10px] text-gray-400 italic mt-8 ml-4">绳子上空空如也...</div>)}
-                            
-{/* 渲染 AI 标签 (已修复：增加点击查看备注功能) */}
-                            {(contact.aiTagsForUser || []).map((tag: any) => (
-                              <div 
-                                key={tag.id} 
-                                // ★★★ 1. 加上 cursor-pointer 和 onClick ★★★
-                                className="relative group flex flex-col items-center flex-shrink-0 animate-fadeIn cursor-pointer hover:z-20 transition-all duration-300"
-                                onClick={() => setViewingTag(tag)} 
-                                style={{ transform: `rotate(${(tag.style || (Math.random()*6-3))}deg)`, marginTop: `${Math.abs(tag.style || 0) + 10}px` }}
-                              >
-                                {/* 夹子 */}
-                                <div className="w-2 h-4 bg-amber-700 rounded-sm mb-[-6px] z-20 shadow-md relative border-l border-white/20"></div>
-                                
-                                {/* 标签纸 */}
-                                <div className="relative bg-yellow-100 text-yellow-900 border border-yellow-200 px-3 pt-3 pb-5 min-w-[70px] max-w-[120px] text-center shadow-lg transition-transform hover:scale-110 hover:rotate-0 z-10 flex flex-col justify-between min-h-[80px]" style={{ borderRadius: "2px 2px 20px 2px" }}>
-                                    <span className="text-sm font-black leading-tight break-words font-sans mb-2">{tag.content}</span>
-                                    
-                                    {/* 底部小字 */}
-                                    <div className="mt-auto pt-2 border-t border-black/10 w-full flex justify-between items-end">
-                                        <span className="text-[8px] opacity-50 font-bold">👀 查看</span>
-                                        <span className="text-[9px] font-mono opacity-60 tracking-tighter">
-                                           {new Date(tag.timestamp).toLocaleDateString([], {month: '2-digit', day: '2-digit'})}
-                                        </span>
-                                    </div>
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      </div>
-
-                    </div>
-                    
-                    {/* 底部工具栏 */}
-                    <div className="flex-shrink-0 p-2 flex justify-center items-center gap-4 bg-white/50 border-t border-white/50 z-20">
-                       <label className="flex flex-col items-center gap-1 cursor-pointer text-xs text-gray-600 hover:text-purple-600 transition-colors">
-                           <span className="text-lg">🖼️</span><span className="text-[10px] font-bold">换背景</span>
-                           <input type="file" className="hidden" accept="image/*" onChange={async (e) => { if (e.target.files && e.target.files[0]) { const base64 = await fileToBase64(e.target.files[0]); setContacts((prev: any[]) => prev.map((c: any) => c.id === contact.id ? { ...c, userProfile: { ...(c.userProfile || {}), background_image: base64 } } : c)); } }}/>
-                       </label>
-                       <label className="flex flex-col items-center gap-1 cursor-pointer text-xs text-gray-600 hover:text-purple-600 transition-colors">
-                           <span className="w-6 h-6 rounded-full border-2 border-white shadow-md" style={{ backgroundColor: themeColor }}></span><span className="text-[10px] font-bold">换颜色</span>
-                           <input type="color" className="absolute opacity-0" defaultValue={themeColor} onChange={(e) => setContacts((prev: any[]) => prev.map((c: any) => c.id === contact.id ? { ...c, userProfile: { ...(c.userProfile || {}), themeColor: e.target.value } } : c))}/>
-                       </label>
-                    </div>
-                  </div>
-                );
-              })()}
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-};
 
       
       
@@ -7185,12 +7565,13 @@ if (view === 'settings' && activeContact) {
         <div className="mt-auto pt-10 pb-4">
           <section className="bg-red-50 rounded-2xl p-4 border border-red-100 text-center">
             <h3 className="text-xs font-bold text-red-400 uppercase mb-3">Danger Zone</h3>
-            <button
-              onClick={handleClearChat}
-              className="w-full bg-white text-red-500 py-3 rounded-xl font-bold border border-red-200 shadow-sm hover:bg-red-50 transition"
-            >
-              ⚠️ Delete All Chat History
-            </button>
+{/* 【修改点】：将 onClick 从 handleClearChat 换成 handleResetCharacter */}
+        <button
+          onClick={handleResetCharacter}
+          className="w-full bg-white text-red-500 py-3 rounded-xl font-bold border border-red-200 shadow-sm hover:bg-red-50 transition"
+        >
+          ☢️ 彻底重置该角色 (Reset Character)
+        </button>
           </section>
         </div>
 

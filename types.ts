@@ -14,14 +14,18 @@ export interface UserTag {
   content: string;
   timestamp: number;
   author: 'user' | 'ai';
-  isPublic: boolean;        // 核心：这个标签是否对AI公开
+  isPublic: boolean;        // true=公开, false=私密
+  
+  // ★★★ 新增：AI是否正在申请查看 ★★★
+  aiRequestPending?: boolean; 
+  
   isUnlocked?: boolean;     // (对AI标签) 用户是否已解锁
   unlockCost?: number;      // (对AI标签) 解锁花费
   userQuote: string;        // 触发AI标签的原话
   aiReasoning: string;      // AI的内心独白
   note?: string;            // 用户的批注
   rotation?: number;        // 旋转角度
-  strength?: number;        // AI标签的强度
+  strength?: number;        // 借用存 margin
 }
 
 export interface TaskCategory {
