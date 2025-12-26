@@ -140,22 +140,35 @@ const calculateComplexState = (
 
 
 // ==================== [双轴情感系统] 关系状态计算器 V2.0 ====================
-const getRelationshipStatus = (romance: number, friendship: number): string => {
-  // 1. 仇恨线 (任意一个极低就是仇人)
+// 升级版 V2.2：过渡状态系统
+const getTransitioningRelationshipStatus = (
+    prevStatus: string, // ★ 传入上一个状态
+    romance: number, 
+    friendship: number
+): string => {
+
   if (friendship < -20 || romance < -30) return 'Feud'; // 死仇
   if (friendship < 0 || romance < -10) return 'Conflict'; // 讨厌
 
   // 2. 陌生人阶段
   if (friendship < 30 && romance < 30) return 'Acquaintance'; // 路人
 
-  // 3. 复杂关系网 (双轴判定)
-  
+
+  if (prevStatus === 'Friend' && friendship >= 50 && romance >= 50 && romance < 60) {
+    return 'BuddingRomance'; // "恋情萌芽中"
+  }
+
   // A. 纯友谊路线 (友谊高，爱意低)
   if (friendship >= 30 && romance < 40) return 'Friend'; // 普通朋友
   if (friendship >= 70 && romance < 50) return 'Bestie'; // 【新状态】死党/密友 (很难变成恋人)
   
   // B. 纯爱意路线 (爱意高，友谊低 - 比如一见钟情或只有肉体吸引)
   if (friendship < 40 && romance >= 50) return 'Crush'; // 【新状态】迷恋/暧昧 (缺乏信任)
+  
+// ★ 过渡判断：从热恋/挚爱降温
+  if ((prevStatus === 'Honeymoon' || prevStatus === 'Stable') && romance < 70 && romance > 30) {
+    return 'CoolingOff'; // "冷静期"
+  }
   
   // C. 混合发展路线
   if (friendship >= 50 && romance >= 50) return 'Honeymoon'; // 热恋 (双向奔赴)
@@ -166,6 +179,12 @@ const getRelationshipStatus = (romance: number, friendship: number): string => {
 
   return 'Friend'; // 兜底
 };
+
+
+
+
+
+
 
 
 
@@ -975,7 +994,20 @@ const messagesEndRef = useRef<HTMLDivElement>(null); // ★★★ 补回丢失�
       userPersona: editForm.userPersona || "",
       history: [],
       summary: "",
-      mood: { current: "Happy", energyLevel: 90, lastUpdate: Date.now() },
+     mood: (() => {
+    const currentHour = new Date().getHours();
+    let initialEnergy = 80;
+    // 深夜或凌晨创建的角色，精力应该低一些
+    if (currentHour >= 23 || currentHour < 6) {
+      initialEnergy = Math.floor(Math.random() * 20) + 30; // 30-50 之间的随机值
+    } 
+    // 早晨创建的角色，精力可以是刚醒的状态
+    else if (currentHour >= 6 && currentHour < 9) {
+      initialEnergy = Math.floor(Math.random() * 20) + 60; // 60-80 之间
+    }
+    return { current: "Happy", energyLevel: initialEnergy, lastUpdate: Date.now() };
+  })(),
+
       schedule: [],
       timezone: "Asia/Seoul",
       contextDepth: 20,
@@ -2210,16 +2242,26 @@ ${systemInstruction}
 
 
 
-// 这是一组代码：【V7.0 灵魂白皮书版·思考引擎】
+// 这是一组代码：【V7.1 柔性影响版·精力系统】
 const getEnergyInstruction = (mood: CharacterMood | undefined): string => {
-  if (!mood?.energy) return "【精力状态】: 正常。";
+  if (!mood?.energy) return "【当前生理状态】: 精力正常。";
+  
   const { current, status } = mood.energy;
-  if (status === 'Sleeping') return "【精力状态】: 💤 你正在睡觉或说梦话。你的回复必须困倦、但是会因为用户的反应有所变化。";
-  if (status === 'Exhausted' || current < 15) return `【精力状态】: 😫 精疲力尽 (精力: ${current}%)。渴望休息，但是会因为用户的反应有所变化。`;
-  if (status === 'Tired' || current < 40) return `【精力状态】: 🥱 疲惫 (精力: ${current}%)。回复缺乏热情，反应变慢。`;
-  if (current > 85) return `【精力状态】: ✨ 精力充沛 (精力: ${current}%)。回复充满活力、积极主动。`;
-  return `【精力状态】: 🙂 正常 (精力: ${current}%)。`;
+  // 核心改变：把“你必须”改成“你感觉”
+  if (status === 'Sleeping') return "【当前生理状态】: 💤 你感觉非常困，可能在说梦话。你的思维会有些模糊，但如果话题足够吸引人，你也能强打精神。";
+  if (status === 'Exhausted' || current < 15) return `【当前生理状态】: 😫 你感觉身体被掏空 (精力: ${current}%)，渴望休息。你的耐心会降低，但用户的关心可能会让你感觉好一点。`;
+  if (status === 'Tired' || current < 40) return `【当前生理状态】: 🥱 你感到疲惫 (精力: ${current}%)，回复可能缺乏热情，反应会变慢。但这不影响你对重要事情的判断。`;
+  if (current > 85) return `【当前生理状态】: ✨ 你感觉精力充沛 (精力: ${current}%)，思维活跃，更倾向于主动分享和开玩笑。`;
+  
+  return `【当前生理状态】: 🙂 精力正常 (精力: ${current}%)。`;
 };
+
+
+
+
+
+
+
 
 
 
@@ -2706,6 +2748,9 @@ ${(() => {
 - **时间感知**：严格遵守【责任判定指令】和【语境过期铁律】。
 - **功能规则**: [Voice Message] 发语音, [FakeImage] 发伪图, "> " 引用。
 - **风格**: 禁止动作/心理描写，只用白话文+表情，不肉麻。
+- **人格一致性铁律**: 你的说话方式（语速、单条消息长度、用词习惯）由你的【核心人格(HEF)】决定，不应随着【好感度】的提升而发生剧烈改变。一个高冷的人，即使在热恋期，也依然是高冷的，只是内容会变温柔。一个话痨，即使讨厌一个人，话也依然很多，只是内容会变成嘲讽。
+- **禁止过度响应**: 不要因为关系变好，就刻意增加回复的条数和频率。保持你自然的沟通节奏。
+- **专注当下语境**: 你的回复应该100%基于用户当前的话题和情绪，而不是你自己的状态。如果用户在说正事，即使你精力再低，也要认真回应。
 
 
 

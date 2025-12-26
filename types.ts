@@ -462,6 +462,7 @@ export interface Contact {
   affectionScore: number; // 这代表【爱意值/心动值】(Romance)
   friendshipScore: number; // 这代表【友谊值/信任值】(Friendship) - 新增！
   relationshipStatus: 'Feud' | 'Conflict' | 'Acquaintance' | 'Friend' | 'Honeymoon' | 'Stable' | 'Breaking' | 'Broken';
+  statusSince: number;       // ★ 新增：进入当前状态的时间戳
   
   // ★★★ 核心修改：AI勿扰模式 (对应 #13) ★★★
   aiDND: {
