@@ -701,6 +701,120 @@ const TagCreationModal: React.FC<{
 
 
 
+// ==================== 灵魂控制台组件 (菜谱) ====================
+
+const MemoryNote: React.FC<{
+  mem: any;
+  idx: number;
+  total: number;
+  contact: any;
+  setContacts: any;
+  isMultiSelect: boolean;
+  isSelected: boolean;
+  onToggleSelect: (id: string) => void;
+}> = ({ mem, idx, total, contact, setContacts, isMultiSelect, isSelected, onToggleSelect }) => {
+  const [isEditing, setIsEditing] = useState(false);
+  const [editContent, setEditContent] = useState(mem.content || '');
+
+  return (
+    <div
+      className={`bg-yellow-50 border ${isSelected ? 'border-blue-500 border-3 ring-2 ring-blue-200' : 'border-yellow-200'} rounded-xl p-4 shadow-sm relative group ${isMultiSelect ? 'cursor-pointer' : ''}`}
+      onClick={() => isMultiSelect && onToggleSelect(mem.id)}
+    >
+      {/* 删除按钮 */}
+      <button
+        onClick={(e) => {
+          e.stopPropagation();
+          if (confirm("确定删除这张便签吗？")) {
+            setContacts((prev: any) => prev.map((c: any) =>
+              c.id === contact.id ? { ...c, longTermMemories: c.longTermMemories.filter((m: any) => m.id !== mem.id) } : c
+            ));
+          }
+        }}
+        className="absolute top-2 right-2 w-7 h-7 bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition flex items-center justify-center text-sm"
+      >
+        ×
+      </button>
+
+      {/* 多选勾勾 */}
+      {isMultiSelect && (
+        <div className={`absolute top-2 left-2 w-6 h-6 rounded-full border-2 flex items-center justify-center ${isSelected ? 'bg-blue-500 border-blue-500' : 'bg-white border-gray-300'}`}>
+          {isSelected && <span className="text-white text-xs font-bold">✓</span>}
+        </div>
+      )}
+
+      <div className="flex justify-between items-start mb-2">
+        <span className="text-xs font-bold text-yellow-700">#{total - idx}</span>
+        <span className="text-xs text-gray-500">{mem.date || '未知日期'}</span>
+      </div>
+
+      {isEditing ? (
+        <>
+          <textarea
+            value={editContent}
+            onChange={(e) => setEditContent(e.target.value)}
+            onClick={(e) => e.stopPropagation()}
+            className="w-full p-2 border border-yellow-400 rounded bg-white text-sm resize-none h-32"
+            autoFocus
+          />
+          <div className="flex gap-2 mt-2">
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                if (editContent.trim()) {
+                  setContacts((prev: any) => prev.map((c: any) =>
+                    c.id === contact.id ? {
+                      ...c,
+                      longTermMemories: c.longTermMemories.map((m: any) => m.id === mem.id ? { ...m, content: editContent.trim() } : m)
+                    } : c
+                  ));
+                  setIsEditing(false);
+                }
+              }}
+              className="flex-1 bg-green-500 text-white py-2 rounded font-bold text-sm"
+            >
+              保存
+            </button>
+            <button
+              onClick={(e) => { e.stopPropagation(); setIsEditing(false); setEditContent(mem.content || ''); }}
+              className="flex-1 bg-gray-300 text-gray-700 py-2 rounded font-bold text-sm"
+            >
+              取消
+            </button>
+          </div>
+        </>
+      ) : (
+        <>
+          <p className="text-sm text-gray-800 leading-relaxed whitespace-pre-wrap pr-8">
+            {mem.content || ''}
+          </p>
+          {mem.range && <div className="text-[10px] text-gray-400 mt-2 italic">记录于聊天第 {mem.range} 条</div>}
+          <button
+            onClick={(e) => { e.stopPropagation(); setIsEditing(true); }}
+            className="mt-3 text-xs text-blue-600 underline opacity-0 group-hover:opacity-100 transition"
+          >
+            ✏️ 编辑便签
+          </button>
+        </>
+      )}
+    </div>
+  );
+};
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -718,7 +832,8 @@ const PersonaPanel = ({
   memoryTab,
   setMemoryTab,
   sampleText,
-  setSampleText
+  setSampleText,
+  onForceUpdate // <--- 加在这里！
 }: any) => {
   // ==================== [状态修复] 把多选相关的状态放回这里！ ====================
   const [isMultiSelect, setIsMultiSelect] = useState(false);
@@ -729,8 +844,12 @@ const PersonaPanel = ({
 // 这是一组代码：【ChatApp.tsx】为 PersonaPanel 添加新状态和新函数
   // ★★★ 新增：控制新建标签弹窗 ★★★
   const [showTagCreate, setShowTagCreate] = useState(false);
-
-// 【ChatApp.tsx 更新：私密标签不通知 + 生成乱序参数】
+// ★★★ 新增：控制规则说明弹窗 ★★★
+  const [showPointRules, setShowPointRules] = useState(false);
+// ★★★ 新增：刷新加载状态 ★★★
+// ★★★ 状态管理：控制全局刷新动画（用于“印象集”） ★★★
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  // 【ChatApp.tsx 更新：私密标签不通知 + 生成乱序参数】
   const handleTagSubmit = (data: { content: string; isPublic: boolean; note: string }) => {
      const timestamp = Date.now();
      
@@ -778,6 +897,46 @@ const PersonaPanel = ({
      
      setShowTagCreate(false);
   };
+
+
+  
+
+// ★★★ 新增：解锁印象标签的逻辑 ★★★
+  const handleUnlockImpression = (tagId: string) => {
+    // 1. 检查钱够不够
+    const currentPoints = contact.interventionPoints || 0;
+    if (currentPoints < 1) {
+      alert("解锁失败：你的介入点数不足 (需要 1 点)！\n\n多聊几句，或者等待每日恢复吧~");
+      return;
+    }
+
+    // 2. 扣费并解锁
+    if (confirm(`🔓 确定消耗 1 个点数，查看 ${contact.name} 对你的这条印象吗？`)) {
+      setContacts((prev: any) => prev.map((c: any) => {
+        if (c.id === contact.id) {
+          return {
+            ...c,
+            interventionPoints: c.interventionPoints - 1, // 扣费
+            aiTagsForUser: (c.aiTagsForUser || []).map((t: any) => 
+              t.id === tagId ? { ...t, isUnlocked: true } : t // 标记为已解锁
+            )
+          };
+        }
+        return c;
+      }));
+    }
+  };
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -884,11 +1043,11 @@ const PersonaPanel = ({
 
 
 
-// ==================== [新组件] 手账档案条目UI ====================
-const TraitItem: React.FC<{ label: string; traits?: ProfileTrait[]; icon: string; isInitiallyOpen?: boolean }> = ({ label, traits, icon, isInitiallyOpen = false }) => {
+// ==================== [修复版] 手账档案条目UI (修复Key重复警告) ====================
+// ==================== [优化版] 手账档案条目UI (强化证据显示) ====================
+const TraitItem: React.FC<{ label: string; traits?: any[]; icon: string; isInitiallyOpen?: boolean }> = ({ label, traits, icon, isInitiallyOpen = false }) => {
   if (!traits || traits.length === 0) return null;
   
-  // 修复 Invalid Date 的核心
   const formatDate = (timestamp: number) => {
     if (!timestamp || isNaN(timestamp)) return "未知日期";
     return new Date(timestamp).toLocaleDateString();
@@ -900,24 +1059,33 @@ const TraitItem: React.FC<{ label: string; traits?: ProfileTrait[]; icon: string
         <span className="flex items-center gap-2">{icon} {label}</span>
         <span className="text-xs text-gray-400 transition-transform group-open:rotate-180">▼</span>
       </summary>
-      <div className="p-3 space-y-2">
-        {traits.map(trait => (
-          <div key={trait.timestamp} className="bg-gray-50/70 p-2 rounded-lg border">
-            <p className="text-sm font-medium text-gray-800">{trait.value}</p>
-            <details className="text-xs mt-1">
-              <summary className="cursor-pointer text-gray-400 hover:text-gray-600 select-none">显示证据</summary>
-              <div className="mt-1 p-2 bg-white rounded-md">
-                <p className="italic text-purple-600">“{trait.quote}”</p>
-                <p className="text-[10px] text-gray-400 mt-1">记录于: {formatDate(trait.timestamp)}</p>
-              </div>
-            </details>
+      <div className="p-3 space-y-3">
+        {traits.map((trait, index) => (
+          <div key={`${trait.timestamp}-${index}`} className="bg-gray-50/70 p-3 rounded-lg border border-gray-100">
+            {/* 特征值 */}
+            <div className="flex items-center gap-2 mb-2">
+               <span className="w-1.5 h-1.5 rounded-full bg-purple-400"></span>
+               <p className="text-sm font-black text-gray-800">{trait.value}</p>
+            </div>
+            
+            {/* ★★★ 核心修改：原文引用区域 (强调显示) ★★★ */}
+            {trait.quote && (
+                <div className="bg-white p-2 rounded border border-dashed border-purple-200 ml-2 relative">
+                    <span className="absolute -top-2 left-2 text-[10px] bg-purple-100 text-purple-600 px-1 rounded">证据</span>
+                    <p className="text-xs text-gray-500 italic leading-relaxed pt-1">
+                        “{trait.quote}”
+                    </p>
+                    <p className="text-[9px] text-gray-300 text-right mt-1">
+                        — 记录于 {formatDate(trait.timestamp)}
+                    </p>
+                </div>
+            )}
           </div>
         ))}
       </div>
     </details>
   );
 };
-
 
 
 
@@ -1024,7 +1192,15 @@ ${memoryContent}
               <h2 className="font-bold text-lg leading-none">{contact?.name}</h2>
               <div className="flex items-center gap-2 mt-1">
                  <p className="text-[10px] text-gray-400">Soul Interface</p>
-                 <span className="text-[10px] bg-yellow-100 text-yellow-700 px-1.5 py-0.5 rounded-full font-bold border border-yellow-200">🪙 {contact.interventionPoints || 0}</span>
+                {/* ★★★ 氪金按钮：点击钱币触发强行刷新 ★★★ */}
+                {/* ★★★ 氪金按钮：点击打开规则说明书 ★★★ */}
+                 <button 
+                    onClick={() => setShowPointRules(true)}
+                    className="text-[10px] bg-yellow-100 text-yellow-700 px-2 py-0.5 rounded-full font-bold border border-yellow-200 hover:bg-yellow-200 active:scale-95 transition cursor-pointer flex items-center gap-1"
+                 >
+                    <span>🪙</span>
+                    <span>{contact.interventionPoints || 0}</span>
+                 </button>
               </div>
             </div>
           </div>
@@ -1580,7 +1756,20 @@ ${memoryContent}
                    onClose={() => setShowTagCreate(false)} 
                    onSubmit={handleTagSubmit} 
                  />
+                 {/* ★★★ 规则说明弹窗 (放在这里) ★★★ */}
+  {/* ★★★ 规则说明弹窗 (逻辑升级：支持 Loading) ★★★ */}
+
+           
               </div>
+
+
+
+
+
+
+
+
+
 
 
 
@@ -1912,52 +2101,81 @@ ${memoryContent}
                             {(!contact.aiTagsForUser || contact.aiTagsForUser.length === 0) && (<div className="text-[10px] text-gray-400 italic mt-8 ml-4">绳子上空空如也...</div>)}
                             
 {/* 渲染 AI 标签 (修改版：大号明信片模式，直接显示备注，不用点) */}
-                            {(contact.aiTagsForUser || []).map((tag: any) => (
-                              <div 
-                                key={tag.id} 
-                                className="relative group flex flex-col items-center flex-shrink-0 animate-fadeIn hover:z-20 transition-all duration-300"
-                                // 移除 onClick，因为内容直接显示了
-                                style={{ 
-                                    transform: `rotate(${(tag.style || (Math.random()*6-3))}deg)`, 
-                                    marginTop: `${Math.abs(tag.style || 0) + 10}px`,
-                                    marginLeft: '5px',
-                                    marginRight: '5px'
-                                }}
-                              >
-                                {/* 顶部：木头夹子 */}
-                                <div className="w-3 h-5 bg-amber-800 rounded-sm mb-[-8px] z-20 shadow-md relative border-l border-white/20"></div>
-                                
-                                {/* 核心：大号便签纸 */}
-                                <div className="relative bg-white border border-gray-200 p-3 w-40 min-h-[120px] shadow-lg flex flex-col rotate-0 hover:scale-105 transition-transform duration-200" style={{ borderRadius: "4px" }}>
-                                    
-                                    {/* 装饰：顶部胶带效果 */}
-                                    <div className="absolute -top-3 left-1/2 -translate-x-1/2 w-16 h-4 bg-blue-100/50 -rotate-1"></div>
+{/* 渲染 AI 标签 (含上锁逻辑) */}
+{(contact.aiTagsForUser || []).map((tag: any) => {
+  // 判断是否已解锁（如果没有 isUnlocked 字段，默认为 false/未解锁，除非你是VIP）
+  // 这里的逻辑是：只有 isUnlocked === true 或者是你自己贴的(author===user)才显示
+  // 但这里是 AI 贴给你的标签，所以默认锁住
+  const isLocked = !tag.isUnlocked;
 
-                                    {/* 1. 标签内容 (大字) */}
-                                    <div className="text-center mt-2 mb-2">
-                                        <span className="text-base font-black text-gray-800 bg-yellow-100 px-2 py-0.5 box-decoration-clone">
-                                            #{tag.content}
-                                        </span>
-                                    </div>
+  return (
+    <div 
+      key={tag.id} 
+      className="relative group flex flex-col items-center flex-shrink-0 animate-fadeIn hover:z-20 transition-all duration-300"
+      style={{ 
+          transform: `rotate(${(tag.style || (Math.random()*6-3))}deg)`, 
+          marginTop: `${Math.abs(tag.style || 0) + 10}px`,
+          marginLeft: '5px',
+          marginRight: '5px'
+      }}
+    >
+      {/* 顶部：木头夹子 */}
+      <div className="w-3 h-5 bg-amber-800 rounded-sm mb-[-8px] z-20 shadow-md relative border-l border-white/20"></div>
+      
+      {/* 核心：大号便签纸 */}
+      <div 
+         onClick={() => isLocked && handleUnlockImpression(tag.id)} // ★★★ 点击锁住的标签触发解锁
+         className={`relative border p-3 w-40 min-h-[120px] shadow-lg flex flex-col transition-transform duration-200 
+            ${isLocked 
+                ? 'bg-gray-100 border-gray-300 cursor-pointer hover:scale-105' // 锁住样式
+                : 'bg-white border-gray-200 rotate-0 hover:scale-105'          // 解锁样式
+            }`} 
+         style={{ borderRadius: "4px" }}
+      >
+          
+          {/* 装饰：顶部胶带效果 */}
+          <div className={`absolute -top-3 left-1/2 -translate-x-1/2 w-16 h-4 -rotate-1 ${isLocked ? 'bg-gray-300' : 'bg-blue-100/50'}`}></div>
 
-                                    {/* 2. AI 的理由 (直接显示在这里！) */}
-                                    <div className="flex-1 bg-gray-50 rounded-lg p-2 border border-gray-100 mb-1">
-                                        <span className="text-[9px] font-bold text-blue-500 block mb-0.5"> {contact.name} 悄悄说:</span>
-                                        <p className="text-[10px] text-gray-600 leading-relaxed font-sans text-justify">
-                                            {/* 如果没有理由，就显示默认文案 */}
-                                            {tag.aiReasoning || tag.note || "（它似乎对你印象很深，但没写下原因...）"}
-                                        </p>
-                                    </div>
-                                    
-                                    {/* 3. 底部时间 */}
-                                    <div className="text-right border-t border-gray-100 pt-1 mt-1">
-                                        <span className="text-[9px] font-mono text-gray-300">
-                                           {new Date(tag.timestamp).toLocaleDateString([], {month: '2-digit', day: '2-digit'})}
-                                        </span>
-                                    </div>
-                                </div>
-                              </div>
-                            ))}
+          {/* === 🔒 情况 A: 标签被锁住 === */}
+          {isLocked ? (
+              <div className="flex-1 flex flex-col items-center justify-center text-center gap-2">
+                  <div className="text-3xl animate-bounce">🔒</div>
+                  <div className="text-xs font-bold text-gray-500">???</div>
+                  <div className="mt-2 bg-yellow-100 text-yellow-700 px-2 py-1 rounded text-[10px] font-bold border border-yellow-200">
+                      消耗 1 点数解锁
+                  </div>
+              </div>
+          ) : (
+              /* === 🔓 情况 B: 标签已解锁 (原本的内容) === */
+              <>
+                  {/* 1. 标签内容 (大字) */}
+                  <div className="text-center mt-2 mb-2">
+                      <span className="text-base font-black text-gray-800 bg-yellow-100 px-2 py-0.5 box-decoration-clone">
+                          #{tag.content}
+                      </span>
+                  </div>
+
+                  {/* 2. AI 的理由 (直接显示在这里！) */}
+                  <div className="flex-1 bg-gray-50 rounded-lg p-2 border border-gray-100 mb-1">
+                      <span className="text-[9px] font-bold text-blue-500 block mb-0.5"> {contact.name} 悄悄说:</span>
+                      <p className="text-[10px] text-gray-600 leading-relaxed font-sans text-justify">
+                          {/* 如果没有理由，就显示默认文案 */}
+                          {tag.aiReasoning || tag.note || "（它似乎对你印象很深，但没写下原因...）"}
+                      </p>
+                  </div>
+                  
+                  {/* 3. 底部时间 */}
+                  <div className="text-right border-t border-gray-100 pt-1 mt-1">
+                      <span className="text-[9px] font-mono text-gray-300">
+                         {new Date(tag.timestamp).toLocaleDateString([], {month: '2-digit', day: '2-digit'})}
+                      </span>
+                  </div>
+              </>
+          )}
+      </div>
+    </div>
+  );
+})}
                           </div>
                         </div>
                       </div>
@@ -1980,6 +2198,82 @@ ${memoryContent}
               })()}
             </div>
           )}
+
+
+
+{/* ==================== 🛠️ [修复版] 全局弹窗挂载区 (放在这里才能全屏显示！) 🛠️ ==================== */}
+
+          {/* 1. 规则说明弹窗 (现在无论在哪个Tab都能弹出来了！) */}
+          <PointRuleModal 
+            isOpen={showPointRules}
+            currentPoints={contact.interventionPoints || 0}
+            onClose={() => setShowPointRules(false)}
+            onConfirm={async () => {
+                setShowPointRules(false); // 先关弹窗
+                setIsRefreshing(true);    // 开启全屏遮罩
+                
+                // 强制切换到印象页，让用户看到变化
+                setActiveTab('memory');       
+                setMemoryTab('impressions');  
+
+                // 等一下 UI 渲染
+                await new Promise(r => setTimeout(r, 100));
+
+                if (onForceUpdate) {
+                    try {
+                        // 扣费逻辑
+                        setContacts((prev: any) => prev.map((c: any) => c.id === contact.id ? { ...c, interventionPoints: c.interventionPoints - 1 } : c));
+                        
+                        // 执行刷新 (至少展示 1.5 秒动画)
+                        await Promise.all([
+                            onForceUpdate(),
+                            new Promise(resolve => setTimeout(resolve, 1500)) 
+                        ]);
+                    } catch (e) {
+                        alert("刷新失败，请重试");
+                    } finally {
+                        setIsRefreshing(false); // 无论成功失败，最后都要关闭遮罩
+                    }
+                } else {
+                    setIsRefreshing(false);
+                }
+            }}
+          />
+
+          {/* 2. 全屏加载遮罩 (现在是真正的全屏了，并且z-index最高) */}
+          {isRefreshing && (
+            <div className="absolute inset-0 z-[999] bg-white/95 backdrop-blur-md flex flex-col items-center justify-center animate-fadeIn rounded-t-3xl sm:rounded-3xl">
+                {/* 动画图标 */}
+                <div className="relative mb-6 scale-125">
+                   <div className="w-24 h-24 border-4 border-indigo-100 border-t-indigo-500 rounded-full animate-spin"></div>
+                   <div className="absolute inset-0 flex items-center justify-center text-4xl animate-pulse">🧠</div>
+                </div>
+                
+                {/* 动态文字 */}
+                <h3 className="text-2xl font-black text-gray-800 mb-2 tracking-widest animate-pulse">
+                  正在重构印象...
+                </h3>
+                
+                <div className="flex gap-2 mt-4">
+                    <span className="text-xs text-indigo-500 font-mono bg-indigo-50 px-3 py-1 rounded-full border border-indigo-100">Deep Dive</span>
+                    <span className="text-xs text-purple-500 font-mono bg-purple-50 px-3 py-1 rounded-full border border-purple-100">Re-Analyzing</span>
+                </div>
+                
+                <p className="text-xs text-gray-400 mt-8 absolute bottom-20">
+                  AI 正在重新审视与你的所有回忆...
+                </p>
+                
+                {/* 防止卡死的紧急关闭按钮 (以防万一) */}
+                <button 
+                  onClick={() => setIsRefreshing(false)} 
+                  className="absolute top-4 right-4 text-gray-300 text-xs hover:text-gray-500 underline"
+                >
+                  [卡住了? 点此关闭]
+                </button>
+            </div>
+          )}
+
+
         </div>
       </div>
     </div>
@@ -2111,6 +2405,100 @@ const getModeInstruction = (mode: string = 'normal'): string => {
 `;
   }
 };
+
+
+// ==================== [新增] 氪金规则说明弹窗 ====================
+const PointRuleModal: React.FC<{
+  isOpen: boolean;
+  onClose: () => void;
+  onConfirm: () => void;
+  currentPoints: number;
+}> = ({ isOpen, onClose, onConfirm, currentPoints }) => {
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm animate-fadeIn" onClick={onClose}>
+      <div className="bg-white w-[85%] max-w-sm rounded-3xl shadow-2xl overflow-hidden animate-scaleIn" onClick={e => e.stopPropagation()}>
+        
+        {/* 顶部插图区 */}
+        <div className="bg-gradient-to-br from-purple-500 to-indigo-600 p-6 text-center relative overflow-hidden">
+           <div className="absolute top-0 left-0 w-full h-full bg-white/10 opacity-50" style={{ backgroundImage: 'radial-gradient(circle, #fff 1px, transparent 1px)', backgroundSize: '10px 10px' }}></div>
+           <div className="text-5xl mb-2 relative z-10">🧠</div>
+           <h3 className="text-xl font-black text-white tracking-wider relative z-10">潜意识深潜</h3>
+           <p className="text-[10px] text-purple-100 font-bold opacity-80 mt-1 uppercase tracking-widest relative z-10">Deep Dive Protocol</p>
+        </div>
+
+        {/* 规则说明区 */}
+        <div className="p-6 space-y-4">
+           
+           <div className="flex gap-3 items-start">
+              <div className="bg-gray-100 p-2 rounded-lg text-lg">🔒</div>
+              <div>
+                 <h4 className="text-sm font-bold text-gray-800">全隐藏模式</h4>
+                 <p className="text-xs text-gray-500 leading-relaxed">
+                    AI 的真实想法（特征与印象）默认是**不可见**的。只有TA才知道自己怎么看你。
+                 </p>
+              </div>
+           </div>
+
+           <div className="flex gap-3 items-start">
+              <div className="bg-pink-100 p-2 rounded-lg text-lg">💓</div>
+              <div>
+                 <h4 className="text-sm font-bold text-gray-800">好感度解锁</h4>
+                 <p className="text-xs text-gray-500 leading-relaxed">
+                    只有当**好感度够高**时，AI 才会在聊天中忍不住对你敞开心扉（自动解锁）。
+                 </p>
+              </div>
+           </div>
+
+           <div className="flex gap-3 items-start">
+              <div className="bg-blue-100 p-2 rounded-lg text-lg">🎲</div>
+              <div>
+                 <h4 className="text-sm font-bold text-gray-800">随机刷新机制</h4>
+                 <p className="text-xs text-gray-500 leading-relaxed">
+                    AI 会在聊天中（每 2~10 句）**自动在后台**更新对你的看法，你不会察觉。
+                 </p>
+              </div>
+           </div>
+
+           {/* 分割线 */}
+           <div className="border-t border-dashed border-gray-200 my-2"></div>
+
+           {/* 氪金提示 */}
+           <div className="bg-yellow-50 border border-yellow-200 p-3 rounded-xl">
+              <p className="text-xs text-yellow-800 font-bold mb-1">⚡️ 等不及了？</p>
+              <p className="text-[10px] text-yellow-700 leading-tight">
+                 你可以消耗 <span className="font-black text-red-500">1</span> 个点数，强行撬开 TA 的大脑，立即刷新并查看当前想法！
+              </p>
+           </div>
+
+        </div>
+
+        {/* 底部按钮 */}
+        <div className="p-4 bg-gray-50 flex gap-3">
+           <button onClick={onClose} className="flex-1 py-3 text-gray-500 font-bold text-xs hover:bg-gray-200 rounded-xl transition">
+              我再等等
+           </button>
+           <button 
+              onClick={onConfirm}
+              disabled={currentPoints < 1}
+              className={`flex-1 py-3 rounded-xl font-bold text-white text-xs shadow-lg flex items-center justify-center gap-1 transition active:scale-95 ${currentPoints < 1 ? 'bg-gray-300 cursor-not-allowed' : 'bg-gradient-to-r from-yellow-400 to-orange-500'}`}
+           >
+              {currentPoints < 1 ? '点数不足' : `🪙 消耗1点刷新`}
+           </button>
+        </div>
+
+      </div>
+    </div>
+  );
+};
+
+
+
+
+
+
+
 
 
 
@@ -2337,12 +2725,38 @@ const messagesEndRef = useRef<HTMLDivElement>(null); // ★★★ 补回丢失�
 
 
 
-        // ★★★ 补全：印象进度条初始化 ★★★
+ if (!updatedContact.mood?.energy) {
+          updatedContact.mood = {
+            ...(updatedContact.mood || {}),
+            current: updatedContact.mood?.current || "Calm",
+            energy: { current: 80, max: 100, status: 'Awake', lastUpdate: now }
+          };
+        }
+
+        // ★★★ 核心新增：历史积分回溯补丁 ★★★
+        // 逻辑：如果发现这个角色从来没有记录过计数器(chatCountForPoint is undefined)，
+        // 说明他是老角色，必须把以前的聊天记录都算上！
+        if (updatedContact.chatCountForPoint === undefined) {
+            // 1. 算出你以前发过多少句 (只算你的，不算AI和系统的，防止注水)
+            const userMsgCount = updatedContact.history.filter(m => m.role === 'user').length;
+            
+            // 2. 换算点数 (每100句 = 1点)
+            const earnedPoints = Math.floor(userMsgCount / 100);
+            const remainder = userMsgCount % 100; // 剩下的零头存进计数器
+            
+            // 3. 豪横补发！
+            updatedContact.chatCountForPoint = remainder;
+            updatedContact.interventionPoints = (updatedContact.interventionPoints || 0) + earnedPoints;
+            
+            hasChanges = true; // 告诉系统：数据变了，快保存！
+            console.log(`[💰 积分回溯] 为 ${updatedContact.name} 补发了 ${earnedPoints} 个点数 (基于 ${userMsgCount} 条历史消息)`);
+        }
+
+        // 补全：印象进度条初始化 (顺手把这个也补全，防止报错)
         if (updatedContact.impressionCount === undefined || updatedContact.impressionThreshold === undefined) {
             updatedContact.impressionCount = 0;
-            // 第一次随机一个 30-50 的低门槛，让用户快点看到效果
             updatedContact.impressionThreshold = Math.floor(Math.random() * 20) + 30; 
-            hasChanges = true; // 标记需要保存
+            hasChanges = true;
         }
 
 
@@ -3411,164 +3825,137 @@ ${historyText}
 
 
 
-const updateUserProfile = async (currentContact: Contact, highlightQuote: string) => {
-  console.log(`[人格档案引擎 V7.0] 注入人设版触发: "${highlightQuote}"`);
+// 【ChatApp.tsx 紧急修正：存入正确位置 + 同时更新特征与标签】
+const updateUserProfile = async (currentContact: Contact, historySlice: any[], nextThreshold: number) => {
+  console.log(`[人格档案引擎 V10.0] 印象&特征全量刷新，下次阈值: ${nextThreshold}`);
 
   const activePreset = globalSettings.apiPresets.find((p: any) => p.id === globalSettings.activePresetId);
   if (!activePreset) return;
 
   try {
-    const existingProfileText = JSON.stringify(currentContact.userProfile || {}, null, 2);
+    // 1. 准备资料
+    // 只读取 AI 给用户的历史印象（防止重复）
+    const existingAiTags = currentContact.aiTagsForUser || [];
+    const existingTagsText = existingAiTags.map(t => `- [${t.content}]`).join(', ');
+    
+    // 读取现有档案（用于增量更新）
+    const currentProfile = currentContact.userProfile || {};
+    const profileText = JSON.stringify(currentProfile, null, 2);
 
-    // 1. ★★★ 紧急修复：获取世界书 (Lore) ★★★
-    // 我们用最近的聊天记录来检索相关的世界书条目，防止 AI 忘记设定
-    const recentHistory = currentContact.history.slice(-5);
-    const relevantLore = findRelevantWorldBookEntries(
-        recentHistory, 
-        worldBooks, 
-        currentContact.enabledWorldBooks || []
-    );
-    const loreText = relevantLore.map(e => `[设定] ${e.keys.join(', ')}: ${e.content}`).join('\n');
+    const chatLog = historySlice.map(m => `${m.role === 'user' ? '用户' : '我'}: ${m.content}`).join('\n');
 
-    // 2. ★★★ 紧急修复：构建包含人设的 Prompt ★★★
+    // 2. 构建 Prompt (全能版：同时更新档案和标签)
     const systemPrompt = `
-# 核心指令
-你【不是】一个通用的AI助手。
-你【必须】完全扮演以下角色，用【该角色的思维方式】来审视用户。
+# 你的身份
+你是"${currentContact.name}"。现在是【秘密复盘时间】。
+请根据【近期对话】，更新你对用户的【秘密手账】和【印象标签】。
 
+# 任务 A：更新秘密手账 (User Profile)
+观察用户的性格、喜好、习惯。
+如果发现了新的点，请**更新**或**追加**到档案中。
+*注意：必须保留原有档案中正确的部分，只修改变动或新增的部分。*
 
+# 任务 B：生成印象标签 (Impressions)
+用一个短词概括你对TA的最新看法。
+*规则：禁止生成已有的标签！必须是新的！如果没有新发现，数组留空。*
 
+# 输入数据
+【已有标签】: ${existingTagsText}
+【现有档案】: ${profileText}
+【近期对话】:
+${chatLog}
 
-# 角色绑定 (Persona)
-名字：${currentContact.name}
-**性格设定 (必须严格遵守)**：
-${currentContact.persona}
-
-# 世界观/背景设定 (Lore)
-${loreText || "（暂无特殊世界观触发）"}
-
-# 当前任务
-用户刚才说了一句：“${highlightQuote}”
-请基于你的**性格设定**，更新你对用户的心理档案，并给TA贴一个标签。
-
-
-# 🚫 铁律：防重与去重
-1. **绝对禁止重复**：如果用户已经有了“吃货”标签，绝对不要再生成“爱吃东西”、“喜欢美食”这种同义词！
-2. **优先更新**：如果用户的新行为符合已有标签（例如已有“胆小”，今天又表现出怕黑），请**更新**该标签的备注（note），增加新的证据。
-3. **宁缺毋滥**：如果没有发现新的显著特质，就**不要**强行生成新标签。返回空即可。
-
-
-
-# ★★★ 语气铁律 (违反必死) ★★★
-1. **绝对禁止 OOC (角色崩坏)**：如果你是高冷角色，就不要写“我好心疼”这种话！要写“麻烦的家伙”。如果你是傲娇，要写“才不是关心他”。
-2. **禁止玛丽苏/油腻**：严禁出现“眼神让我沉醉”、“命都给你”、“让我喉咙发紧”这种烂俗描写。
-3. **强制碎碎念**：ai_reason 必须是【你在心里的默念】，可以比较萌地描述，可爱清淡地描述比较好。
-4. **极简短**：**30字以内**！像随手写的便利贴，遵循【外语（中文）】的格式！！！
-
-# 语气示范 (根据你的人设自我调整)
-- (若你是高冷): "幼稚。"
-- (若你是傲娇): "也就这点能耐。哼。"
-- (若你是温柔): "有点可爱呢，好想ta……"
-- (若你是疯批): "想把他藏起来..."
-- (若你是逗比): "哈哈哈哈什么鬼。"
-
-
-# 现有档案
-\`\`\`json
-${existingProfileText}
-\`\`\`
-
-# JSON 输出格式
-请输出一个 JSON 对象，包含 "actions" 数组。
-每个 action 可以是 "create" (新增) 或 "update" (更新)。
-
-示例：
+# JSON 输出格式 (严格遵守)
 {
-  "actions": [
-    {
-      "type": "create",
-      "content": "路痴", 
-      "ai_reason": "连左右都分不清，还得我带路。啧。",
-      "is_public": false
-    },
-    {
-      "type": "update",
-      "target_tag_id": "12345...",  // 对应已有标签的ID
-      "new_ai_reason": "不仅怕鬼，连虫子都怕。胆子到底多小啊。" // 追加新的吐槽
-    }
+  "userProfile": {
+     // 在这里返回更新后的完整档案结构
+     "personality_traits": [ { "value": "傲娇", "quote": "原文证据", "timestamp": ${Date.now()} } ],
+     "preferences": { 
+        "likes": [ { "value": "甜食", "quote": "...", "timestamp": ... } ],
+        "dislikes": []
+     },
+     "habits": []
+  },
+  "new_tags": [
+     {
+       "content": "标签名(8字内)", 
+       "ai_reason": "你的内心独白(碎碎念)",
+       "is_public": false // 默认私密
+     }
   ]
 }
-如果没有值得记录的，输出: { "actions": [] }
 `;
 
-   const rawResponse = await generateResponse([{ role: 'user', content: systemPrompt }], activePreset);
-    
-    // 解析 JSON
+    const rawResponse = await generateResponse([{ role: 'user', content: systemPrompt }], activePreset);
     let result;
     try {
         const jsonMatch = rawResponse.match(/\{[\s\S]*\}/);
         if (jsonMatch) result = JSON.parse(jsonMatch[0]);
     } catch (e) { console.error("JSON解析失败", e); return; }
 
-    if (!result || !Array.isArray(result.actions)) return;
+    if (!result) return;
 
-    // 3. 执行更新
+    // 3. 执行更新 (存入正确的位置！)
     setContacts(prev => prev.map(c => {
         if (c.id === currentContact.id) {
             let newHistory = [...c.history];
-            let currentTags = [...(c.userTags || [])];
             const timestamp = Date.now();
+            
+            // --- A. 更新手账 (特征) ---
+            // 深度合并逻辑：AI 返回的 userProfile 会覆盖旧的
+            // 为了防止 AI 把照片墙等数据洗掉，我们要小心合并
+            const updatedUserProfile = {
+                ...c.userProfile, // 保留照片、背景色等
+                ...result.userProfile // 更新文字特征
+            };
 
-            result.actions.forEach((action: any) => {
-                if (action.type === 'create') {
-                    // 双重防重检查 (防止 AI 瞎眼)
-                    if (currentTags.some(t => t.content === action.content)) return;
+            // --- B. 更新标签 (绳子上的印象) ---
+            let currentAiTags = [...(c.aiTagsForUser || [])]; // ★★★ 关键：读取 aiTagsForUser (绳子)，而不是 userTags (夹子)
+            
+            // 好感度解锁概率
+            const affection = c.affectionScore || 50;
+            const unlockChance = Math.max(0, (affection - 40) / 100); 
 
-                    // 新增标签
-                    const isPublic = action.is_public !== false; 
-                    if (isPublic) {
+            if (Array.isArray(result.new_tags)) {
+                result.new_tags.forEach((tagData: any) => {
+                    // 防重
+                    if (currentAiTags.some(t => t.content === tagData.content)) return;
+
+                    const isLuckyUnlock = Math.random() < unlockChance;
+                    
+                    // 中奖通知
+                    if (isLuckyUnlock) {
                         newHistory.push({ 
-                            id: `sys_tag_${timestamp}_${Math.random()}`, 
+                            id: `sys_unlock_${timestamp}_${Math.random()}`, 
                             role: 'system', 
-                            content: `【系统通知】${c.name} 经过观察，给你贴了新标签：[${action.content}]`, 
+                            content: `【系统通知】${c.name} 的想法藏不住了！标签 [${tagData.content}] 已对你解锁。`, 
                             timestamp: timestamp, 
                             type: 'text' 
                         });
                     }
-                    currentTags.push({
+
+                    // ★★★ 关键：存入 currentAiTags ★★★
+                    currentAiTags.push({
                         id: Date.now().toString() + Math.random(),
-                        content: action.content,
+                        content: tagData.content,
                         timestamp: timestamp,
                         style: Math.random() * 10 - 5,
-                        aiReasoning: action.ai_reason || "...",
-                        note: action.ai_reason || "无",
+                        aiReasoning: tagData.ai_reason || "...",
+                        note: tagData.ai_reason || "无", // 兼容旧显示
                         author: 'ai',
-                        isPublic: isPublic,
-                        isUnlocked: isPublic,
+                        isPublic: false,
+                        isUnlocked: isLuckyUnlock,
+                        unlockCost: 1,
                         aiRequestPending: false
                     });
-                } 
-                else if (action.type === 'update' && action.target_tag_id) {
-                    // 更新已有标签
-                    currentTags = currentTags.map(t => {
-                        if (t.id === action.target_tag_id) {
-                            return {
-                                ...t,
-                                timestamp: timestamp, // 更新时间，让它浮到最上面
-                                aiReasoning: action.new_ai_reason || t.aiReasoning, // 更新吐槽
-                                note: action.new_ai_reason || t.note
-                            };
-                        }
-                        return t;
-                    });
-                }
-            });
+                });
+            }
 
             return { 
                 ...c, 
-                userTags: currentTags, 
+                userProfile: updatedUserProfile, // 更新手账
+                aiTagsForUser: currentAiTags,    // 更新绳子上的标签 (AI -> User)
                 history: newHistory,
-                // ★★★ 关键：在这里重置计数器，并设置下一次的随机阈值 ★★★
                 impressionCount: 0,
                 impressionThreshold: nextThreshold
             };
@@ -3577,7 +3964,7 @@ ${existingProfileText}
     }));
 
   } catch (e) {
-    console.error("批量总结失败", e);
+    console.error("全量刷新失败", e);
   }
 };
 
@@ -5154,7 +5541,8 @@ if (extractedThought.new_agreement && Object.keys(extractedThought.new_agreement
         console.log("🎯 进度条已满！触发深度印象总结...");
         
         // 重置进度条 (生成一个新的随机阈值 30-100)
-        const nextThreshold = Math.floor(Math.random() * 71) + 30; 
+        c// ★★★ 方便测试：随机阈值改为 2 ~ 10 ★★★
+        const nextThreshold = Math.floor(Math.random() * 9) + 2;
         
         // 立即在内存中更新计数器（防止重复触发），稍后会在 setContacts 里通过 updateUserProfile 最终保存
         // 这里只是为了触发 update 函数
@@ -5179,7 +5567,7 @@ if (extractedThought.new_agreement && Object.keys(extractedThought.new_agreement
         const privateTags = activeContact.userTags.filter(t => !t.isPublic && !t.aiRequestPending && t.author === 'user');
         
         // 10% 的概率触发好奇心 (你可以调高这个 0.1 来测试)
-        if (privateTags.length > 0 && Math.random() < 0.1) {
+        if (privateTags.length > 0 && Math.random() < 0.4) {
             const targetTag = privateTags[Math.floor(Math.random() * privateTags.length)];
             console.log(`[好奇心] AI 察觉到了私密标签: ${targetTag.content}，发起申请！`);
             
@@ -5872,108 +6260,6 @@ const ChatListItem: React.FC<{
 
 
 
-
-
-
-// ==================== 灵魂控制台组件 (菜谱) ====================
-
-const MemoryNote: React.FC<{
-  mem: any;
-  idx: number;
-  total: number;
-  contact: any;
-  setContacts: any;
-  isMultiSelect: boolean;
-  isSelected: boolean;
-  onToggleSelect: (id: string) => void;
-}> = ({ mem, idx, total, contact, setContacts, isMultiSelect, isSelected, onToggleSelect }) => {
-  const [isEditing, setIsEditing] = useState(false);
-  const [editContent, setEditContent] = useState(mem.content || '');
-
-  return (
-    <div
-      className={`bg-yellow-50 border ${isSelected ? 'border-blue-500 border-3 ring-2 ring-blue-200' : 'border-yellow-200'} rounded-xl p-4 shadow-sm relative group ${isMultiSelect ? 'cursor-pointer' : ''}`}
-      onClick={() => isMultiSelect && onToggleSelect(mem.id)}
-    >
-      {/* 删除按钮 */}
-      <button
-        onClick={(e) => {
-          e.stopPropagation();
-          if (confirm("确定删除这张便签吗？")) {
-            setContacts((prev: any) => prev.map((c: any) =>
-              c.id === contact.id ? { ...c, longTermMemories: c.longTermMemories.filter((m: any) => m.id !== mem.id) } : c
-            ));
-          }
-        }}
-        className="absolute top-2 right-2 w-7 h-7 bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition flex items-center justify-center text-sm"
-      >
-        ×
-      </button>
-
-      {/* 多选勾勾 */}
-      {isMultiSelect && (
-        <div className={`absolute top-2 left-2 w-6 h-6 rounded-full border-2 flex items-center justify-center ${isSelected ? 'bg-blue-500 border-blue-500' : 'bg-white border-gray-300'}`}>
-          {isSelected && <span className="text-white text-xs font-bold">✓</span>}
-        </div>
-      )}
-
-      <div className="flex justify-between items-start mb-2">
-        <span className="text-xs font-bold text-yellow-700">#{total - idx}</span>
-        <span className="text-xs text-gray-500">{mem.date || '未知日期'}</span>
-      </div>
-
-      {isEditing ? (
-        <>
-          <textarea
-            value={editContent}
-            onChange={(e) => setEditContent(e.target.value)}
-            onClick={(e) => e.stopPropagation()}
-            className="w-full p-2 border border-yellow-400 rounded bg-white text-sm resize-none h-32"
-            autoFocus
-          />
-          <div className="flex gap-2 mt-2">
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                if (editContent.trim()) {
-                  setContacts((prev: any) => prev.map((c: any) =>
-                    c.id === contact.id ? {
-                      ...c,
-                      longTermMemories: c.longTermMemories.map((m: any) => m.id === mem.id ? { ...m, content: editContent.trim() } : m)
-                    } : c
-                  ));
-                  setIsEditing(false);
-                }
-              }}
-              className="flex-1 bg-green-500 text-white py-2 rounded font-bold text-sm"
-            >
-              保存
-            </button>
-            <button
-              onClick={(e) => { e.stopPropagation(); setIsEditing(false); setEditContent(mem.content || ''); }}
-              className="flex-1 bg-gray-300 text-gray-700 py-2 rounded font-bold text-sm"
-            >
-              取消
-            </button>
-          </div>
-        </>
-      ) : (
-        <>
-          <p className="text-sm text-gray-800 leading-relaxed whitespace-pre-wrap pr-8">
-            {mem.content || ''}
-          </p>
-          {mem.range && <div className="text-[10px] text-gray-400 mt-2 italic">记录于聊天第 {mem.range} 条</div>}
-          <button
-            onClick={(e) => { e.stopPropagation(); setIsEditing(true); }}
-            className="mt-3 text-xs text-blue-600 underline opacity-0 group-hover:opacity-100 transition"
-          >
-            ✏️ 编辑便签
-          </button>
-        </>
-      )}
-    </div>
-  );
-};
 
 
 
@@ -7886,30 +8172,41 @@ if (view === 'settings' && activeContact) {
 
 
 
-        {/* ★★★ 全屏沉浸式加载遮罩 (Loading Overlay) ★★★ */}
-        {isAnalyzing && (
-          <div className="fixed inset-0 z-[100] bg-white/80 backdrop-blur-md flex flex-col items-center justify-center animate-fadeIn cursor-wait">
-            {/* 动画图标 */}
-            <div className="relative mb-6">
-               <div className="w-16 h-16 border-4 border-rose-200 border-t-rose-500 rounded-full animate-spin"></div>
-               <div className="absolute inset-0 flex items-center justify-center text-2xl animate-pulse">
-                 🔮
-               </div>
-            </div>
-            
-            {/* 动态文字 */}
-            <h3 className="text-lg font-bold text-gray-800 mb-2 animate-pulse">
-              AI 命运推演中
-            </h3>
-            <p className="text-xs text-rose-500 font-mono bg-rose-50 px-3 py-1 rounded-full border border-rose-100 transition-all duration-300">
-              {loadingText}
-            </p>
-            
-            <p className="text-[10px] text-gray-400 mt-8 absolute bottom-10">
-              请稍候，正在连接情感逻辑核心...
-            </p>
-          </div>
-        )}
+{/* ★★★ 全屏沉浸式加载遮罩 (同款高级样式) ★★★ */}
+{/* ★★★ 全屏沉浸式加载遮罩 (同款高级样式) ★★★ */}
+                 {isAnalyzing && (
+                    <div className="absolute inset-0 z-[100] bg-white/80 backdrop-blur-md flex flex-col items-center justify-center animate-fadeIn cursor-wait rounded-3xl">
+                        {/* 动画图标容器 */}
+                        <div className="relative mb-6">
+                           {/* 外圈旋转 (紫色/蓝色渐变光环) */}
+                           <div className="w-20 h-20 border-4 border-indigo-100 border-t-indigo-500 rounded-full animate-spin"></div>
+                           
+                           {/* 中间图标 (跳动的大脑) */}
+                           <div className="absolute inset-0 flex items-center justify-center text-3xl animate-pulse">
+                             🧠
+                           </div>
+                        </div>
+                        
+                        {/* 动态文字 (显示 loadingText) */}
+                        <h3 className="text-xl font-black text-gray-800 mb-2 tracking-widest animate-pulse">
+                          {loadingText || "正在分析中..."}
+                        </h3>
+                        
+                        {/* 装饰性胶囊标签 */}
+                        <div className="flex gap-2">
+                            <span className="text-[10px] text-indigo-500 font-mono bg-indigo-50 px-3 py-1 rounded-full border border-indigo-100">
+                              Deep Dive
+                            </span>
+                            <span className="text-[10px] text-purple-500 font-mono bg-purple-50 px-3 py-1 rounded-full border border-purple-100">
+                              Re-Analyzing
+                            </span>
+                        </div>
+                        
+                        <p className="text-[10px] text-gray-400 mt-8 absolute bottom-20">
+                          AI 正在量化角色的人格数据...
+                        </p>
+                    </div>
+                 )}
 
 
 
@@ -8584,18 +8881,28 @@ style={{ paddingBottom: '12px' }}  // 只留一点内间距，让输入框不紧
 
 
 {showPersonaPanel && activeContact && (
-            <PersonaPanel
+       <PersonaPanel
                 contact={activeContact}
                 globalSettings={globalSettings}
                 setContacts={setContacts}
                 onClose={() => setShowPersonaPanel(false)}
-                onRefineMemory={handleRefineMemory}
-                playMessageAudio={playMessageAudio}
-                onNavigateToSettings={onOpenSettings}
+                // ... 其他属性保持不变 ...
+                
+                // ★★★ 新增：传入强行刷新函数 ★★★
+               // ★★★ 修复：加上 async/await，支持加载等待 ★★★
+                onForceUpdate={async () => {
+                    const nextThreshold = Math.floor(Math.random() * 9) + 2; 
+                    // 传入最近 30 条记录强行分析
+                    const historySlice = activeContact.history.slice(-30); 
+                    
+                    // 这里加了 await，等 AI 算完才会继续往下走
+                    await updateUserProfile(activeContact, historySlice, nextThreshold);
+                }}
+                
                 activeTab={panelTab}
                 setActiveTab={setPanelTab}
-                memoryTab={memoryTab}         // <-- 新增
-                setMemoryTab={setMemoryTab}   // <-- 新增
+                memoryTab={memoryTab}
+                setMemoryTab={setMemoryTab}
                 sampleText={panelSampleText}
                 setSampleText={setPanelSampleText}
             />
