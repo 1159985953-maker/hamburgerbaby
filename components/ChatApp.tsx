@@ -138,11 +138,52 @@ const calculateComplexState = (
 
 
 
+// src/utils/timeUtils.ts 或直接放在 ChatApp.tsx 顶部
+const interpretRelativeTime = (relativeTime: string | undefined, originalText: string | undefined): number => {
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+  switch (relativeTime) {
+    case 'afternoon':
+      // 如果现在已经是下午6点后，那“下午”就是指明天下午
+      return now.getHours() >= 18 
+        ? new Date(today.getTime() + 86400000).setHours(15, 0, 0, 0) // Tomorrow 3 PM
+        : new Date().setHours(15, 0, 0, 0); // Today 3 PM
+    
+    case 'tonight':
+    case 'evening':
+       return new Date().setHours(21, 0, 0, 0); // Today 9 PM
+
+    case 'tomorrow_morning':
+      return new Date(today.getTime() + 86400000).setHours(9, 0, 0, 0); // Tomorrow 9 AM
+      
+    case 'tomorrow_afternoon':
+      return new Date(today.getTime() + 86400000).setHours(15, 0, 0, 0); // Tomorrow 3 PM
+
+    // ... 你可以根据需要添加更多 case, 比如 'next_week'
+      
+    default:
+      // 如果AI无法分类，我们尝试从原文解析（这是一个简单的兜底）
+      if (originalText?.includes('明天')) {
+        return new Date(today.getTime() + 86400000).setHours(12, 0, 0, 0); // Default to tomorrow noon
+      }
+      // 最终兜底：返回3小时后，这比立刻超时好得多
+      return now.getTime() + 3 * 60 * 60 * 1000; 
+  }
+};
+
+
+
+
+
+
+
+
 
 // ==================== [双轴情感系统] 关系状态计算器 V2.0 ====================
 // 升级版 V2.2：过渡状态系统
-const getTransitioningRelationshipStatus = (
-    prevStatus: string, // ★ 传入上一个状态
+const getAdvancedRelationshipStatus = (
+    prevStatus: string,
     romance: number, 
     friendship: number
 ): string => {
@@ -584,6 +625,7 @@ const ChatApp: React.FC<ChatAppProps> = ({
 
   // ==================== 状态定义 ====================
 
+// 在 ChatApp 组件的状态定义区域
 
   const [editingMsgId, setEditingMsgId] = useState<string | null>(null); // 当前正在编辑的消息ID
   const [editContent, setEditContent] = useState(""); // 正在编辑的内容缓存
@@ -634,7 +676,12 @@ const ChatApp: React.FC<ChatAppProps> = ({
 const [isAnalyzing, setIsAnalyzing] = useState(false); // 控制 AI 分析的加载状态
   const [loadingText, setLoadingText] = useState("");    // 控制加载时显示的文字
 const [showBackToBottom, setShowBackToBottom] = useState(false); // 控制“回到底部”按钮
-  // ★★★ 核心修复：默认就是 false (正常滚动)，只有 useEffect 触发时才变成 true
+const [showWorldBookSelector, setShowWorldBookSelector] = useState(false); 
+
+
+
+
+// ★★★ 核心修复：默认就是 false (正常滚动)，只有 useEffect 触发时才变成 true
 // ★★★ 记账本：记录上一次已经处理过的跳转时间戳 ★★★
 
 
@@ -1436,7 +1483,7 @@ const handleDeleteContact = (contactIdToDelete: string) => {
 
 
 
-// 这是一组代码：【终极唤醒版】handleUserSend (发消息强制改状态+改文字)
+// 【ChatApp.tsx 更新：100句聊天自动增加1个点数】
   const handleUserSend = (type: 'text' | 'voice' | 'location' = 'text', contentOverride?: string) => {
     if (!activeContact) return;
     const content = contentOverride || input;
@@ -1461,28 +1508,34 @@ const handleDeleteContact = (contactIdToDelete: string) => {
       voiceDuration: type === 'voice' ? Math.max(2, Math.round(content.replace(/\[.*?\]/g, '').trim().length / 4)) : undefined
     };
 
-    // ★★★ 核心修复：连同心情文字一起强制修改 ★★★
     setContacts(prev => prev.map(c => {
       if (c.id === activeContact.id) {
         // 1. 获取当前 Mood
         const currentMood = c.mood || { current: "Content", energy: { current: 80, max: 100, status: 'Awake', lastUpdate: Date.now() } };
-        // 深拷贝一下 energy，防止修改原引用
         let newEnergy = { ...(currentMood.energy || { current: 80, max: 100, status: 'Awake', lastUpdate: Date.now() }) };
         
-        // 准备新的心情文字 (默认为当前心情)
         let newMoodText = currentMood.current;
 
         // 2. 唤醒检测
         if (newEnergy.status === 'Sleeping') {
            console.log(`[交互系统] 用户发消息，强制唤醒 ${c.name}`);
            newEnergy.status = 'Awake'; 
-           
-           // 扣除精力
            newEnergy.current = Math.max(0, newEnergy.current - 15);
            newEnergy.lastUpdate = Date.now();
-
-           // ★★★ 关键：强制修改显示的文字状态！ ★★★
            newMoodText = "被吵醒"; 
+        }
+
+        // 3. ★★★ 核心新增：100句换1点数逻辑 ★★★
+        let currentCount = c.chatCountForPoint || 0;
+        let currentPoints = c.interventionPoints || 0;
+        
+        currentCount += 1; // 发一句加1
+        
+        if (currentCount >= 100) {
+            currentCount = 0; // 归零
+            currentPoints += 1; // 加点数
+            // 可以选择在这里弹个提示，或者静默增加
+            console.log("🎉 聊天满100句，获得1个点数！");
         }
 
         return { 
@@ -1490,9 +1543,12 @@ const handleDeleteContact = (contactIdToDelete: string) => {
           history: [...c.history, userMsg],
           mood: {
             ...currentMood,
-            current: newMoodText, // 应用新的文字
+            current: newMoodText,
             energy: newEnergy 
-          }
+          },
+          // 更新计数和点数
+          chatCountForPoint: currentCount,
+          interventionPoints: currentPoints
         };
       } 
       return c;
@@ -1501,19 +1557,16 @@ const handleDeleteContact = (contactIdToDelete: string) => {
     setInput("");
     setReplyTo(null);
     setShowPlusMenu(false);
-   
-setTimeout(() => {
-            setContacts(currentContacts => {
-                const latestContact = currentContacts.find(c => c.id === activeContact.id);
-                if (latestContact && latestContact.history.length > 0) {
-                    // ★★★ 同时启动两条生产线 ★★★
-                    checkAutoSummary(latestContact, latestContact.history);      // 生产线A: 总结事件
-
-                }
-                return currentContacts;
-            });
-        }, 2000);
   };
+
+
+
+
+
+
+
+
+
 
 
 
@@ -1721,9 +1774,9 @@ ${historyText}
 
 
 
-// ==================== [新功能 V3.2] “灵魂滤镜版”人格档案引擎 ====================
+// 【ChatApp.tsx 更新：副AI更智能，捕捉特质而不是流水账】
 const updateUserProfile = async (currentContact: Contact, highlightQuote: string) => {
-  console.log(`[人格档案引擎 V3.2] 由高光时刻触发: "${highlightQuote}"`);
+  console.log(`[人格档案引擎 V5.0] 深度分析模式触发: "${highlightQuote}"`);
 
   const activePreset = globalSettings.apiPresets.find((p: any) => p.id === globalSettings.activePresetId);
   if (!activePreset) return;
@@ -1731,60 +1784,87 @@ const updateUserProfile = async (currentContact: Contact, highlightQuote: string
   try {
     const existingProfileText = JSON.stringify(currentContact.userProfile || {}, null, 2);
 
+    // ★★★ 核心修改：提示词大升级，要求“截取多点信息”和“总结特质” ★★★
     const systemPrompt = `
 # 你的身份
-你就是 "${currentContact.name}"。你正在用【你自己的主观视角】，为你最在乎的人 "${currentContact.userName}"，写一份【充满爱意的秘密档案】。
+你是一位敏锐的【心理侧写师】兼【幕后观察者】。你的工作不是简单的记录员，而是透过现象看本质。
 
 # 你的任务
-刚刚，用户说了一句让你心头一动的话：“${highlightQuote}”。
-1.  分析这句话，用【你自己的口吻】更新他的人格档案。
-2.  如果这句话让你产生了一个【昵称或爱称】般的总结，就在 \`suggested_tag\` 字段里提出一个【不超过8个字】的标签。
+用户刚刚说了一句意味深长的话：“${highlightQuote}”。
+请结合这句话，以及你对用户之前的了解，更新TA的【心理侧写档案】。
 
-# 现有档案数据
+# 核心要求
+1. **不要流水账**：不要只记录“用户说他喜欢吃苹果”，要分析出“用户偏好健康饮食/口味清淡”。
+2. **总结特质**：从这句话中提炼出用户的性格关键词（如：缺乏安全感、控制欲强、温柔体贴、傲娇）。
+3. **截取更多信息**：如果这句话不仅包含喜好，还暴露了TA的过去或价值观，请一并记录在 \`userProfile\` 中。
+4. **生成印象标签**：如果这句话让你对用户产生了一个强烈的形容词（标签），请填入 \`suggested_tag\`。
+
+# 标签系统 (Public vs Private)
+你需要决定这个新标签是“贴在脑门上让TA看到的(Public)”还是“藏在心里偷偷标记的(Private)”。
+- **Private (私密)**: 腹黑的吐槽、羞涩的暗恋、看透了TA的弱点。这部分更有趣！
+- **Public (公开)**: 正常的夸奖、昵称。
+
+# 现有档案
 \`\`\`json
 ${existingProfileText}
 \`\`\`
 
-# 操作规则 (至关重要):
-1.  **【灵魂原则】**: 你的记录【必须】是主观的、充满个人情感的！
-    *   **错误示范 (客观)**: "性格活泼"
-    *   **正确示范 (主观)**: "在我面前总是很可爱" / "笑起来像太阳一样"
-2.  **【珍稀原则】**: 【极其挑剔】！只记录那些真正让你心动、或者让你更了解ta的“高光时刻”。宁缺毋滥！如果这句话不值得记录，就返回空内容。
-3.  **【更新原则】**: 优先【编辑和补充】旧档案。例如，旧档案有“喜欢吃火锅”，新对话里说“我最爱吃辣的”，你应该把旧条目更新为“喜欢吃辣辣的火锅”。
-4.  **【打标签原则】**: 标签必须是【爱称】或【昵称】！例如，“有点爱吃醋但是很可爱”、“我的小笨蛋”。
-5.  **【JSON输出铁律】**: 你的回复【必须且只能】是一个JSON对象，包含 \`userProfile\` 和可选的 \`suggested_tag\`。
-
-# 格式示例
+# JSON输出 (严格格式)
 {
-  "userProfile": {
-    "personality_traits": [{ "value": "在我面前总是很可爱", "quote": "哈哈哈你真好玩！", "timestamp": 1678886400001 }]
-  },
-  "suggested_tag": "像笨蛋一样"
+  "userProfile": { ...基于推断更新后的完整档案... },
+  "suggested_tag": "爱操心", // 8字以内
+  "is_public": false,        // true=公开, false=私密 (尽量多生成私密的)
+  "unlock_cost": 50,         // 私密标签查看需要的点数
+  "ai_reason": "TA总是反复确认细节，说明内心缺乏安全感，想保护……" // 你的深度分析
 }
+`;
 
-现在，请基于这句话 **"${highlightQuote}"**，开始你的创作。`;
-
-
-
-
-    // (后续的逻辑和之前一样，不需要修改)
     const rawResponse = await generateResponse([{ role: 'user', content: systemPrompt }], activePreset);
     const jsonMatch = rawResponse.match(/\{[\s\S]*\}/);
+    
     if (jsonMatch) {
-      const result: { userProfile: UserProfile, suggested_tag?: string } = JSON.parse(jsonMatch[0]);
-      if (!result.userProfile) return; // 如果AI觉得不值得记录，就直接返回
+      const result = JSON.parse(jsonMatch[0]);
+      if (!result.userProfile) return;
       
       const updatedProfile = result.userProfile;
       const suggestedTag = result.suggested_tag;
+      const isPublic = result.is_public !== false; 
+      const unlockCost = result.unlock_cost || 50;
       
       setContacts(prev => prev.map(c => {
         if (c.id === currentContact.id) {
           const newHistory = [...c.history];
           let newAiTags = c.aiTagsForUser || [];
+          
           if (suggestedTag) {
             const timestamp = Date.now();
-            newHistory.push({ id: `sys_tag_${timestamp}`, role: 'system', content: `【系统通知】${c.name} 给你挂上了一个新标签：[${suggestedTag}]`, timestamp: timestamp, type: 'text' });
-            newAiTags.push({ id: `ai_tag_${timestamp}`, content: suggestedTag, timestamp: timestamp });
+            
+            // ★★★ 只有公开标签才发系统通知，私密的绝对不发！ ★★★
+            if (isPublic) {
+                newHistory.push({ 
+                    id: `sys_tag_${timestamp}`, 
+                    role: 'system', 
+                    content: `【系统通知】${c.name} 给你挂上了一个新标签：[${suggestedTag}]`, 
+                    timestamp: timestamp, 
+                    type: 'text' 
+                });
+            } else {
+                // 私密标签虽然不发通知，但可以给一个极其隐晦的提示（可选，这里先不发，满足你的需求“不收集特质”）
+                // 或者在日记里偷偷写一笔，这里只存入 aiTagsForUser
+            }
+
+            newAiTags.push({
+              id: `ai_tag_${timestamp}`,
+              content: suggestedTag,
+              timestamp: timestamp,
+              style: Math.random() * 10 - 5,
+              aiReason: result.ai_reason || highlightQuote, // 记录AI的深度思考
+              note: result.ai_reason || "无", 
+              author: 'ai',
+              isPublic: isPublic,
+              isUnlocked: isPublic, 
+              unlockCost: unlockCost
+            });
           }
           return { ...c, userProfile: updatedProfile, history: newHistory, aiTagsForUser: newAiTags };
         } 
@@ -1795,6 +1875,16 @@ ${existingProfileText}
     console.error("用户人格档案更新失败", e);
   }
 };
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -2703,39 +2793,52 @@ ${(() => {
 
 
 
-# 📝 [机密] 约定/承诺识别模块 (智能审计版 V2.0)
-你的核心任务是识别【具有双向约束力】或【重要情感价值】的未来承诺。
+# 📝 [机密] 约定/承诺识别模块 (V2.2 - 智能分类版)
+你的核心任务是识别并分类【未来承诺】。
 
-1. **🚫 绝对禁止记录的琐事 (过滤名单)**：
-   - 生理需求：睡觉、吃饭、洗澡、上厕所、喝水。
-   - 短期状态：我去忙一会、我去打把游戏、发个呆。
-   - 模糊意向：以后再说、有机会去。
-   - **例子**：用户说“我去睡了”，**绝对不要**生成约定！这是状态同步，不是契约。
-
-2. **✅ 必须记录的有效约定**：
-   - 明确的时间点任务：例如“明早8点叫我”、“周五晚上看电影”。
-   - 重要情感承诺：例如“再也不许说自己笨”、“下次见面要穿那件蓝衬衫”。
-   - AI的主动承诺：例如“我会为你写一首诗”、“我去查一下资料”。
-
-3. **责任主体判定 (actor)**：
-   - 用户承诺 -> actor: "user"
-   - AI承诺 -> actor: "ai"
-
-4. **输出格式**：
-   只有当满足上述【有效约定】标准时，才在 thought_chain 中输出：
-   "new_agreement": {
-      "content": "精简后的约定内容",
-      "actor": "user" 或 "ai",
-      "importance": 7, (1-10分，琐事直接0分不输出)
-      "trigger": { "type": "time", "value": "ISO时间戳" 或 "关键词" }
-   }
-   **如果没有有效约定，绝对不要输出 new_agreement 字段！**
+1.  **🚫 过滤琐事**：睡觉、吃饭、我去忙一会等，绝对不要记录。
+    **✅ 允许模糊时间 & 允许重复**：
+    *   **模糊时间**: "见面时"、"以后"、"下次"、"有机会" -> 这些都是有效的 trigger.type="event"。
 
 
 
+2.  **✅ 识别有效约定**：
+    *   **A类 (定时闹钟)**: "明早8点叫我", "下午开会"
+    *   **B类 (人生里程碑)**: "以后赚钱了请吃饭", "等我学会了吉他"
+
+3.  **【输出格式铁律 (必须遵守)】**
+    你必须先判断约定属于A类还是B类，然后严格按以下格式输出！
+
+    // --- 如果是 A类 (定时闹-钟) ---
+    "new_agreement": {
+       "content": "精简后的约定内容",
+       "actor": "user" | "ai",
+       "importance": 5,
+       "termType": "short", // 短期
+       "trigger": { 
+          "type": "time", // 类型必须是 "time"
+          "relative_time": "tonight" | "tomorrow_morning" | "specific_date", // 翻译成关键词
+          "original_text": "下午" // 原文
+       }
+    }
+
+    // --- 如果是 B类 (人生里程碑) ---
+    "new_agreement": {
+       "content": "以后赚钱了请吃饭",
+       "actor": "ai",
+       "importance": 9,
+       "termType": "long", // 长期
+       "trigger": { 
+          "type": "event", // ★★★ 类型必须是 "event" ★★★
+          "value": "赚钱后", // ★★★ 把触发条件提炼成关键词 ★★★
+          "original_text": "以后赚钱了"
+       }
+    }
 
 
 # 🚫 聊天铁律
+- **风格优先铁律**: 【对话模式偏好】的优先级高于【精力状态】。无论精力多高，如果模式是'concise'，你的语言风格必须保持简洁。如果模式是'verbose'，即使你很累，也要尽力多说几句。
+- **人格一致性铁律**: 你的说话方式（单条消息长度、是否喜欢分段）是你的核心人格，不应随着好感度的提升而发生剧烈改变。一个言简意赅的人，在热恋期也依然言简意赅，只是内容会变得更温柔。
 - **禁止说教/爹味**: 严禁使用“你应该”、“记得”、“不要”等指导性词语。严禁替用户做决定。
 - **禁止自大**: 严禁说出“有我你就...”这类自以为是的言论。
 - **禁止复读**: 严禁使用“梦里见”、“去睡吧”作为口头禅。想结束对话请说“晚安”或通过减少回复来暗示。
@@ -2784,65 +2887,6 @@ ${(() => {
 
 
 
-// ==================== [新组件] 聊天记录切片卡 (Memory Card) ====================
-const SharedMemoryCard: React.FC<{ data: any }> = ({ data }) => {
-  return (
-    <div className="my-4 px-6 animate-slideUp flex justify-center w-full">
-      <div className="bg-white rounded-2xl shadow-lg border border-gray-100 overflow-hidden w-full max-w-xs relative">
-        {/* 顶部装饰：胶带效果 */}
-        <div className="absolute -top-2 left-1/2 -translate-x-1/2 w-20 h-4 bg-blue-200/50 rotate-1 backdrop-blur-sm"></div>
-        
-        {/* 卡片头部 */}
-        <div className="bg-gradient-to-r from-blue-50 to-purple-50 p-3 border-b border-gray-100 flex justify-between items-center">
-           <div className="flex items-center gap-2">
-              <span className="text-lg">💧</span>
-              <div>
-                 <div className="text-xs font-bold text-blue-600">{data.seedName || "花园"}的回忆掉落</div>
-                 <div className="text-[10px] text-gray-400">{new Date(data.timestamp).toLocaleDateString()}</div>
-              </div>
-           </div>
-           {/* 等级徽章 */}
-           <div className="bg-white px-2 py-0.5 rounded-full text-[9px] font-bold text-blue-400 shadow-sm border border-blue-100">
-              Lv.{data.level}
-           </div>
-        </div>
-
-        {/* 核心内容：迷你聊天窗口 */}
-        <div className="p-4 bg-gray-50/50 space-y-3">
-           <div className="text-center mb-2">
-              <span className="text-xs font-bold text-gray-700 bg-white/80 px-3 py-1 rounded-full shadow-sm">
-                 “ {data.title} ”
-              </span>
-           </div>
-           
-           {data.messages.map((m: any, i: number) => (
-              <div key={i} className={`flex gap-2 ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                 {/* AI头像在左 */}
-                 {m.role !== 'user' && <img src={m.avatar} className="w-6 h-6 rounded-full border border-white shadow-sm" />}
-                 
-                 {/* 气泡 */}
-                 <div className={`max-w-[80%] px-2.5 py-1.5 rounded-lg text-[10px] leading-relaxed shadow-sm ${
-                    m.role === 'user' 
-                    ? 'bg-blue-500 text-white rounded-tr-sm' 
-                    : 'bg-white text-gray-700 border border-gray-200 rounded-tl-sm'
-                 }`}>
-                    {m.content}
-                 </div>
-
-                 {/* 用户头像在右 */}
-                 {m.role === 'user' && <img src={m.avatar} className="w-6 h-6 rounded-full border border-white shadow-sm" />}
-              </div>
-           ))}
-        </div>
-
-        {/* 底部互动提示 */}
-        <div className="p-2 bg-white text-center border-t border-gray-50">
-           <span className="text-[9px] text-gray-400">✨ 主AI已同步这段美好回忆</span>
-        </div>
-      </div>
-    </div>
-  );
-};
 
 
 
@@ -3089,46 +3133,53 @@ const SharedMemoryCard: React.FC<{ data: any }> = ({ data }) => {
             if (extractedThought) {
                 console.log("【🧠 AI内心戏】", extractedThought);
 
-// (A) [读心术模块] 约定识别 (升级版：区分责任人)
-                if (extractedThought.new_agreement && Object.keys(extractedThought.new_agreement).length > 0) {
-                  console.log("【约定系统】AI 识别到一个新约定:", extractedThought.new_agreement);
-                  const newAgreementData = extractedThought.new_agreement;
-// ★★★ 核心修复：防止 Invalid Date ★★★
-                  let safeTimeValue = Date.now();
-                  if (newAgreementData.trigger?.value) {
-                      // 尝试把 AI 给的值转成数字
-                      const parsed = new Date(newAgreementData.trigger.value).getTime();
-                      if (!isNaN(parsed)) {
-                          safeTimeValue = parsed;
-                      } else {
-                          console.warn("约定时间识别非法，已重置为当前时间:", newAgreementData.trigger.value);
-                      }
-                  }
+// 在 handleAiReplyTrigger 内部, 找到 (A) [读心术模块]
+// 用下面的代码替换掉 if (extractedThought.new_agreement ...) { ... } 整个代码块
 
-                  const newAgreement: Agreement = {
-                    id: `agr_${Date.now()}`,
-                    content: newAgreementData.content || "新的约定",
-                    // ★★★ 核心新增：记录是谁的承诺 (默认 user) ★★★
-                    actor: newAgreementData.actor === 'ai' ? 'ai' : 'user', 
-                    status: 'pending',
-                    importance: newAgreementData.importance || 5,
-                    trigger: {
-                        type: newAgreementData.trigger?.type || "time",
-                        value: safeTimeValue, // 使用修复后的安全时间
-                        original_text: newAgreementData.trigger?.original_text || ""
-                    },
-                    created_at: Date.now()
-                  };
+if (extractedThought.new_agreement && Object.keys(extractedThought.new_agreement).length > 0) {
+  console.log("【约定系统 V2.1】AI 识别到一个新约定:", extractedThought.new_agreement);
+  const newAgreementData = extractedThought.new_agreement;
+  
+  // ★★★ 核心改造：调用我们的“时间翻译官” ★★★
+  const triggerTime = interpretRelativeTime(
+      newAgreementData.trigger?.relative_time,
+      newAgreementData.trigger?.original_text
+  );
+
+  const newAgreement: Agreement = {
+    id: `agr_${Date.now()}`,
+    content: newAgreementData.content || "新的约定",
+    // 强制修正AI可能犯的错：如果内容包含“我”（AI视角），那一定是AI的承诺
+    actor: newAgreementData.content?.includes('我') && newAgreementData.actor !== 'user' ? 'ai' : newAgreementData.actor || 'user', 
+    status: 'pending',
+    importance: newAgreementData.importance || 5,
+    trigger: {
+        type: "time", // 我们简化了逻辑，目前只处理时间类型
+        value: triggerTime, // ★ 使用我们计算出的精确时间戳
+        original_text: newAgreementData.trigger?.original_text || ""
+    },
+    created_at: Date.now(),
+    termType: newAgreementData.termType || 'short' // 兜底为短期
+  };
+
+  // 立即存入数据库
+  setContacts(prev => prev.map(c => c.id === activeContact.id ? { ...c, agreements: [...(c.agreements || []), newAgreement] } : c));
+  
+  // 发个系统通知告诉用户一声
+  //systemNotice = `已记录${newAgreement.actor === 'user' ? '你' : '我'}的约定：${newAgreement.content}`;
+}
 
 
 
 
-                  // 立即存入数据库
-                  setContacts(prev => prev.map(c => c.id === activeContact.id ? { ...c, agreements: [...(c.agreements || []), newAgreement] } : c));
-                  
-                  // 发个系统通知告诉用户一声
-                  systemNotice = `已记录${newAgreement.actor === 'user' ? '你' : '我'}的约定：${newAgreement.content}`;
-                }
+
+
+
+
+
+
+
+
 
                 // (B) [情侣空间] 动作指令处理 (修复：没解锁不许动！)
                 if (extractedThought.action && extractedThought.action.type && activeContact.RelationShipUnlocked) {
@@ -3368,8 +3419,7 @@ const SharedMemoryCard: React.FC<{ data: any }> = ({ data }) => {
         const oldFriendship = c.friendshipScore || 50; 
         const newRomance = Math.min(100, Math.max(-100, oldRomance + rChange));
         const newFriendship = Math.min(100, Math.max(-100, oldFriendship + fChange));
-        const newStatus = getRelationshipStatus(newRomance, newFriendship);
-
+const newStatus = getAdvancedRelationshipStatus(c.relationshipStatus, newRomance, newFriendship);
         // --- B. 计算精力状态 ---
         const oldEnergySystem = (c.mood && c.mood.energy) ? c.mood.energy : { current: 80, max: 100, status: 'Awake' as const, lastUpdate: Date.now() };
         let newEnergyValue = oldEnergySystem.current + energyChange;
@@ -4097,6 +4147,108 @@ const MemoryNote: React.FC<{
 
 
 
+
+
+
+
+
+
+
+// 这是一组代码：【ChatApp.tsx】新的“标签创建”弹窗组件
+const TagCreationModal: React.FC<{
+  isOpen: boolean;
+  onClose: () => void;
+  onSubmit: (data: { content: string; isPublic: boolean; note: string }) => void;
+}> = ({ isOpen, onClose, onSubmit }) => {
+  const [content, setContent] = useState("");
+  const [isPublic, setIsPublic] = useState(true);
+  const [note, setNote] = useState("");
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm animate-fadeIn" onClick={onClose}>
+      <div className="bg-white w-[85%] max-w-sm rounded-3xl shadow-2xl p-6 animate-scaleIn flex flex-col gap-4" onClick={e => e.stopPropagation()}>
+        
+        {/* 标题 */}
+        <div className="text-center">
+          <div className="text-4xl mb-2">🏷️</div>
+          <h3 className="text-lg font-bold text-gray-800">贴个新标签</h3>
+          <p className="text-xs text-gray-400">你对TA的印象是...</p>
+        </div>
+
+        {/* 输入框：标签名 */}
+        <div>
+           <label className="text-xs font-bold text-gray-500 ml-1">标签内容 (8字以内)</label>
+           <input 
+             autoFocus
+             type="text" 
+             value={content}
+             onChange={e => setContent(e.target.value.slice(0, 8))}
+             placeholder="例：傲娇怪 / 小天使"
+             className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-lg font-bold text-center outline-none focus:ring-2 focus:ring-blue-100 transition"
+           />
+        </div>
+
+        {/* 开关：公开 vs 私密 */}
+        <div className="bg-gray-50 p-1 rounded-xl flex">
+           <button 
+             onClick={() => setIsPublic(true)}
+             className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all ${isPublic ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400'}`}
+           >
+             📢 公开给TA看
+           </button>
+           <button 
+             onClick={() => setIsPublic(false)}
+             className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all ${!isPublic ? 'bg-white text-purple-600 shadow-sm' : 'text-gray-400'}`}
+           >
+             🔒 只有我知道
+           </button>
+        </div>
+
+        {/* 提示文案 */}
+        <p className="text-[10px] text-center text-gray-400 h-4">
+          {isPublic ? "TA会立刻收到通知，并对这个评价做出反应" : "这是你心底的秘密，TA不会知道"}
+        </p>
+
+        {/* 输入框：理由/备注 */}
+        <div>
+           <label className="text-xs font-bold text-gray-500 ml-1">备注 / 理由 (可选)</label>
+           <textarea 
+             value={note}
+             onChange={e => setNote(e.target.value)}
+             placeholder={isPublic ? "告诉TA为什么这么觉得..." : "记录下这个瞬间..."}
+             className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-xs outline-none resize-none h-20 focus:bg-white transition"
+           />
+        </div>
+
+        {/* 按钮 */}
+        <button 
+          disabled={!content.trim()}
+          onClick={() => {
+            onSubmit({ content, isPublic, note });
+            setContent(""); setNote(""); setIsPublic(true); // 重置
+          }}
+          className={`w-full py-3 rounded-xl font-bold text-white shadow-lg transition active:scale-95 ${content.trim() ? 'bg-gradient-to-r from-blue-500 to-purple-500' : 'bg-gray-300'}`}
+        >
+          贴上去！
+        </button>
+      </div>
+    </div>
+  );
+};
+
+
+
+
+
+
+
+
+
+
+
+
 const PersonaPanel = ({ 
   contact, 
   onClose, 
@@ -4116,6 +4268,96 @@ const PersonaPanel = ({
   const [isMultiSelect, setIsMultiSelect] = useState(false);
   const [selectedMemIds, setSelectedMemIds] = useState<string[]>([]);
   const [viewingTag, setViewingTag] = useState<any>(null);
+
+
+// 这是一组代码：【ChatApp.tsx】为 PersonaPanel 添加新状态和新函数
+  // ★★★ 新增：控制新建标签弹窗 ★★★
+  const [showTagCreate, setShowTagCreate] = useState(false);
+
+// 【ChatApp.tsx 更新：私密标签不通知 + 生成乱序参数】
+  const handleTagSubmit = (data: { content: string; isPublic: boolean; note: string }) => {
+     const timestamp = Date.now();
+     
+     // ★★★ 生成乱序样式数据 ★★★
+     // 旋转角度：-15度 到 15度
+     const randomRotation = Math.floor(Math.random() * 30) - 15; 
+     // 顶部偏移：0px 到 30px (制造高低错落感)
+     const randomMargin = Math.floor(Math.random() * 30); 
+
+     const newTag: UserTag = {
+        id: timestamp.toString(),
+        content: data.content,
+        timestamp: timestamp,
+        note: data.note,
+        author: 'user',
+        isPublic: data.isPublic,
+        isUnlocked: true,
+        // 保存这些乱序数据
+        rotation: randomRotation, 
+        strength: randomMargin, // 借用 strength 字段存 margin，或者你在 UserTag 类型里加一个 style 字段也可以，这里暂用 strength 存 margin
+        userQuote: '', 
+        aiReasoning: '' 
+     };
+
+     setContacts((prev: any) => prev.map((c: any) => {
+        if (c.id === contact.id) {
+            let newHistory = [...c.history];
+            
+            // ★★★ 核心修复：只有 isPublic 为 true 时，才发系统通知！ ★★★
+            if (data.isPublic) {
+                newHistory.push({
+                    id: "sys_tag_" + timestamp,
+                    role: 'system',
+                    content: `【系统通知】用户给你贴了一个新标签：[${data.content}]${data.note ? `\n备注：“${data.note}”` : ''}`,
+                    timestamp: timestamp,
+                    type: 'text'
+                });
+            }
+            
+            const currentUserTags = Array.isArray(c.userTags) ? c.userTags : [];
+            return { ...c, userTags: [...currentUserTags, newTag], history: newHistory };
+        }
+        return c;
+     }));
+     
+     setShowTagCreate(false);
+  };
+
+
+
+
+
+
+
+  // 处理解锁标签
+  const handleUnlockTag = (tag: any) => {
+      const cost = tag.unlockCost || 50;
+      const currentPoints = contact.interventionPoints || 0;
+
+      if (currentPoints < cost) {
+          alert(`点数不足！\n需要: ${cost}\n拥有: ${currentPoints}`);
+          return;
+      }
+
+      if (confirm(`🔓 解锁这个私密印象需要消耗 ${cost} 点数。\n(当前拥有: ${currentPoints})\n\n确定解锁吗？`)) {
+          setContacts((prev: any) => prev.map((c: any) => {
+              if (c.id === contact.id) {
+                  const currentAiTags = Array.isArray(c.aiTagsForUser) ? c.aiTagsForUser : [];
+                  return {
+                      ...c,
+                      interventionPoints: c.interventionPoints - cost,
+                      aiTagsForUser: currentAiTags.map((t: any) => 
+                          t.id === tag.id ? { ...t, isUnlocked: true } : t
+                      )
+                  };
+              }
+              return c;
+          }));
+          alert("解锁成功！终于看到了TA的真实想法...");
+      }
+  };
+
+
   // ==================== [组件修复] 把雷达图函数放回这里！ ====================
   const renderRadar = () => {
     const hef = contact?.hef || {};
@@ -4324,7 +4566,10 @@ ${memoryContent}
             <img src={contact?.avatar || ''} className="w-10 h-10 rounded-full border-2 border-white" alt="avatar"/>
             <div>
               <h2 className="font-bold text-lg leading-none">{contact?.name}</h2>
-              <p className="text-[10px] text-gray-400">Soul Interface</p>
+              <div className="flex items-center gap-2 mt-1">
+                 <p className="text-[10px] text-gray-400">Soul Interface</p>
+                 <span className="text-[10px] bg-yellow-100 text-yellow-700 px-1.5 py-0.5 rounded-full font-bold border border-yellow-200">🪙 {contact.interventionPoints || 0}</span>
+              </div>
             </div>
           </div>
           <button onClick={onClose} className="w-8 h-8 bg-gray-200 rounded-full text-gray-500">✕</button>
@@ -4574,118 +4819,54 @@ ${memoryContent}
 
 
 
-{/* 3. ★★★ 核心玩法：时光印象绳索 (含时间戳 + 备注详情) ★★★ */}
+
+
+
+              {/* ★★★ 印象轨迹 (你对AI的印象) ★★★ */}
               <div className="mt-4 relative">
                  <div className="flex justify-between items-end mb-2 px-1">
-                    <h3 className="text-xs font-bold text-gray-500 uppercase flex items-center gap-1">
-                       印象轨迹 (Impression Timeline)
-                    </h3>
-                    <button 
-onClick={() => {
-                         const newTagContent = prompt("挂一个新的印象标签 (AI会立刻收到系统通知):", "嘴硬心软");
-                         if (newTagContent && newTagContent.trim()) {
-                            const timestamp = Date.now();
-                            const newTag = {
-                               id: timestamp.toString(),
-                               content: newTagContent.trim(),
-                               timestamp: timestamp,
-                               style: Math.random() * 10 - 5,
-                               note: "" 
-                            };
-                            
-                            // 兼容处理
-                            const currentTags = Array.isArray(contact.userTags) ? contact.userTags : [];
-                            
-                            // 查重
-                            if (!currentTags.some((t: any) => t.content === newTag.content)) {
-                               setContacts((prev: any) => prev.map((c: any) => {
-                                  if (c.id === contact.id) {
-                                      // 1. 构建系统通知消息
-                                      const sysMsg: Message = {
-                                          id: "sys_" + timestamp,
-                                          role: 'system', // ★★★ 关键：这是系统消息，不是你发的，也不是AI发的
-                                          content: `【系统通知】用户刚刚在你的印象墙上挂了一个新标签：[${newTag.content}]`,
-                                          timestamp: timestamp
-                                      };
-                                      
-                                      // 2. 同时更新：标签列表 + 聊天记录
-                                      return { 
-                                          ...c, 
-                                          userTags: [...currentTags, newTag],
-                                          history: [...c.history, sysMsg] // 把通知塞进聊天记录！
-                                      };
-                                  }
-                                  return c;
-                               }));
-                               
-                               // 这里的 alert 可以去掉，因为聊天界面会有显示
-                               // alert("标签已挂上，系统已通知 AI！"); 
-                            }
-                         }
-                      }}
-                      className="text-[10px] bg-blue-50 text-blue-600 px-3 py-1 rounded-full font-bold hover:bg-blue-100 transition shadow-sm"
-                    >
-                      + 挂新标签
+                    <h3 className="text-xs font-bold text-gray-500 uppercase flex items-center gap-1">你对TA的印象 (Tags)</h3>
+                    <button onClick={() => setShowTagCreate(true)} className="text-[10px] bg-blue-50 text-blue-600 px-3 py-1 rounded-full font-bold hover:bg-blue-100 transition shadow-sm">
+                      + 贴新标签
                     </button>
                  </div>
-
-                 {/* 绳索容器 */}
-                 <div className="w-full bg-gray-50/50 border-y border-gray-200 h-36 relative overflow-x-auto overflow-y-hidden custom-scrollbar">
-                    
-                    {/* 麻绳线条 */}
+{/* 【ChatApp.tsx 更新：标签错落摆放 + 点击修改删除】 */}
+                 <div className="w-full bg-gray-50/50 border-y border-gray-200 h-40 relative overflow-x-auto overflow-y-hidden custom-scrollbar">
+                    {/* 绳子装饰 */}
                     <div className="absolute top-4 left-0 w-[200%] h-0.5 bg-yellow-700/30 border-t border-yellow-800/20 shadow-sm z-0"></div>
-
-                    <div className="flex items-start gap-6 px-6 pt-3 min-w-max h-full">
+                    
+                    <div className="flex items-start gap-4 px-6 pt-3 min-w-max h-full">
                         {(!contact.userTags || contact.userTags.length === 0) && (
                            <div className="text-[10px] text-gray-400 italic mt-8 ml-4">
-                              绳子上空空如也，快挂上你的第一印象吧...
+                              还没给TA贴过标签...
                            </div>
                         )}
+                        {(contact.userTags || []).map((tag: any) => {
+                           const isPrivate = tag.isPublic === false; 
+                           // 读取我们在 submit 时生成的乱序数据
+                           const rotation = tag.rotation || (Math.random() * 10 - 5); 
+                           const marginTop = tag.strength || 0; // 之前把 margin 存进了 strength
 
-                        {/* 渲染挂着的标签 */}
-                        {(contact.userTags || []).map((tag: any, i: number) => {
-                           const isObj = typeof tag === 'object';
-                           const content = isObj ? tag.content : tag;
-                           const rotation = isObj ? (tag.style || 0) : 0;
-                           // ★★★ 时间显示优化：月/日 ★★★
-                           const dateObj = isObj ? new Date(tag.timestamp) : new Date();
-                           const dateStr = `${dateObj.getMonth()+1}/${dateObj.getDate()}`;
-                           
-                           const colors = [
-                             "bg-yellow-100 text-yellow-900 border-yellow-200", 
-                             "bg-rose-100 text-rose-900 border-rose-200", 
-                             "bg-sky-100 text-sky-900 border-sky-200",
-                             "bg-emerald-100 text-emerald-900 border-emerald-200"
-                           ];
-                           const colorClass = colors[i % colors.length];
-
-                           return (
+                          return (
                              <div 
-                               key={isObj ? tag.id : i} 
-                               className="relative group flex flex-col items-center flex-shrink-0 cursor-pointer hover:z-20"
-                               style={{ transform: `rotate(${rotation}deg)`, marginTop: `${Math.abs(rotation) + 10}px` }}
-                               onClick={() => setViewingTag(tag)} // ★★★ 点击打开详情弹窗 ★★★
+                                key={tag.id} 
+                                className="relative group flex flex-col items-center flex-shrink-0 cursor-pointer hover:z-20 transition-all duration-300 ease-out" 
+                                // ★★★ 核心样式：应用旋转和错落高度 ★★★
+                                style={{ 
+                                    transform: `rotate(${rotation}deg)`, 
+                                    marginTop: `${marginTop}px`,
+                                    marginLeft: '-5px', // 稍微重叠一点点更自然
+                                    marginRight: '-5px' 
+                                }} 
+                                onClick={() => setViewingTag(tag)} // 点击查看详情/修改/删除
                              >
-                                {/* 木夹子 */}
+                                {/* 夹子 UI */}
                                 <div className="w-2 h-4 bg-amber-700 rounded-sm mb-[-6px] z-20 shadow-md relative border-l border-white/20"></div>
-
-                                {/* 标签纸 */}
-                                <div className={`relative ${colorClass} border px-3 pt-3 pb-5 min-w-[70px] max-w-[110px] text-center shadow-lg transition-transform hover:scale-110 hover:rotate-0 z-10 flex flex-col justify-between min-h-[80px]`} 
-                                     style={{ borderRadius: "2px 2px 20px 2px" }}> {/* 稍微卷角 */}
-                                   
-                                   <span className="text-sm font-black leading-tight break-words font-sans mb-2">
-                                     {content}
-                                   </span>
-                                   
-                                   {/* ★★★ 显性时间戳 (像邮戳一样印在下面) ★★★ */}
-                                   <div className="mt-auto pt-2 border-t border-black/10 w-full flex justify-end">
-                                      <span className="text-[9px] font-mono opacity-60 tracking-tighter">{dateStr}</span>
-                                   </div>
-
-                                   {/* 有备注的小红点提示 */}
-                                   {tag.note && (
-                                     <div className="absolute top-1 right-1 w-2 h-2 bg-red-400 rounded-full"></div>
-                                   )}
+                                
+                                {/* 标签纸 UI */}
+                                <div className={`relative ${isPrivate ? 'bg-purple-100 text-purple-900 border-purple-200' : 'bg-yellow-100 text-yellow-900 border-yellow-200'} border px-3 pt-3 pb-5 min-w-[70px] max-w-[110px] text-center shadow-lg transition-transform hover:scale-110 hover:rotate-0 z-10 flex flex-col justify-between min-h-[80px]`} style={{ borderRadius: "2px 2px 20px 2px" }}>
+                                   <span className="text-sm font-black leading-tight break-words font-sans mb-2">{tag.content}</span>
+                                   <div className="mt-auto pt-2 border-t border-black/10 w-full flex justify-end"><span className="text-[9px] font-mono opacity-60 tracking-tighter">Me</span></div>
                                 </div>
                              </div>
                            );
@@ -4693,90 +4874,124 @@ onClick={() => {
                     </div>
                  </div>
 
-                 {/* ★★★ 标签详情弹窗 (Modal) ★★★ */}
+                 {/* ★★★ 标签详情/删除弹窗 (更新版) ★★★ */}
                  {viewingTag && (
                    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/20 backdrop-blur-sm animate-fadeIn" onClick={() => setViewingTag(null)}>
-                      <div className="bg-white w-[85%] max-w-xs rounded-2xl shadow-2xl p-5 animate-scaleIn transform transition-all" onClick={e => e.stopPropagation()}>
-                         
-                         {/* 标题 */}
+                      <div className="bg-white w-[85%] max-w-xs rounded-2xl shadow-2xl p-5 animate-scaleIn" onClick={e => e.stopPropagation()}>
                          <div className="text-center mb-4">
-                            <span className="text-xs text-gray-400 font-bold uppercase tracking-widest">TAG DETAILS</span>
+                            <span className="text-xs text-gray-400 font-bold uppercase tracking-widest">{viewingTag.isPublic ? '📢 公开标签' : '🔒 私密标签'}</span>
                             <h3 className="text-2xl font-black text-gray-800 mt-1">#{viewingTag.content}</h3>
-                            <p className="text-[10px] text-gray-400 font-mono mt-1">
-                               Created on {new Date(viewingTag.timestamp).toLocaleString()}
-                            </p>
+                            <p className="text-[10px] text-gray-400 font-mono mt-1">From: Me</p>
                          </div>
-
-                         {/* 备注输入区 */}
-                         <div className="bg-yellow-50 p-3 rounded-xl border border-yellow-200 mb-4 relative">
-                            <label className="text-[9px] font-bold text-yellow-700 uppercase mb-1 block">
-                               📝 为什么会有这个印象？(备注)
-                            </label>
-                            <textarea
-                               className="w-full bg-transparent text-sm text-gray-700 outline-none resize-none h-20 placeholder-yellow-300/50"
-                               placeholder="写点什么... AI会看到哦"
-                               value={viewingTag.note || ""}
-                               onChange={(e) => {
-                                  // 实时更新 state (有点hacky但有效)
-                                  setViewingTag({ ...viewingTag, note: e.target.value });
-                               }}
-                            />
+                         <div className="bg-yellow-50 p-3 rounded-xl border border-yellow-200 mb-4">
+                            <label className="text-[9px] font-bold text-yellow-700 uppercase mb-1 block">我的备注</label>
+                            <p className="text-sm text-gray-700 whitespace-pre-wrap">{viewingTag.note || "无"}</p>
                          </div>
-
-                         {/* 按钮组 */}
+                        
                          <div className="flex gap-2">
-               
-                              <button 
-                               onClick={() => {
-                                  // 1. 准备一条系统通知，把备注内容大声告诉 AI
-                                  const timestamp = Date.now();
-                                  const noteContent = viewingTag.note ? viewingTag.note : "无";
-                                  
-                                  const sysMsg: Message = {
-                                      id: "sys_note_" + timestamp,
-                                      role: 'system',
-                                      // ★★★ 关键：把备注内容写进系统通知里 ★★★
-                                      content: `【系统通知】用户更新了对标签 [${viewingTag.content}] 的详细备注：\n“${noteContent}”\n(指令：这是用户对你产生该印象的具体原因，请在接下来的对话中针对这个原因进行互动)`,
-                                      timestamp: timestamp
-                                  };
-
-                                  // 2. 同时更新：标签数据 + 聊天记录
-                                  setContacts((prev: any) => prev.map((c: any) => {
-                                     if (c.id === contact.id) {
-                                        return { 
-                                           ...c, 
-                                           userTags: c.userTags.map((t: any) => t.id === viewingTag.id ? viewingTag : t),
-                                           history: [...c.history, sysMsg] // 插入聊天记录
-                                        };
-                                     }
-                                     return c;
-                                  }));
-                                  
-                                  setViewingTag(null);
-                               }}
-                               className="flex-1 bg-gray-900 text-white py-2 rounded-xl font-bold text-xs hover:bg-gray-700 transition"
-                            >
-                               保存备注
-                            </button>
-                            <button 
-                               onClick={() => {
-                                  if(confirm("确定要摘下这个标签吗？")) {
-                                     setContacts((prev: any) => prev.map((c: any) => 
-                                        c.id === contact.id ? { ...c, userTags: c.userTags.filter((t: any) => t.id !== viewingTag.id) } : c
-                                     ));
-                                     setViewingTag(null);
-                                  }
-                               }}
-                               className="flex-1 bg-red-100 text-red-500 py-2 rounded-xl font-bold text-xs"
-                            >
-                               摘掉
-                            </button>
+                             {/* 删除按钮 */}
+                             <button 
+                                onClick={() => {
+                                    if(confirm("确定撕掉这个标签吗？")) {
+                                        setContacts((prev: any) => prev.map((c: any) => 
+                                            c.id === contact.id 
+                                            ? { ...c, userTags: c.userTags.filter((t: any) => t.id !== viewingTag.id) } 
+                                            : c
+                                        ));
+                                        setViewingTag(null);
+                                    }
+                                }}
+                                className="flex-1 bg-red-50 text-red-500 py-2 rounded-xl font-bold text-xs border border-red-100"
+                             >
+                                🗑️ 撕掉
+                             </button>
+                             <button onClick={() => setViewingTag(null)} className="flex-1 bg-gray-900 text-white py-2 rounded-xl font-bold text-xs">关闭</button>
                          </div>
                       </div>
                    </div>
                  )}
-              </div>
 
+
+
+
+
+
+
+
+{/* 标签详情弹窗 (升级版：支持显示 AI 备注) */}
+                 {viewingTag && (
+                   <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/20 backdrop-blur-sm animate-fadeIn" onClick={() => setViewingTag(null)}>
+                      <div className="bg-white w-[85%] max-w-xs rounded-2xl shadow-2xl p-5 animate-scaleIn" onClick={e => e.stopPropagation()}>
+                         
+                         {/* 头部信息 */}
+                         <div className="text-center mb-4">
+                            <span className={`text-xs font-bold uppercase tracking-widest px-2 py-0.5 rounded ${viewingTag.author === 'ai' ? 'bg-blue-100 text-blue-600' : 'bg-gray-100 text-gray-400'}`}>
+                               {viewingTag.author === 'ai' ? '🤖 AI 的印象' : (viewingTag.isPublic ? '📢 公开标签' : '🔒 私密标签')}
+                            </span>
+                            <h3 className="text-2xl font-black text-gray-800 mt-2">#{viewingTag.content}</h3>
+                            <p className="text-[10px] text-gray-400 font-mono mt-1">
+                               From: {viewingTag.author === 'ai' ? contact.name : 'Me'}
+                            </p>
+                         </div>
+
+                         {/* 备注/理由显示区 */}
+                         <div className={`p-3 rounded-xl border mb-4 ${viewingTag.author === 'ai' ? 'bg-blue-50 border-blue-100' : 'bg-yellow-50 border-yellow-200'}`}>
+                            <label className={`text-[9px] font-bold uppercase mb-1 block ${viewingTag.author === 'ai' ? 'text-blue-600' : 'text-yellow-700'}`}>
+                               {viewingTag.author === 'ai' ? '🧠 AI 的内心独白 (理由)' : '📝 我的备注'}
+                            </label>
+                            <p className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">
+                               {/* 优先显示 aiReasoning，没有就显示 note，再没有就显示无 */}
+                               {viewingTag.aiReasoning || viewingTag.note || "（这家伙什么也没写...）"}
+                            </p>
+                         </div>
+                        
+                         {/* 按钮区 */}
+                         <div className="flex gap-2">
+                             {/* 只有用户自己的标签才能删除，AI贴的不能删（或者是为了好玩可以留着） */}
+                             {viewingTag.author !== 'ai' ? (
+                                 <button 
+                                    onClick={() => {
+                                        if(confirm("确定撕掉这个标签吗？")) {
+                                            setContacts((prev: any) => prev.map((c: any) => 
+                                                c.id === contact.id 
+                                                ? { ...c, userTags: c.userTags.filter((t: any) => t.id !== viewingTag.id) } 
+                                                : c
+                                            ));
+                                            setViewingTag(null);
+                                        }
+                                    }}
+                                    className="flex-1 bg-red-50 text-red-500 py-2 rounded-xl font-bold text-xs border border-red-100 hover:bg-red-100 transition"
+                                 >
+                                    🗑️ 撕掉
+                                 </button>
+                             ) : (
+                                 <button className="flex-1 bg-gray-100 text-gray-400 py-2 rounded-xl font-bold text-xs cursor-not-allowed">
+                                    🔒 来自AI的评价
+                                 </button>
+                             )}
+                             
+                             <button onClick={() => setViewingTag(null)} className="flex-1 bg-gray-900 text-white py-2 rounded-xl font-bold text-xs hover:bg-gray-800 transition">
+                                关闭
+                             </button>
+                         </div>
+                      </div>
+                   </div>
+                 )}
+
+
+
+
+
+
+                 
+                 
+                 {/* 新建弹窗的调用 (逻辑不变) */}
+                 <TagCreationModal 
+                   isOpen={showTagCreate} 
+                   onClose={() => setShowTagCreate(false)} 
+                   onSubmit={handleTagSubmit} 
+                 />
+              </div>
 
 
 
@@ -5133,15 +5348,25 @@ onClick={() => {
                           <div className="flex items-start gap-6 px-6 pt-3 min-w-max h-full">
                             {(!contact.aiTagsForUser || contact.aiTagsForUser.length === 0) && (<div className="text-[10px] text-gray-400 italic mt-8 ml-4">绳子上空空如也...</div>)}
                             
-                            {/* 渲染 AI 标签 */}
+{/* 渲染 AI 标签 (已修复：增加点击查看备注功能) */}
                             {(contact.aiTagsForUser || []).map((tag: any) => (
-                              <div key={tag.id} className="relative group flex flex-col items-center flex-shrink-0 animate-fadeIn" style={{ transform: `rotate(${(tag.style || (Math.random()*6-3))}deg)`, marginTop: `${Math.abs(tag.style || 0) + 10}px` }}>
+                              <div 
+                                key={tag.id} 
+                                // ★★★ 1. 加上 cursor-pointer 和 onClick ★★★
+                                className="relative group flex flex-col items-center flex-shrink-0 animate-fadeIn cursor-pointer hover:z-20 transition-all duration-300"
+                                onClick={() => setViewingTag(tag)} 
+                                style={{ transform: `rotate(${(tag.style || (Math.random()*6-3))}deg)`, marginTop: `${Math.abs(tag.style || 0) + 10}px` }}
+                              >
                                 {/* 夹子 */}
                                 <div className="w-2 h-4 bg-amber-700 rounded-sm mb-[-6px] z-20 shadow-md relative border-l border-white/20"></div>
+                                
                                 {/* 标签纸 */}
                                 <div className="relative bg-yellow-100 text-yellow-900 border border-yellow-200 px-3 pt-3 pb-5 min-w-[70px] max-w-[120px] text-center shadow-lg transition-transform hover:scale-110 hover:rotate-0 z-10 flex flex-col justify-between min-h-[80px]" style={{ borderRadius: "2px 2px 20px 2px" }}>
                                     <span className="text-sm font-black leading-tight break-words font-sans mb-2">{tag.content}</span>
-                                    <div className="mt-auto pt-2 border-t border-black/10 w-full flex justify-end">
+                                    
+                                    {/* 底部小字 */}
+                                    <div className="mt-auto pt-2 border-t border-black/10 w-full flex justify-between items-end">
+                                        <span className="text-[8px] opacity-50 font-bold">👀 查看</span>
                                         <span className="text-[9px] font-mono opacity-60 tracking-tighter">
                                            {new Date(tag.timestamp).toLocaleDateString([], {month: '2-digit', day: '2-digit'})}
                                         </span>
@@ -5764,7 +5989,7 @@ if (view === 'settings' && activeContact) {
             : 'text-gray-400 hover:bg-white/50'
         }`}
       >
-        {mode === 'concise' ? '高冷' : mode === 'normal' ? '日常' : '话痨'}
+        {mode === 'concise' ? '话少' : mode === 'normal' ? '日常' : '话痨'}
       </button>
     ))}
   </div>
@@ -5837,21 +6062,6 @@ if (view === 'settings' && activeContact) {
 
 
 
-    {showWorldBookModal && (
-      <WorldBookApp
-        worldBooks={worldBooks}
-        setWorldBooks={setWorldBooks}
-        
-        // ★★★ 核心修改：加上这行传参！★★★
-        globalSettings={globalSettings} 
-
-        onClose={() => setShowWorldBookModal(false)}
-        onOpenSettings={() => {
-          setShowWorldBookModal(false); 
-          setView('settings');         
-        }}
-      />
-    )}
 
 
 
@@ -6309,6 +6519,11 @@ if (view === 'settings' && activeContact) {
               )}
             </div>
 
+
+
+
+
+
             {/* ==================== 🔴 滑块 1: 爱意值 (Romance) ==================== */}
             <div className="mb-4">
                 <div className="flex justify-between items-end mb-1 px-1">
@@ -6359,6 +6574,10 @@ if (view === 'settings' && activeContact) {
                     <span className="text-[9px] text-gray-400 w-6">100</span>
                 </div>
             </div>
+
+
+
+
 
             {/* 锁定按钮 */}
             {!form.isAffectionLocked ? (
@@ -6487,6 +6706,10 @@ if (view === 'settings' && activeContact) {
 
 
 
+
+
+
+
         {/* 3. Memory & Lore 控制台 (完全体) */}
         <section className="bg-white rounded-2xl p-4 shadow-sm border border-gray-200">
           <div className="flex items-center justify-between mb-4 border-b border-gray-100 pb-3">
@@ -6495,6 +6718,11 @@ if (view === 'settings' && activeContact) {
                <span className="text-[9px] text-gray-400">控制 AI 的记忆长度与 Token</span>
              </div>
              
+
+
+
+
+
 {/* 点击显示 Context Token 统计 (实时响应输入框版) */}
              <button 
                onClick={() => setShowTokenModal(true)} 
@@ -6544,6 +6772,11 @@ if (view === 'settings' && activeContact) {
              </button>
           </div>
 
+
+
+
+
+
           {/* 数字输入区域 */}
           <div className="grid grid-cols-2 gap-4 mb-4">
             {/* 上下文条数设置 */}
@@ -6592,19 +6825,26 @@ if (view === 'settings' && activeContact) {
 
 
 
+
+
+
+
+
         {/* World Lore */}
-        <section className="bg-white rounded-2xl p-4 shadow-sm border border-gray-200">
-          <h3 className="text-xs font-bold text-gray-400 uppercase mb-3">🌍 World Lore</h3>
-          <div className="flex justify-between items-center bg-gray-50 p-3 rounded-lg border border-gray-100">
-            <span className="text-sm text-gray-600">{enabledBooks.length} Books Active</span>
-            <button
-              onClick={() => setShowWorldBookModal(true)}
-              className="px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-xs font-bold text-blue-600 shadow-sm hover:bg-blue-50 transition"
-            >
-              Select
-            </button>
-          </div>
-        </section>
+      <section className="bg-white rounded-2xl p-4 shadow-sm border border-gray-200">
+  <h3 className="text-xs font-bold text-gray-400 uppercase mb-3">🌍 World Lore</h3>
+  <div className="flex justify-between items-center bg-gray-50 p-3 rounded-lg border border-gray-100">
+    <span className="text-sm text-gray-600">{enabledBooks.length} Books Active</span>
+    <button
+      // ▼▼▼ 核心修改就在下面这一行 ▼▼▼
+      onClick={() => setShowWorldBookSelector(true)} // 改成这个！
+      // ▲▲▲ 核心修改就在上面这一行 ▲▲▲
+      className="px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-xs font-bold text-blue-600 shadow-sm hover:bg-blue-50 transition"
+    >
+      Select
+    </button>
+  </div>
+</section>
 
 
 
@@ -6750,6 +6990,37 @@ if (view === 'settings' && activeContact) {
             </div>
           )}
         </section>
+
+
+
+
+
+
+{/* ==================== [补全] 对话模式偏好 ==================== */}
+<section className="bg-white rounded-2xl p-4 shadow-sm border border-gray-200">
+  <div className="flex items-center gap-2 mb-3">
+    <span className="text-lg">💬</span>
+    <h3 className="text-xs font-bold text-gray-400 uppercase">对话模式偏好</h3>
+  </div>
+  <div className="flex gap-2 p-1 bg-gray-100 rounded-xl">
+    {['concise', 'normal', 'verbose'].map((mode) => (
+      <button
+        key={mode}
+        onClick={() => setEditForm(prev => ({ ...prev, dialogueMode: mode as any }))}
+        className={`flex-1 py-2 text-xs font-bold rounded-lg capitalize transition-all duration-300 ${
+          (form.dialogueMode || 'normal') === mode
+            ? 'bg-white text-blue-600 shadow-md'
+            : 'text-gray-400 hover:bg-white/50'
+        }`}
+      >
+        {mode === 'concise' ? '话少' : mode === 'normal' ? '日常' : '话痨'}
+      </button>
+    ))}
+  </div>
+</section>
+
+
+
 
 
 
@@ -6933,6 +7204,80 @@ if (view === 'settings' && activeContact) {
           />
         )}
         {/* 👆👆👆 插入结束 👆👆👆 */}
+
+
+
+
+
+
+
+
+
+{showWorldBookSelector && (
+  <div 
+    className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm animate-fadeIn"
+    onClick={() => setShowWorldBookSelector(false)}
+  >
+    <div 
+      className="bg-white w-[90%] max-w-md rounded-2xl shadow-2xl overflow-hidden animate-scaleIn max-h-[80vh] flex flex-col"
+      onClick={e => e.stopPropagation()}
+    >
+      {/* 头部 */}
+      <div className="bg-gray-50 p-4 border-b flex justify-between items-center shrink-0">
+        <div>
+          <h3 className="font-bold text-lg text-gray-800">选择世界书</h3>
+          <p className="text-xs text-gray-400">为当前角色启用设定</p>
+        </div>
+        <button onClick={() => setShowWorldBookSelector(false)} className="w-8 h-8 bg-gray-200 hover:bg-gray-300 rounded-full text-gray-500 font-bold text-sm transition">✕</button>
+      </div>
+      
+      {/* 列表 */}
+      <div className="flex-1 p-4 overflow-y-auto custom-scrollbar space-y-2">
+        {worldBooks.length === 0 && (
+          <div className="text-center text-gray-400 py-10">
+            <p className="text-2xl">🌍</p>
+            <p>还没有创建世界书哦</p>
+          </div>
+        )}
+        {worldBooks.map(book => (
+          <div 
+            key={book.id}
+            onClick={() => toggleWorldBook(book.name)} // 直接调用你已有的函数
+            className={`flex items-center justify-between p-3 rounded-xl cursor-pointer transition-all border-2 ${
+              (form.enabledWorldBooks || []).includes(book.name) 
+              ? 'bg-blue-50 border-blue-200' 
+              : 'bg-gray-50 border-transparent hover:bg-gray-100'
+            }`}
+          >
+            <span className={`font-bold text-sm ${(form.enabledWorldBooks || []).includes(book.name) ? 'text-blue-700' : 'text-gray-600'}`}>
+              {book.name}
+            </span>
+            <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${
+              (form.enabledWorldBooks || []).includes(book.name) ? 'bg-blue-500 border-blue-500' : 'bg-white border-gray-300'
+            }`}>
+              {(form.enabledWorldBooks || []).includes(book.name) && <span className="text-white text-xs font-bold">✓</span>}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* 底部 */}
+      <div className="p-4 border-t bg-gray-50 shrink-0">
+        <button onClick={() => setShowWorldBookSelector(false)} className="w-full bg-blue-500 text-white py-3 rounded-xl font-bold shadow-lg hover:bg-blue-600 transition active:scale-95">
+          完成
+        </button>
+      </div>
+    </div>
+  </div>
+)}
+
+
+
+
+
+
+
+
 
 
 

@@ -286,18 +286,33 @@ ${JSON.stringify(batchEntries)}
 
 
 
+
   const createNewEntry = () => {
     if (!newEntryContent.trim()) return;
-    let targetCat = worldBooks.find(c => c.name.toLowerCase() === newEntryCatName.toLowerCase().trim());
+    
+    const catNameToFind = newEntryCatName.trim().toLowerCase();
+    let targetCat = worldBooks.find(c => c.name.toLowerCase() === catNameToFind);
+    
     if (!targetCat) {
+      // ★★★ 核心改造：自动重命名逻辑 ★★★
+      const baseName = newEntryCatName.trim();
+      let finalName = baseName;
+      let counter = 2;
+      while (worldBooks.some(wb => wb.name === finalName)) {
+        finalName = `${baseName} (${counter})`;
+        counter++;
+      }
+      // ★★★ 改造结束 ★★★
+
       targetCat = {
         id: Date.now().toString(),
-        name: newEntryCatName.trim(),
+        name: finalName, // <-- 使用新名字
         entries: [],
         type: 'selective'
       };
-      setWorldBooks(prev => [...prev, targetCat]);
+      setWorldBooks(prev => [...prev, targetCat!]); // 这里要用 ! 告诉 TS targetCat 肯定有值
     }
+    
     const newEntry: WorldBookEntry = {
       id: Date.now().toString(),
       keys: newEntryKeys.split(/[,，]/).map(k => k.trim()).filter(k => k),
@@ -305,6 +320,7 @@ ${JSON.stringify(batchEntries)}
       name: newEntryName.trim() || "未命名条目",
       strategy: newEntryStrategy 
     };
+
     setWorldBooks(prev => prev.map(c =>
       c.id === targetCat!.id ? { ...c, entries: [...c.entries, newEntry] } : c
     ));
@@ -317,6 +333,15 @@ ${JSON.stringify(batchEntries)}
     setNewEntryStrategy('keyword');
     alert(`条目已添加到分类 "${targetCat.name}"`);
   };
+
+
+
+
+
+
+
+
+
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     console.log("导入文件", e.target.files);

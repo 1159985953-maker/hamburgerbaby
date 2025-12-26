@@ -1,22 +1,21 @@
-import React, { useState, useEffect, useRef } from 'react';
+// 这是一组代码：【App.tsx】新的 import 区域
+import React, { useState, useEffect, useRef, ChangeEvent } from 'react';
 import ChatApp from './components/ChatApp';
 import RelationshipSpace from './components/RelationshipSpace';
 import SettingsApp from './components/SettingsApp';
 import WorldBookApp from './components/WorldBookApp';
 import WallpaperApp from './components/AppearanceApp';
-import SafeAreaHeader from './components/SafeAreaHeader';  // ← 加这一行！
-import localforage from 'localforage';
-import { Contact, GlobalSettings, WorldBookCategory, Message } from './types';
-import { generateResponse } from './services/apiService'; // ★★★ 新增这一行导入 ★★★
 import LifeApp from './components/LifeApp';
-console.log('React version:', React.version);  // 只应该打印一次
-
+import SafeAreaHeader from './components/SafeAreaHeader';
+import localforage from 'localforage';
+import { Contact, GlobalSettings, WorldBookCategory, Message, EmotionalNeed, TodoItem } from './types';
+import { generateResponse } from './services/apiService';
+import { readTavernPng, fileToBase64 } from './utils/fileUtils';
 
 // ==================== 1. 辅助函数 & 初始数据 (必须放在组件外面！) ====================
 
 
-
-// 初始联系人数据 (防崩底包)
+// 这是一组代码：【App.tsx】初始数据 (已将点数修改为 999 用于测试)
 const INITIAL_CONTACTS: Contact[] = [
   {
     id: '1',
@@ -50,14 +49,25 @@ const INITIAL_CONTACTS: Contact[] = [
     affectionScore: 60,
     relationshipStatus: 'Friend',
     aiDND: { enabled: false, until: 0 },
-    interventionPoints: 0,
+    
+    // ★★★ 修改这里：点数设为 999 ★★★
+    interventionPoints: 999,
+    
     longTermMemories: [],
     currentChatMode: 'Casual',
     customCSS: "",
     chatBackground: "",
-    proactiveConfig: { enabled: true, minGapMinutes: 60, maxDaily: 5 } // 默认开启一点主动
+    proactiveConfig: { enabled: true, minGapMinutes: 60, maxDaily: 5 },
+    userTags: [],
+    aiTagsForUser: []
   }
 ];
+
+
+
+
+
+
 
 // 数据清洗函数
 const sanitizeContact = (c: any): any => {
@@ -492,6 +502,12 @@ if (savedSettings) {
         pendingProactive: false
       };
     });
+    const contactsWithPoints = repaired.map(c => ({
+...c,
+// 如果这个角色没有点数，就给他999点
+interventionPoints: c.interventionPoints || 999
+}));
+setContacts(contactsWithPoints); // ★★★ 使用加了点数的新数组
     setContacts(repaired);
             console.log(`成功载入 ${repaired.length} 个角色`);
           }
