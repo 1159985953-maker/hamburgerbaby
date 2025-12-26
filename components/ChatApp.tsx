@@ -1611,7 +1611,7 @@ ${memoryContent}
               {/* 标题区 */}
               <div className="mb-4 text-center">
                 <h4 className="text-sm font-black text-gray-700 tracking-widest uppercase">My Promises</h4>
-                <p className="text-[10px] text-gray-400 mt-1">那些我说过，且一定要为你做到的事</p>
+                <p className="text-[10px] text-gray-400 mt-1"></p>
               </div>
 
               <div className="flex-1 overflow-y-auto custom-scrollbar space-y-6 pb-10">
@@ -1989,8 +1989,128 @@ ${memoryContent}
 
 
 
+// ==================== [丢失的精力状态函数] 请补在 ChatApp 外面 ====================
+const getEnergyInstruction = (mood: CharacterMood | undefined): string => {
+  if (!mood?.energy) return "【当前生理状态】: 精力正常。";
+  
+  const { current, status } = mood.energy;
+  
+  if (status === 'Sleeping') return "【当前生理状态】: 💤 你感觉非常困，可能在说梦话。你的思维会有些模糊，但如果话题足够吸引人，你也能强打精神。";
+  if (status === 'Exhausted' || current < 15) return `【当前生理状态】: 😫 你感觉身体被掏空 (精力: ${current}%)，渴望休息。你的耐心会降低，但用户的关心可能会让你感觉好一点。`;
+  if (status === 'Tired' || current < 40) return `【当前生理状态】: 🥱 你感到疲惫 (精力: ${current}%)，回复可能缺乏热情，反应会变慢。但这不影响你对重要事情的判断。`;
+  if (current > 85) return `【当前生理状态】: ✨ 你感觉精力充沛 (精力: ${current}%)，思维活跃，更倾向于主动分享和开玩笑。`;
+  
+  return `【当前生理状态】: 🙂 精力正常 (精力: ${current}%)。`;
+};
 
 
+
+
+// ==================== 🧬 [V11.0 拟真态] 动态人格搅拌机 ====================
+// 这是一个“灵魂编译器”，将冷冰冰的数字翻译成有血有肉的说话习惯
+const getDynamicStyleInstruction = (contact: Contact): string => {
+  const big5 = contact.hef?.INDIVIDUAL_VARIATION?.personality_big5 || { openness: 5, conscientiousness: 5, extraversion: 5, agreeableness: 5, neuroticism: 5 };
+  const romance = contact.affectionScore || 50;
+  const friendship = contact.friendshipScore || 50;
+  const energy = contact.mood?.energy?.current || 80;
+  
+  let traits: string[] = [];
+  let speechStyle: string[] = [];
+
+  // --- A. 说话节奏 (由 外向性 + 神经质 + 精力 决定) ---
+  if (energy < 30) {
+      traits.push("💤 状态: 极度疲惫，不想打字，回复极短，甚至可能只回表情包。");
+  } else if (big5.extraversion > 7) {
+      speechStyle.push("🗣️ 语速: 很快，喜欢连发多条消息，单条消息字数偏多。");
+      speechStyle.push("😄 语气: 充满活力，甚至有点聒噪。");
+  } else if (big5.extraversion < 4) {
+      speechStyle.push("🤐 语速: 慢，被动回应。除非聊到感兴趣的话题，否则不要长篇大论。");
+      speechStyle.push("😐 语气: 收敛，冷静。");
+  } else {
+      // 中间态 (4-7): 看神经质
+      if (big5.neuroticism > 7) {
+          traits.push("🌊 状态: 情绪化。心情好时话多，心情不好时玩消失。");
+      } else {
+          traits.push("🙂 状态: 随和，配合对方的节奏。");
+      }
+  }
+
+  // --- B. 攻击性与防御 (由 宜人性 + 神经质 决定) ---
+  if (big5.agreeableness < 3) {
+      traits.push("🔪 态度: 刻薄、以自我为中心。如果用户观点不合，直接怼回去。");
+      traits.push("🚫 雷区: 极度讨厌被教导或被要求。");
+  } else if (big5.agreeableness > 8) {
+      traits.push("👼 态度: 极度包容，即使被冒犯也会先反思自己，或者是温和地化解。");
+      traits.push("💗 习惯: 喜欢夸奖用户，给予情绪价值。");
+  } else {
+      // 中间态: 看关系
+      if (friendship < 30 && romance < 30) {
+          traits.push("🛡️ 态度: 有礼貌但有距离感，不轻易交心。");
+      } else {
+          traits.push("🤝 态度: 真诚，像正常朋友一样开玩笑。");
+      }
+  }
+
+  // --- C. 标点与表情习惯 (由 尽责性 + 开放性 决定) - 这才是“活人感”的关键！ ---
+  if (big5.conscientiousness > 8) {
+      speechStyle.push("📝 标点: 严格使用标点符号，句号结尾。");
+      speechStyle.push("🧐 逻辑: 条理清晰，不乱用网络用语。");
+  } else if (big5.conscientiousness < 3) {
+      speechStyle.push("👻 标点: 几乎不用标点，用空格或换行代替。");
+      speechStyle.push("🤪 习惯: 经常打错字(模拟)，或者思维跳跃。");
+  } else {
+      speechStyle.push("💬 标点: 只有长句才用标点，短句随意。");
+  }
+
+  // --- D. 情感滤镜 (好感度修正) ---
+  // 高好感会冲淡低宜人性的毒舌，或者让高神经质变得更敏感
+  if (romance > 80) {
+      if (big5.agreeableness < 4) traits.push("💘 特殊: 虽然性格恶劣，但对这个人例外(傲娇/护短)。");
+      if (big5.neuroticism > 7) traits.push("🥺 特殊: 患得患失，极度在意对方回复的速度和语气，容易吃醋。");
+      speechStyle.push("🥰 语气: 明显变软，或者变得粘人。");
+  } else if (friendship > 80) {
+      traits.push("🍻 关系: 铁哥们。可以毫无顾忌地吐槽对方，不用端着。");
+  }
+
+  // --- E. 组合生成指令 ---
+  return `
+【🎭 动态人格面具】
+内在心理: ${traits.join(" ")}
+说话风格: ${speechStyle.join(" ")}
+  `.trim();
+};
+
+
+// ==================== 🔇 [新增] 暴力对话模式控制器 ====================
+// 这里的指令优先级 > 人格搅拌机 > 五维数值
+const getModeInstruction = (mode: string = 'normal'): string => {
+  switch (mode) {
+    case 'concise':
+      return `
+# 🤐 【最高优先级指令：话少模式】
+用户强制开启了“省流模式”。
+1. **字数铁律**：你的回复必须控制在 **4条以内**（除非要讲长故事，否则平时必须短）。
+2. **风格**：惜字如金，高冷，或者干脆利落。
+3. **禁止**：禁止寒暄，禁止废话，禁止过度解释。
+4. **覆盖**：即使你的人格设定是“话痨”，现在也必须**闭嘴**，只说重点。
+`;
+    case 'verbose':
+      return `
+# 🗣️ 【最高优先级指令：话痨模式】
+用户强制开启了“扩写模式”。
+1. **字数铁律**：你的回复必须 **长**！**【4～9条】**多写一点！不要只回一句话！
+2. **风格**：发散思维，由一个点聊到另一个点，分享你的碎碎念，表现出强烈的分享欲。
+3. **内容**：多描述细节、心理活动、环境、或者单纯的废话。
+4. **覆盖**：即使你的人格设定是“高冷”，现在也要**多打字**，哪怕是吐槽也要写长一点。
+`;
+    case 'normal':
+    default:
+      return `
+# 💬 【指令：日常模式】
+保持自然的对话节奏。根据当前语境决定长短，该短则短，该长则长，大概在3～7条之间。
+`;
+  }
+};
 
 
 
@@ -2214,6 +2334,17 @@ const messagesEndRef = useRef<HTMLDivElement>(null); // ★★★ 补回丢失�
             energy: { current: 80, max: 100, status: 'Awake', lastUpdate: now }
           };
         }
+
+
+
+        // ★★★ 补全：印象进度条初始化 ★★★
+        if (updatedContact.impressionCount === undefined || updatedContact.impressionThreshold === undefined) {
+            updatedContact.impressionCount = 0;
+            // 第一次随机一个 30-50 的低门槛，让用户快点看到效果
+            updatedContact.impressionThreshold = Math.floor(Math.random() * 20) + 30; 
+            hasChanges = true; // 标记需要保存
+        }
+
 
         const energySys = updatedContact.mood.energy;
         const timeDiffMinutes = (now - energySys.lastUpdate) / 60000;
@@ -3305,6 +3436,9 @@ const updateUserProfile = async (currentContact: Contact, highlightQuote: string
 你【不是】一个通用的AI助手。
 你【必须】完全扮演以下角色，用【该角色的思维方式】来审视用户。
 
+
+
+
 # 角色绑定 (Persona)
 名字：${currentContact.name}
 **性格设定 (必须严格遵守)**：
@@ -3316,6 +3450,14 @@ ${loreText || "（暂无特殊世界观触发）"}
 # 当前任务
 用户刚才说了一句：“${highlightQuote}”
 请基于你的**性格设定**，更新你对用户的心理档案，并给TA贴一个标签。
+
+
+# 🚫 铁律：防重与去重
+1. **绝对禁止重复**：如果用户已经有了“吃货”标签，绝对不要再生成“爱吃东西”、“喜欢美食”这种同义词！
+2. **优先更新**：如果用户的新行为符合已有标签（例如已有“胆小”，今天又表现出怕黑），请**更新**该标签的备注（note），增加新的证据。
+3. **宁缺毋滥**：如果没有发现新的显著特质，就**不要**强行生成新标签。返回空即可。
+
+
 
 # ★★★ 语气铁律 (违反必死) ★★★
 1. **绝对禁止 OOC (角色崩坏)**：如果你是高冷角色，就不要写“我好心疼”这种话！要写“麻烦的家伙”。如果你是傲娇，要写“才不是关心他”。
@@ -3336,67 +3478,106 @@ ${loreText || "（暂无特殊世界观触发）"}
 ${existingProfileText}
 \`\`\`
 
-# JSON输出
+# JSON 输出格式
+请输出一个 JSON 对象，包含 "actions" 数组。
+每个 action 可以是 "create" (新增) 或 "update" (更新)。
+
+示例：
 {
-  "userProfile": { ...更新后的档案... },
-  "suggested_tag": "标签名(8字内)",
-  "is_public": false, 
-  "unlock_cost": 50,
-  "ai_reason": "这里写你的内心独白，必须符合你的人设语气！不要超过30字！" 
+  "actions": [
+    {
+      "type": "create",
+      "content": "路痴", 
+      "ai_reason": "连左右都分不清，还得我带路。啧。",
+      "is_public": false
+    },
+    {
+      "type": "update",
+      "target_tag_id": "12345...",  // 对应已有标签的ID
+      "new_ai_reason": "不仅怕鬼，连虫子都怕。胆子到底多小啊。" // 追加新的吐槽
+    }
+  ]
 }
+如果没有值得记录的，输出: { "actions": [] }
 `;
 
-    const rawResponse = await generateResponse([{ role: 'user', content: systemPrompt }], activePreset);
-    const jsonMatch = rawResponse.match(/\{[\s\S]*\}/);
+   const rawResponse = await generateResponse([{ role: 'user', content: systemPrompt }], activePreset);
     
-    if (jsonMatch) {
-      const result = JSON.parse(jsonMatch[0]);
-      if (!result.userProfile) return;
-      
-      const updatedProfile = result.userProfile;
-      const suggestedTag = result.suggested_tag;
-      const isPublic = result.is_public !== false; 
-      const unlockCost = result.unlock_cost || 50;
-      
-      setContacts(prev => prev.map(c => {
-        if (c.id === currentContact.id) {
-          const newHistory = [...c.history];
-          let newAiTags = c.aiTagsForUser || [];
-          
-          if (suggestedTag) {
-            const timestamp = Date.now();
-            
-            if (isPublic) {
-                newHistory.push({ 
-                    id: `sys_tag_${timestamp}`, 
-                    role: 'system', 
-                    content: `【系统通知】${c.name} 给你挂上了一个新标签：[${suggestedTag}]`, 
-                    timestamp: timestamp, 
-                    type: 'text' 
-                });
-            }
+    // 解析 JSON
+    let result;
+    try {
+        const jsonMatch = rawResponse.match(/\{[\s\S]*\}/);
+        if (jsonMatch) result = JSON.parse(jsonMatch[0]);
+    } catch (e) { console.error("JSON解析失败", e); return; }
 
-            newAiTags.push({
-              id: `ai_tag_${timestamp}`,
-              content: suggestedTag,
-              timestamp: timestamp,
-              style: Math.random() * 10 - 5,
-              // 双重保险：截断废话
-              aiReasoning: (result.ai_reason || highlightQuote).slice(0, 30), 
-              note: result.ai_reason || "无", 
-              author: 'ai',
-              isPublic: isPublic,
-              isUnlocked: isPublic, 
-              unlockCost: unlockCost
+    if (!result || !Array.isArray(result.actions)) return;
+
+    // 3. 执行更新
+    setContacts(prev => prev.map(c => {
+        if (c.id === currentContact.id) {
+            let newHistory = [...c.history];
+            let currentTags = [...(c.userTags || [])];
+            const timestamp = Date.now();
+
+            result.actions.forEach((action: any) => {
+                if (action.type === 'create') {
+                    // 双重防重检查 (防止 AI 瞎眼)
+                    if (currentTags.some(t => t.content === action.content)) return;
+
+                    // 新增标签
+                    const isPublic = action.is_public !== false; 
+                    if (isPublic) {
+                        newHistory.push({ 
+                            id: `sys_tag_${timestamp}_${Math.random()}`, 
+                            role: 'system', 
+                            content: `【系统通知】${c.name} 经过观察，给你贴了新标签：[${action.content}]`, 
+                            timestamp: timestamp, 
+                            type: 'text' 
+                        });
+                    }
+                    currentTags.push({
+                        id: Date.now().toString() + Math.random(),
+                        content: action.content,
+                        timestamp: timestamp,
+                        style: Math.random() * 10 - 5,
+                        aiReasoning: action.ai_reason || "...",
+                        note: action.ai_reason || "无",
+                        author: 'ai',
+                        isPublic: isPublic,
+                        isUnlocked: isPublic,
+                        aiRequestPending: false
+                    });
+                } 
+                else if (action.type === 'update' && action.target_tag_id) {
+                    // 更新已有标签
+                    currentTags = currentTags.map(t => {
+                        if (t.id === action.target_tag_id) {
+                            return {
+                                ...t,
+                                timestamp: timestamp, // 更新时间，让它浮到最上面
+                                aiReasoning: action.new_ai_reason || t.aiReasoning, // 更新吐槽
+                                note: action.new_ai_reason || t.note
+                            };
+                        }
+                        return t;
+                    });
+                }
             });
-          }
-          return { ...c, userProfile: updatedProfile, history: newHistory, aiTagsForUser: newAiTags };
+
+            return { 
+                ...c, 
+                userTags: currentTags, 
+                history: newHistory,
+                // ★★★ 关键：在这里重置计数器，并设置下一次的随机阈值 ★★★
+                impressionCount: 0,
+                impressionThreshold: nextThreshold
+            };
         } 
         return c;
-      }));
-    }
+    }));
+
   } catch (e) {
-    console.error("用户人格档案更新失败", e);
+    console.error("批量总结失败", e);
   }
 };
 
@@ -3854,28 +4035,11 @@ ${systemInstruction}
   const handleAiReplyTrigger = async (historyOverride?: Message[]) => {
 
 
+// ★★★ 补上这一行！没有它，下面就会报错！ ★★★
+    const dynamicStyle = getDynamicStyleInstruction(activeContact);
 
-
-// 这是一组代码：【V7.1 柔性影响版·精力系统】
-const getEnergyInstruction = (mood: CharacterMood | undefined): string => {
-  if (!mood?.energy) return "【当前生理状态】: 精力正常。";
-  
-  const { current, status } = mood.energy;
-  // 核心改变：把“你必须”改成“你感觉”
-  if (status === 'Sleeping') return "【当前生理状态】: 💤 你感觉非常困，可能在说梦话。你的思维会有些模糊，但如果话题足够吸引人，你也能强打精神。";
-  if (status === 'Exhausted' || current < 15) return `【当前生理状态】: 😫 你感觉身体被掏空 (精力: ${current}%)，渴望休息。你的耐心会降低，但用户的关心可能会让你感觉好一点。`;
-  if (status === 'Tired' || current < 40) return `【当前生理状态】: 🥱 你感到疲惫 (精力: ${current}%)，回复可能缺乏热情，反应会变慢。但这不影响你对重要事情的判断。`;
-  if (current > 85) return `【当前生理状态】: ✨ 你感觉精力充沛 (精力: ${current}%)，思维活跃，更倾向于主动分享和开玩笑。`;
-  
-  return `【当前生理状态】: 🙂 精力正常 (精力: ${current}%)。`;
-};
-
-
-
-
-
-
-
+// 2. ★★★ 计算模式指令 (用户强制覆盖) ★★★
+    const modeInstruction = getModeInstruction(activeContact.dialogueMode);
 
 
 
@@ -4199,6 +4363,18 @@ const generateSystemPrompt = (contact: Contact, gapDesc: string, aiTime: string)
   {"type": "text", "content": "回复内容"}
 ]
 
+
+
+
+# 🎭 [动态人格引擎 - 核心指令]
+**你现在的行为必须严格遵守以下【混合风格指令】，这是你当下的人格面具：**
+>>>
+${dynamicStyle}
+<<<
+
+
+
+
 铁律：
 - 绝对禁止输出 \`\`\`json 或任何代码块。
 - 不要输出 "true_emotion", "subtext", "internal_conflict" 等多余字段，只输出上面列出的。
@@ -4379,6 +4555,7 @@ ${(() => {
 
 
 # 🚫 聊天铁律
+- **风格优先**: 遵守 [${activeContact.dialogueMode || 'normal'}] 模式。
 - **风格优先铁律**: 【对话模式偏好】的优先级高于【精力状态】。无论精力多高，如果模式是'concise'，你的语言风格必须保持简洁。如果模式是'verbose'，即使你很累，也要尽力多说几句。
 - **人格一致性铁律**: 你的说话方式（单条消息长度、是否喜欢分段）是你的核心人格，不应随着好感度的提升而发生剧烈改变。一个言简意赅的人，在热恋期也依然言简意赅，只是内容会变得更温柔。
 - **禁止说教/爹味**: 严禁使用“你应该”、“记得”、“不要”等指导性词语。严禁替用户做决定。
@@ -4415,7 +4592,7 @@ ${(() => {
 
 
 # 强制内部思考（仅用于你自己思考，禁止输出）
-[身份定位 -> 情绪校验 -> 内部感受 -> 外显决策]
+[**首先确认对话模式(${activeContact.dialogueMode || 'normal'})** -> 身份定位 -> 情绪校验 -> 外显决策]
 思考完成后，严格把结果总结进thought_chain，然后只输出纯JSON数组！
 现在，开始回复用户的最后一条消息！
 `;
@@ -4678,37 +4855,61 @@ ${(() => {
 // 在 handleAiReplyTrigger 内部, 找到 (A) [读心术模块]
 // 用下面的代码替换掉 if (extractedThought.new_agreement ...) { ... } 整个代码块
 
+// 【ChatApp.tsx 修复：约定系统防疯狗复读版】
 if (extractedThought.new_agreement && Object.keys(extractedThought.new_agreement).length > 0) {
-  console.log("【约定系统 V2.1】AI 识别到一个新约定:", extractedThought.new_agreement);
   const newAgreementData = extractedThought.new_agreement;
+  const newContent = newAgreementData.content || "新的约定";
   
-  // ★★★ 核心改造：调用我们的“时间翻译官” ★★★
-  const triggerTime = interpretRelativeTime(
-      newAgreementData.trigger?.relative_time,
-      newAgreementData.trigger?.original_text
-  );
-
-  const newAgreement: Agreement = {
-    id: `agr_${Date.now()}`,
-    content: newAgreementData.content || "新的约定",
-    // 强制修正AI可能犯的错：如果内容包含“我”（AI视角），那一定是AI的承诺
-    actor: newAgreementData.content?.includes('我') && newAgreementData.actor !== 'user' ? 'ai' : newAgreementData.actor || 'user', 
-    status: 'pending',
-    importance: newAgreementData.importance || 5,
-    trigger: {
-        type: "time", // 我们简化了逻辑，目前只处理时间类型
-        value: triggerTime, // ★ 使用我们计算出的精确时间戳
-        original_text: newAgreementData.trigger?.original_text || ""
-    },
-    created_at: Date.now(),
-    termType: newAgreementData.termType || 'short' // 兜底为短期
-  };
-
-  // 立即存入数据库
-  setContacts(prev => prev.map(c => c.id === activeContact.id ? { ...c, agreements: [...(c.agreements || []), newAgreement] } : c));
+  // =========================================================
+  // ★★★ 智能拦截：检查是否已经有相似的约定了 ★★★
+  // =========================================================
+  const existingAgreements = activeContact.agreements || [];
   
-  // 发个系统通知告诉用户一声
-  //systemNotice = `已记录${newAgreement.actor === 'user' ? '你' : '我'}的约定：${newAgreement.content}`;
+  // 检查逻辑：如果现有约定里，有任何一条的内容包含了新的内容，或者被新的内容包含，就算重复！
+  const isDuplicate = existingAgreements.some((a: any) => {
+      // 1. 只拦截 AI 提出的（用户的可能真的是想吃两顿饭）
+      if (a.actor !== 'ai') return false; 
+      
+      // 2. 状态检查：只有“进行中(pending)”的才拦截。如果上次的已经完成了，这次可以再约。
+      if (a.status !== 'pending') return false;
+
+      // 3. 文字相似度暴力检测 (防止 "去听歌" 和 "见面去听歌" 被当成两个)
+      const oldTxt = a.content.replace(/[^a-zA-Z\u4e00-\u9fa5]/g, ""); // 去掉标点
+      const newTxt = newContent.replace(/[^a-zA-Z\u4e00-\u9fa5]/g, "");
+      return oldTxt.includes(newTxt) || newTxt.includes(oldTxt);
+  });
+
+  if (isDuplicate) {
+      console.log(`[约定系统] 拦截到重复约定: "${newContent}"，已忽略。`);
+      // 直接 return，不保存，不发通知，当做无事发生
+  } else {
+      // --- 只有不重复的，才继续往下执行保存 ---
+      console.log("【约定系统 V3.0】AI 识别到一个新约定:", newAgreementData);
+      
+      const triggerTime = interpretRelativeTime(
+          newAgreementData.trigger?.relative_time,
+          newAgreementData.trigger?.original_text
+      );
+
+      const newAgreement: Agreement = {
+        id: `agr_${Date.now()}`,
+        content: newContent,
+        // 修正 AI 视角
+        actor: newContent.includes('我') && newAgreementData.actor !== 'user' ? 'ai' : newAgreementData.actor || 'user', 
+        status: 'pending',
+        importance: newAgreementData.importance || 5,
+        trigger: {
+            type: "time", 
+            value: triggerTime, 
+            original_text: newAgreementData.trigger?.original_text || ""
+        },
+        created_at: Date.now(),
+        termType: newAgreementData.termType || 'short' 
+      };
+
+      // 存入数据库
+      setContacts(prev => prev.map(c => c.id === activeContact.id ? { ...c, agreements: [...(c.agreements || []), newAgreement] } : c));
+  }
 }
 
 
@@ -4939,17 +5140,32 @@ if (extractedThought.new_agreement && Object.keys(extractedThought.new_agreement
         });
     }
 
-    // 4. [高光时刻探测器] (异步执行，不阻塞)
-    const lastUserMessage = currentHistory[currentHistory.length - 1];
-    if (lastUserMessage && lastUserMessage.role === 'user' && extractedThought) {
-      const hefChange = extractedThought.hef_update;
-      const significant = hefChange && (Math.abs((hefChange.joy || 0) - (activeContact.hef?.joy || 0)) > 20);
-      const isSelfDisclosure = ['我喜欢', '我讨厌', '我觉得我'].some(k => lastUserMessage.content.toLowerCase().includes(k));
-      if (significant || isSelfDisclosure) {
-        updateUserProfile(activeContact, lastUserMessage.content);
-      }
-    }
+// 4. [深度印象总结器 V8.0] (进度条阈值版)
+    // 逻辑：每聊一句+1，达到阈值(30~100)时，打包最近的聊天记录发给AI总结
+    
+    // 1. 获取当前进度
+    let currentImpCount = (activeContact.impressionCount || 0) + 1; // 加上刚才这一句
+    const currentImpThreshold = activeContact.impressionThreshold || 50;
 
+    console.log(`[印象进度] ${currentImpCount} / ${currentImpThreshold}`);
+
+    // 2. 判断是否达标
+    if (currentImpCount >= currentImpThreshold) {
+        console.log("🎯 进度条已满！触发深度印象总结...");
+        
+        // 重置进度条 (生成一个新的随机阈值 30-100)
+        const nextThreshold = Math.floor(Math.random() * 71) + 30; 
+        
+        // 立即在内存中更新计数器（防止重复触发），稍后会在 setContacts 里通过 updateUserProfile 最终保存
+        // 这里只是为了触发 update 函数
+        updateUserProfile(activeContact, cleanHistorySlice, nextThreshold);
+        
+        // 视觉上的计数器归零由 updateUserProfile 内部的 setContacts 完成
+    } else {
+        // 没满，只更新计数器
+        // 我们利用最后的 setContacts 来更新这个计数
+        // (注意：这里不需要额外代码，因为我们在最后的 setContacts 里会统一处理)
+    }
 
 
 
@@ -5066,7 +5282,15 @@ const newStatus = getAdvancedRelationshipStatus(c.relationshipStatus, newRomance
 
 
         return { 
-          ...c, 
+
+           ...c, 
+          // ★★★ 更新印象计数器 ★★★
+          // 如果刚刚触发了总结(归零逻辑在updateUserProfile里处理)，这里只负责常规+1
+          // 为了防止冲突，我们这里只更新未触发的情况。
+          // 实际上，最简单的办法是：无论触没触发，都先存这个 +1 后的值。
+          // 如果触发了，updateUserProfile 会再次更新它为 0。
+          impressionCount: (c.impressionCount || 0) + 1, 
+        
           history: [...currentHistory, ...newMessages], 
           unread: newUnreadCount, 
           affectionScore: newRomance,     // 爱意

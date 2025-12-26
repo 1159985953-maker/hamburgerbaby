@@ -255,7 +255,9 @@ export interface Contact {
   
   // ★★★ 新增：聊天计数器 (满100句换1点) ★★★
   chatCountForPoint?: number; 
-
+  // ★★★ 新增：印象生成进度条 ★★★
+  impressionCount?: number;      // 当前已聊句数
+  impressionThreshold?: number;  // 下次触发阈值 (30-100随机)
   pendingProactive?: boolean;
   affectionScore: number;
   friendshipScore?: number;
