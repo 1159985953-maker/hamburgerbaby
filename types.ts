@@ -8,6 +8,7 @@ export interface Song {
   cover: string;
 }
 
+// 这是一组代码：【types.ts】请用这段代码覆盖掉旧的 UserTag 接口
 export interface UserTag {
   id: string;
   content: string;
@@ -22,6 +23,7 @@ export interface UserTag {
   note?: string;
   rotation?: number;
   strength?: number;
+  isFavorite?: boolean; // ★★★ 核心新增：收藏夹标记！
 }
 
 export interface TaskCategory {
@@ -42,6 +44,7 @@ export interface TodoItem {
   categoryId?: string;
 }
 
+// 这是一组代码：【types.ts】请用这段代码覆盖掉旧的 Message 接口
 export interface Message {
   id: string;
   role: 'user' | 'assistant' | 'system';
@@ -51,6 +54,8 @@ export interface Message {
   translation?: string;
   voiceDuration?: number;
   song?: Song;
+  // ★★★ 核心新增：记忆归档邮戳！ ★★★
+  isArchived?: boolean; 
 }
 
 export interface CharacterMood {

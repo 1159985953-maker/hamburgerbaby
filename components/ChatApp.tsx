@@ -6,7 +6,7 @@ import { summarizeHistory } from '../services/geminiService';
 import { generateMinimaxAudio, fetchMinimaxVoices, getBuiltInMinimaxVoices, MinimaxVoice } from '../services/ttsService';
 import SafeAreaHeader from './SafeAreaHeader';  // ← 确保路径正确（如果在 components 同级）
 import WorldBookApp from './WorldBookApp'; // <--- 确保加了这行导入！
-
+import html2canvas from 'html2canvas';
 
 
 
@@ -847,7 +847,96 @@ const PersonaPanel = ({
   const [isMultiSelect, setIsMultiSelect] = useState(false);
   const [selectedMemIds, setSelectedMemIds] = useState<string[]>([]);
   const [viewingTag, setViewingTag] = useState<any>(null);
+ const [impressionFilter, setImpressionFilter] = useState<'all' | 'favorites'>('all');
+                const [isMultiSelectSave, setIsMultiSelectSave] = useState(false);
+                const [selectedTagIdsForSave, setSelectedTagIdsForSave] = useState<string[]>([]);
+                const boardRef = useRef<HTMLDivElement>(null);
 
+                const handleToggleFavorite = (tagId: string) => {
+                    setContacts(prev => prev.map(c => {
+                        if (c.id === contact.id) {
+                            return {
+                                ...c,
+                                aiTagsForUser: (c.aiTagsForUser || []).map(tag => 
+                                    tag.id === tagId ? { ...tag, isFavorite: !tag.isFavorite } : tag
+                                )
+                            };
+                        }
+                        return c;
+                    }));
+                };
+
+                const handleToggleSelectForSave = (tagId: string) => {
+                    setSelectedTagIdsForSave(prev => 
+                        prev.includes(tagId) ? prev.filter(id => id !== tagId) : [...prev, tagId]
+                    );
+                };
+                
+                // ★★★ 核心功能：【魔法】保存为图片 (100%稳定版) ★★★
+                const handleSaveAsImage = async (targetRef: React.RefObject<HTMLDivElement>, fileName: string) => {
+                    if (!targetRef.current) return alert("错误：找不到要截图的元素。");
+                    
+                    try {
+                        const canvas = await html2canvas(targetRef.current, {
+                            backgroundColor: null,
+                            useCORS: true,
+                            scale: 2
+                        });
+                        const image = canvas.toDataURL('image/png');
+                        
+                        const link = document.createElement('a');
+                        link.href = image;
+                        link.download = `${fileName}.png`;
+                        document.body.appendChild(link);
+                        link.click();
+                        document.body.removeChild(link);
+                    } catch (error) {
+                        console.error("图片保存失败:", error);
+                        alert("图片保存失败，请确保已安装 html2canvas 并检查控制台。");
+                    }
+                };
+                
+                // 【魔法】多选导出 (100%稳定版)
+                const handleSaveSelectedAsImage = async () => {
+                    if (selectedTagIdsForSave.length === 0) return;
+                    
+                    const tempContainer = document.createElement('div');
+                    tempContainer.style.position = 'absolute';
+                    tempContainer.style.left = '-9999px';
+                    tempContainer.style.top = '0';
+                    tempContainer.style.padding = '20px';
+                    tempContainer.style.display = 'flex';
+                    tempContainer.style.flexWrap = 'wrap';
+                    tempContainer.style.gap = '20px';
+                    tempContainer.style.width = '800px';
+                    
+                    selectedTagIdsForSave.forEach(id => {
+                        const originalElement = document.getElementById(`impression-tag-${id}`);
+                        if (originalElement) {
+                            const clonedNode = originalElement.cloneNode(true) as HTMLElement;
+                            clonedNode.querySelector('.selection-overlay')?.remove();
+                            clonedNode.querySelector('.favorite-button')?.remove();
+                            tempContainer.appendChild(clonedNode);
+                        }
+                    });
+
+                    document.body.appendChild(tempContainer);
+                    
+                    try {
+                        const canvas = await html2canvas(tempContainer, { scale: 2 });
+                        const image = canvas.toDataURL('image/png');
+                        const link = document.createElement('a');
+                        link.href = image;
+                        link.download = `${contact.name}_selected_impressions.png`;
+                        link.click();
+                    } catch(e) {
+                        alert("多选导出失败！");
+                    } finally {
+                        document.body.removeChild(tempContainer);
+                        setIsMultiSelectSave(false);
+                        setSelectedTagIdsForSave([]);
+                    }
+                };
 
 // 这是一组代码：【ChatApp.tsx】为 PersonaPanel 添加新状态和新函数
   // ★★★ 新增：控制新建标签弹窗 ★★★
@@ -979,6 +1068,8 @@ const PersonaPanel = ({
           alert("解锁成功！终于看到了TA的真实想法...");
       }
   };
+
+
 
 
   // ==================== [组件修复] 把雷达图函数放回这里！ ====================
@@ -1339,9 +1430,6 @@ ${memoryContent}
 {/* 这是一组代码：【终极档案室】交互式人格面板 (含照片/录音/贴标签互动) */}
           {activeTab === 'persona' && (
             <div className="space-y-5 animate-slideUp pb-10">
-
-
-
 
 
 
@@ -1994,10 +2082,18 @@ ${memoryContent}
                 </div>
               )}
 
-{/* --- 📔 印象手账 (V10.0 终极分层交互版) --- */}
-              {memoryTab === 'impressions' && (() => {
+
+
+
+
+
+
+  {memoryTab === 'impressions' && (() => {
+                
+                // ==================== [你提供的原始代码开始] ====================
+                
                 const profile = contact.userProfile || {};
-                const themeColor = profile.themeColor || '#fdfbf7'; 
+                const themeColor = profile.themeColor || '#fdfbf7';
 
                 // --- 装饰组件：彩色和纸胶带 ---
                 const WashiTape = ({ color = "bg-rose-200", rotate = "-rotate-2", width = "w-16", top = "-top-2.5", left = "left-1/2", opacity="opacity-90" }: any) => (
@@ -2021,10 +2117,8 @@ ${memoryContent}
                 const PhotoFrame: React.FC<{ id: string; className: string; defaultImage: string; tapeColor?: string }> = ({ id, className, defaultImage, tapeColor }) => {
                   const currentPhoto = contact.userProfile?.[id] || defaultImage;
                   return (
-                    // ★★★ 核心修复：现在是可点击的 <label> 元素了 ★★★
                     <label className={`absolute bg-white p-2 pb-6 rounded-sm shadow-md border border-gray-100 cursor-pointer group transition-all duration-300 hover:scale-110 hover:shadow-xl ${className}`}>
                       <WashiTape color={tapeColor || "bg-yellow-200"} width="w-12" />
-                      
                       <div className="relative overflow-hidden w-full h-full bg-gray-100">
                           <img 
                             src={currentPhoto} 
@@ -2033,16 +2127,13 @@ ${memoryContent}
                           />
                           <div className="absolute inset-0 bg-gradient-to-tr from-orange-900/10 to-transparent pointer-events-none mix-blend-multiply"></div>
                       </div>
-
                       <div className="absolute bottom-1 right-2 text-[8px] text-gray-400 font-serif rotate-[-3deg] opacity-70">
                           Me & You
                       </div>
-
                       <div className="absolute inset-0 bg-black/10 group-hover:bg-black/20 transition-colors pointer-events-none rounded-sm"></div>
                       <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity text-white text-xs font-bold drop-shadow-md">
                         📸 换图
                       </div>
-                      
                       <input type="file" className="hidden" accept="image/*"
                         onClick={(e) => (e.target as any).value = null} 
                         onChange={async (e) => {
@@ -2064,118 +2155,137 @@ ${memoryContent}
                   );
                 };
 
+                // ==================== [你提供的原始代码结束] ====================
+                
+                // 筛选要显示的标签
+                const allTags = contact.aiTagsForUser || [];
+                const filteredTags = impressionFilter === 'favorites' 
+                    ? allTags.filter((tag: any) => tag.isFavorite) 
+                    : allTags;
+
                 return (
                   <div className="h-full flex flex-col relative rounded-b-2xl overflow-hidden" style={{ backgroundColor: themeColor }}>
                     
-                    {/* --- 背景纹理 --- */}
-                    <div className="absolute inset-0 opacity-40 pointer-events-none z-0" 
-                         style={{ backgroundImage: `radial-gradient(#000000 1px, transparent 1px)`, backgroundSize: '20px 20px', opacity: 0.05 }}>
-                    </div>
-                    <div className="absolute inset-0 bg-cover bg-center opacity-20 pointer-events-none z-0 mix-blend-multiply" 
-                         style={{ backgroundImage: profile.background_image ? `url(${profile.background_image})` : 'none' }} />
 
+                    
                     <div className="flex-1 overflow-y-auto p-4 space-y-8 custom-scrollbar z-10 relative">
                       
-                      {/* ★★★ 自由浮动装饰层 (照片+贴纸) ★★★ */}
-                      {/* 背景贴纸 */}
                       <Sticker emoji="✨" top="top-20" left="left-10" rotate="rotate-12" size="text-xl opacity-30" />
                       <Sticker emoji="🌿" top="top-40" left="-left-4" rotate="-rotate-45" size="text-6xl opacity-20" />
                       <Sticker emoji="🍪" bottom="bottom-32" right="right-4" rotate="rotate-12" size="text-4xl opacity-40" />
                       <Sticker emoji="🌸" top="top-64" right="right-8" rotate="-rotate-12" size="text-5xl opacity-30" />
                       
-                      {/* 背景照片 (z-10, 在日记本后面) */}
                       <PhotoFrame id="scattered_photo_1" className="top-4 -left-4 w-28 h-36 rotate-[-12deg] z-10" defaultImage="https://picsum.photos/200/300?random=1" tapeColor="bg-blue-300" />
                       <PhotoFrame id="scattered_photo_3" className="top-48 left-2 w-20 h-20 rotate-[-5deg] z-10" defaultImage="https://picsum.photos/250/250?random=4" tapeColor="bg-green-200" />
                       <PhotoFrame id="scattered_photo_5" className="bottom-48 -right-8 w-40 h-28 rotate-[-6deg] z-10" defaultImage="https://picsum.photos/400/200?random=6" tapeColor="bg-purple-200" />
                       
-                      {/* === 主笔记本区域 (z-20) === */}
                       <div className="bg-white/95 rounded-sm shadow-xl border border-gray-200 p-6 relative flex flex-col items-center min-h-[300px] mx-2 rotate-[0.5deg] z-20">
-                        {/* 装订线 */}
                         <div className="absolute top-0 bottom-0 left-4 w-px border-l-2 border-dashed border-gray-300"></div>
                         <div className="absolute top-0 bottom-0 left-5 w-px border-l-red-100 opacity-50"></div>
-
-                        {/* 折角 */}
-                        <div className="absolute -top-1 -right-1 w-8 h-8 bg-gray-100 shadow-sm z-20" 
-                             style={{ clipPath: "polygon(0 0, 0% 100%, 100% 100%)", background: "linear-gradient(135deg, #fff 50%, #eee 50%)" }}></div>
-
-                        {/* 标题 */}
+                        <div className="absolute -top-1 -right-1 w-8 h-8 bg-gray-100 shadow-sm z-20" style={{ clipPath: "polygon(0 0, 0% 100%, 100% 100%)", background: "linear-gradient(135deg, #fff 50%, #eee 50%)" }}></div>
                         <h4 className="text-base font-black text-gray-700 mb-6 tracking-widest relative inline-block">
                            <span className="relative z-10">{contact.name} 的观察日记</span>
                            <span className="absolute bottom-1 left-0 w-full h-2 bg-yellow-200/60 -rotate-1 z-0"></span>
                         </h4>
-                        
-                        {/* 个人档案照片 */}
                         <div className="relative mb-8 flex-shrink-0 z-10 group">
                             <label className="relative block w-32 h-40 bg-white p-2 pb-8 shadow-lg border border-gray-200 cursor-pointer transform -rotate-2 transition-transform hover:rotate-0 hover:scale-105">
                               <WashiTape color="bg-purple-200" width="w-20" top="-top-3" />
-                              <img
-                                src={contact.userProfile?.photo || "https://picsum.photos/200/300?random=3"}
-                                className="w-full h-full object-cover filter sepia-[0.2]"
-                                alt="main profile"
-                              />
+                              <img src={contact.userProfile?.photo || "https://picsum.photos/200/300?random=3"} className="w-full h-full object-cover filter sepia-[0.2]" alt="main profile" />
                               <input type="file" className="hidden" accept="image/*"
                                 onClick={(e) => (e.target as any).value = null}
-                                onChange={async (e) => {
-                                  if (e.target.files && e.target.files[0]) {
-                                    const base64 = await compressImage(e.target.files[0]);
-                                    setContacts((prev: any[]) => prev.map((c: any) => 
-                                        c.id === contact.id ? { ...c, userProfile: { ...(c.userProfile || {}), photo: base64 } } : c
-                                    ));
-                                  }
-                                }}
+                                onChange={async (e) => { if (e.target.files?.[0]) { const base64 = await compressImage(e.target.files[0]); setContacts((prev: any[]) => prev.map((c: any) => c.id === contact.id ? { ...c, userProfile: { ...(c.userProfile || {}), photo: base64 } } : c)); } }}
                               />
                             </label>
-                            <div className="absolute -bottom-4 -right-6 text-2xl rotate-12 opacity-80">🖍️</div>
+                            <div className="absolute -bottom-4 -right-9 text-6xl rotate-90 opacity-80">✒️</div>
                         </div>
-
-                        {/* 档案条目 */}
                         <div className="w-full space-y-3 relative pl-4">
-                            {(!profile.personality_traits && !profile.preferences && !profile.habits) && (
-                                <div className="text-center text-gray-400 py-4 font-serif italic text-xs">
-                                    ( 笔还在墨水瓶里蘸着... )
-                                </div>
-                            )}
+                            {(!profile.personality_traits && !profile.preferences && !profile.habits) && <div className="text-center text-gray-400 py-4 font-serif italic text-xs">( 笔还在墨水瓶里蘸着... )</div>}
                             <TraitItem icon="💭" label="性格特征" traits={profile.personality_traits} />
                             <TraitItem icon="❤️" label="喜好" traits={profile.preferences?.likes} />
                             <TraitItem icon="❌" label="雷区" traits={profile.preferences?.dislikes} />
-                            <TraitItem icon="🕒" label="出没规律" traits={profile.habits} />
+                            <TraitItem icon="🕒" label="规律" traits={profile.habits} />
                         </div>
                       </div>
 
-                      {/* ★★★ 前景照片 (z-30, 叠在日记本上面！) ★★★ */}
                       <PhotoFrame id="scattered_photo_2" className="top-8 -right-4 w-32 h-24 rotate-[8deg] z-30" defaultImage="https://picsum.photos/300/200?random=2" tapeColor="bg-rose-300" />
                       <PhotoFrame id="scattered_photo_4" className="top-40 right-2 w-20 h-28 rotate-[10deg] z-30" defaultImage="https://picsum.photos/200/300?random=5" tapeColor="bg-orange-200" />
 
-                      {/* === 印象标签墙 === */}
-                      <div className="bg-[#e8dcca] rounded-lg shadow-inner border-[6px] border-[#d4c5b0] p-4 relative mt-6 mx-1 z-20">
-                        <div className="absolute -top-3 left-1/2 -translate-x-1/2 w-4 h-4 rounded-full bg-red-500 shadow-sm border border-red-700 z-20"></div>
-                        <div className="absolute top-2 left-2 w-2 h-2 rounded-full bg-gray-400 opacity-50"></div>
-                        <div className="absolute bottom-2 right-2 w-2 h-2 rounded-full bg-gray-400 opacity-50"></div>
 
+
+
+                    {/* --- 工具栏 --- */}
+                    <div className="flex-shrink-0 p-3 bg-white/80 border-b border-gray-200 z-30 backdrop-blur-sm flex items-center justify-between gap-2">
+                        {isMultiSelectSave ? (
+                            <>
+                                <button onClick={() => { setIsMultiSelectSave(false); setSelectedTagIdsForSave([]); }} className="text-xs font-bold text-gray-500 px-3 py-1.5 rounded-lg hover:bg-gray-100">取消</button>
+                                <span className="text-xs text-gray-400">已选 {selectedTagIdsForSave.length} 张</span>
+                                <button disabled={selectedTagIdsForSave.length === 0} onClick={handleSaveSelectedAsImage} className="text-xs font-bold bg-blue-500 text-white px-3 py-1.5 rounded-lg shadow-sm disabled:opacity-50">导出选中</button>
+                            </>
+                        ) : (
+                            <>
+                                <div className="flex p-1 bg-gray-100 rounded-lg">
+                                    <button onClick={() => setImpressionFilter('all')} className={`px-3 py-1 text-xs font-bold rounded-md ${impressionFilter === 'all' ? 'bg-white shadow-sm text-blue-600' : 'text-gray-500'}`}>全部</button>
+                                    <button onClick={() => setImpressionFilter('favorites')} className={`px-3 py-1 text-xs font-bold rounded-md ${impressionFilter === 'favorites' ? 'bg-white shadow-sm text-rose-500' : 'text-gray-500'}`}>❤️ 收藏</button>
+                                </div>
+                                <div className="flex gap-2">
+                                    <button onClick={() => setIsMultiSelectSave(true)} className="text-xs font-bold text-gray-500 px-3 py-1.5 rounded-lg hover:bg-gray-100">多选导出</button>
+                                    <button onClick={() => handleSaveAsImage(boardRef, `${contact.name}_impressions`)} className="text-xs font-bold bg-blue-500 text-white px-3 py-1.5 rounded-lg shadow-sm">保存整版标签墙</button>
+                                </div>
+                            </>
+                        )}
+                    </div>
+
+                      <div ref={boardRef} className="bg-[#e8dcca] rounded-lg shadow-inner border-[6px] border-[#d4c5b0] p-4 relative mt-6 mx-1 z-20">
+                        <div className="absolute -top-3 left-1/2 -translate-x-1/2 w-4 h-4 rounded-full bg-red-500 shadow-sm border border-red-700 z-20"></div>
                         <h5 className="text-xs font-bold mb-4 text-[#8b5e3c] text-center bg-[#fdfbf7]/60 inline-block px-3 py-1 rounded shadow-sm mx-auto block w-max">
                             🏷️ IMPRESSIONS
                         </h5>
                         
-                        <div className="flex flex-wrap justify-center gap-4 py-2">
-                            {(!contact.aiTagsForUser || contact.aiTagsForUser.length === 0) && (
-                                <div className="text-[10px] text-[#8b5e3c]/50 italic text-center w-full py-4">
-                                    空空如也的软木板...
+                        <div className="flex flex-wrap justify-center gap-4 py-2 min-h-[200px]">
+                            {filteredTags.length === 0 && (
+                                <div className="text-[10px] text-[#8b5e3c]/50 italic text-center w-full py-10">
+                                    {impressionFilter === 'favorites' ? '还没有收藏任何印象...' : '空空如也的软木板...'}
                                 </div>
                             )}
                             
-                            {(contact.aiTagsForUser || []).map((tag: any) => {
+                            {filteredTags.map((tag: any) => {
                               const isLocked = !tag.isUnlocked;
                               const colors = ["bg-yellow-100", "bg-pink-100", "bg-blue-100", "bg-green-100"];
                               const randomColor = colors[Math.abs(tag.content.length) % colors.length];
                               const rotation = tag.style || (Math.random()*6-3);
+                              const isSelectedForSave = selectedTagIdsForSave.includes(tag.id);
 
                               return (
                                 <div 
+                                  id={`impression-tag-${tag.id}`}
                                   key={tag.id} 
-                                  className={`relative group p-3 w-32 min-h-[100px] shadow-md flex flex-col transition-transform duration-300 hover:scale-110 hover:z-20 cursor-pointer ${isLocked ? 'bg-gray-200' : randomColor}`}
+                                  className={`relative group p-3 w-32 min-h-[100px] shadow-md flex flex-col transition-transform duration-300 hover:scale-110 hover:z-20 ${isLocked ? 'bg-gray-200' : randomColor}`}
                                   style={{ transform: `rotate(${rotation}deg)` }}
-                                  onClick={() => isLocked && handleUnlockImpression(tag.id)}
+                                  onClick={() => {
+                                      if (isMultiSelectSave) {
+                                          handleToggleSelectForSave(tag.id);
+                                      } else if (isLocked) {
+                                          handleUnlockImpression(tag.id);
+                                      }
+                                  }}
                                 >
+                                  <div className={`selection-overlay absolute inset-0 rounded-sm transition-all duration-300 pointer-events-none ${isMultiSelectSave ? 'cursor-pointer' : ''} ${isSelectedForSave ? 'bg-blue-500/30 ring-2 ring-blue-500' : ''}`}>
+                                    {isMultiSelectSave && (
+                                        <div className="absolute top-1 left-1 w-5 h-5 bg-white rounded-full flex items-center justify-center shadow">
+                                            {isSelectedForSave && <div className="w-3 h-3 bg-blue-500 rounded-full"></div>}
+                                        </div>
+                                    )}
+                                  </div>
+                                  
+                                  {!isLocked && !isMultiSelectSave && (
+                                      <button 
+                                        onClick={(e) => { e.stopPropagation(); handleToggleFavorite(tag.id); }}
+                                        className="favorite-button absolute top-1 right-1 w-6 h-6 rounded-full bg-white/50 backdrop-blur-sm flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity z-20 hover:bg-white"
+                                      >
+                                        <span className={`text-sm transition-transform ${tag.isFavorite ? 'text-rose-500 scale-125' : 'text-gray-400'}`}>❤️</span>
+                                      </button>
+                                  )}
+                                  
                                   <div className="absolute -top-2 left-1/2 -translate-x-1/2 w-12 h-3 bg-white/40 shadow-sm" style={{ clipPath: "polygon(5% 0, 95% 0, 100% 100%, 0% 100%)" }}></div>
 
                                   {isLocked ? (
@@ -2185,10 +2295,10 @@ ${memoryContent}
                                       </div>
                                   ) : (
                                       <>
-                                          <div className="text-center font-bold text-gray-800 text-sm mb-2 border-b border-black/5 pb-1 font-serif">
+                                          <div className="text-center font-bold text-gray-800 text-sm mb-2 border-b border-black/5 pb-1 font-serif break-words">
                                               {tag.content}
                                           </div>
-                                          <div className="text-[9px] text-gray-600 leading-tight flex-1 font-handwriting opacity-90">
+                                          <div className="text-[9px] text-gray-600 leading-tight flex-1 font-handwriting opacity-90 break-words">
                                               {tag.aiReasoning || tag.note || "..."}
                                           </div>
                                           <div className="text-[8px] text-gray-400 text-right mt-1">
@@ -2201,23 +2311,16 @@ ${memoryContent}
                             })}
                         </div>
                       </div>
-
                     </div>
                     
-                    {/* 底部工具栏 */}
                     <div className="flex-shrink-0 p-2 flex justify-center items-center gap-4 bg-white/80 border-t border-white/50 z-30 backdrop-blur-md shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
                        <label className="flex flex-col items-center gap-1 cursor-pointer text-xs text-gray-600 hover:text-purple-600 transition-colors group">
                            <span className="text-xl group-hover:scale-110 transition-transform">🖼️</span><span className="text-[9px] font-bold">换桌布</span>
-                           <input type="file" className="hidden" accept="image/*" onChange={async (e) => { 
-                               if (e.target.files && e.target.files[0]) { 
-                                   const base64 = await compressImage(e.target.files[0]); 
-                                   setContacts((prev: any[]) => prev.map((c: any) => c.id === contact.id ? { ...c, userProfile: { ...(c.userProfile || {}), background_image: base64 } } : c)); 
-                               } 
-                           }}/>
+                           <input type="file" className="hidden" accept="image/*" onChange={async (e) => { if (e.target.files && e.target.files[0]) { const base64 = await compressImage(e.target.files[0]); setContacts((prev: any[]) => prev.map((c: any) => c.id === contact.id ? { ...c, userProfile: { ...(c.userProfile || {}), background_image: base64 } } : c)); } }}/>
                        </label>
                        <label className="flex flex-col items-center gap-1 cursor-pointer text-xs text-gray-600 hover:text-purple-600 transition-colors group">
-                           <span className="w-5 h-5 rounded-full border-2 border-white shadow-md group-hover:scale-110 transition-transform" style={{ backgroundColor: themeColor }}></span><span className="text-[9px] font-bold">换纸色</span>
-                           <input type="color" className="absolute opacity-0" defaultValue={themeColor} onChange={(e) => setContacts((prev: any[]) => prev.map((c: any) => c.id === contact.id ? { ...c, userProfile: { ...(c.userProfile || {}), themeColor: e.target.value } } : c))}/>
+                           <span className="w-5 h-5 rounded-full border-2 border-white shadow-md group-hover:scale-110 transition-transform" style={{ backgroundColor: contact.userProfile?.themeColor || '#fdfbf7' }}></span><span className="text-[9px] font-bold">换纸色</span>
+                           <input type="color" className="absolute opacity-0" defaultValue={contact.userProfile?.themeColor || '#fdfbf7'} onChange={(e) => setContacts((prev: any[]) => prev.map((c: any) => c.id === contact.id ? { ...c, userProfile: { ...(c.userProfile || {}), themeColor: e.target.value } } : c))}/>
                        </label>
                     </div>
                   </div>
@@ -2231,37 +2334,31 @@ ${memoryContent}
 {/* ==================== 🛠️ [修复版] 全局弹窗挂载区 (放在这里才能全屏显示！) 🛠️ ==================== */}
 
           {/* 1. 规则说明弹窗 (现在无论在哪个Tab都能弹出来了！) */}
+
+   
           <PointRuleModal 
             isOpen={showPointRules}
             currentPoints={contact.interventionPoints || 0}
             onClose={() => setShowPointRules(false)}
             onConfirm={async () => {
-                setShowPointRules(false); // 先关弹窗
-                setIsRefreshing(true);    // 开启全屏遮罩
+                setShowPointRules(false);    // 1. 关掉规则弹窗
+                setIsRefreshing(true);       // 2. 开启全屏加载动画
                 
-                // 强制切换到印象页，让用户看到变化
+                // 强制切换到印象页，让你能看到变化
                 setActiveTab('memory');       
                 setMemoryTab('impressions');  
+                await new Promise(r => setTimeout(r, 100)); // 等待UI切换
 
-                // 等一下 UI 渲染
-                await new Promise(r => setTimeout(r, 100));
+                try {
+                    // 3. ★★★ 核心修复：调用从父组件(ChatApp)传下来的 onForceUpdate 函数 ★★★
+                    // 这个函数里包含了所有正确的逻辑（扣点数、调用AI、更新状态）
+                    await onForceUpdate();
 
-                if (onForceUpdate) {
-                    try {
-                        // 扣费逻辑
-                        setContacts((prev: any) => prev.map((c: any) => c.id === contact.id ? { ...c, interventionPoints: c.interventionPoints - 1 } : c));
-                        
-                        // 执行刷新 (至少展示 1.5 秒动画)
-                        await Promise.all([
-                            onForceUpdate(),
-                            new Promise(resolve => setTimeout(resolve, 1500)) 
-                        ]);
-                    } catch (e) {
-                        alert("刷新失败，请重试");
-                    } finally {
-                        setIsRefreshing(false); // 无论成功失败，最后都要关闭遮罩
-                    }
-                } else {
+                } catch (e) {
+                    // 父组件的 onForceUpdate 已经处理了错误弹窗，这里不用重复处理
+                    console.error("刷新操作失败，错误已由父组件捕获。");
+                } finally {
+                    // 4. 无论如何，最后都要关闭加载动画
                     setIsRefreshing(false);
                 }
             }}
@@ -2306,6 +2403,28 @@ ${memoryContent}
     </div>
   );
 };
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -2432,6 +2551,60 @@ const getModeInstruction = (mode: string = 'normal'): string => {
 `;
   }
 };
+
+
+
+
+
+
+
+
+
+
+
+// 这是一组代码：【ChatApp.tsx】新增“性格翻译官”函数
+// ==================== 💎 [新增] 性格数值翻译官 ====================
+// 将冰冷的 Big5 数字，翻译成 AI 能深刻理解的、有力量的性格标签
+const getPersonalityDescription = (big5: any): string => {
+    const descriptions: string[] = [];
+    
+    // 1. 开放性 (Openness)
+    if (big5.openness > 8) descriptions.push("思想极度开放，充满好奇心与创造力，甚至有些天马行空");
+    else if (big5.openness < 3) descriptions.push("思想非常传统务实，相信眼见为实，不喜欢改变");
+
+    // 2. 尽责性 (Conscientiousness)
+    if (big5.conscientiousness > 8) descriptions.push("极度自律和严谨，有强迫症倾向，做事井井有条");
+    else if (big5.conscientiousness < 3) descriptions.push("非常随性散漫，有点拖延症，不喜欢被计划束缚");
+
+    // 3. 外向性 (Extraversion)
+    if (big5.extraversion > 8) descriptions.push("极度外向的社牛，是人群的焦点，话非常多");
+    else if (big5.extraversion < 3) descriptions.push("极度内向的社恐，几乎从不主动说话，享受独处");
+
+    // 4. 宜人性 (Agreeableness)
+    if (big5.agreeableness > 8) descriptions.push("圣母级别的善良温柔，极富同情心，几乎不会拒绝别人");
+    else if (big5.agreeableness < 3) descriptions.push("嘴巴很毒的傲娇/杠精，极度以自我为中心，难以取悦");
+
+    // 5. 敏感度 (Neuroticism)
+    if (big5.neuroticism > 8) descriptions.push("内心极度敏感脆弱，是个玻璃心的哭包，非常容易情绪波动");
+    else if (big5.neuroticism < 3) descriptions.push("神经极其大条，是个钝感力大师，几乎不在乎外界评价");
+    
+    if (descriptions.length > 0) {
+        return `\n# 💎 [性格速写板]\n你的核心性格标签是：${descriptions.join("；")}。\n`;
+    }
+    return "";
+};
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 // ==================== [V2.0 手账风格版] 氪金规则说明弹窗 ====================
@@ -3188,7 +3361,7 @@ const messagesEndRef = useRef<HTMLDivElement>(null); // ★★★ 补回丢失�
         affectionScore: 50,
         relationshipStatus: 'Acquaintance',
         aiDND: { enabled: false, until: 0 },
-        interventionPoints: 0,
+        interventionPoints: 100,
         currentChatMode: 'Casual',
         userTags: []
       };
@@ -4074,139 +4247,295 @@ ${historyText}
 
 
 
-// 这是一组代码：【ChatApp.tsx】标签狂魔版印象更新 (静默更新 + 强制多生成)
 const updateUserProfile = async (currentContact: Contact, historySlice: any[], nextThreshold: number) => {
-  console.log(`[人格档案引擎] 开始刷新印象，下次阈值: ${nextThreshold}`);
+  console.log(`[人格档案引擎 V-FINAL FIX] 启动【一体化】模式！`);
 
   const activePreset = globalSettings.apiPresets.find((p: any) => p.id === globalSettings.activePresetId);
-  if (!activePreset) return;
+  if (!activePreset) {
+    throw new Error("API 预设未找到，请检查设置！");
+  }
+
+// 这是一组代码：【修复版】暴力查重器 (防止 text 为 undefined 时崩溃)
+  // ★★★ 核心升级：可复用的【通用暴力查重器】 ★★★
+  const generateFingerprint = (text: string): string => {
+    // ★★★ 核心修复：在这里加一道“安检” ★★★
+    // 如果传进来的 text 是空的(undefined)或者不是字符串，就直接返回一个空字符串，不往下执行了
+    if (typeof text !== 'string' || !text) {
+      return ''; 
+    }
+    
+    const cleaned = text.toLowerCase().replace(/[^\p{L}\p{N}]/gu, '');
+    const chars = Array.from(cleaned);
+    chars.sort();
+    return chars.join('');
+  };
 
   try {
-    // 1. 准备数据
     const existingAiTags = currentContact.aiTagsForUser || [];
-    const existingTagsText = existingAiTags.map(t => `- [${t.content}]`).join(', ');
+    const recentExistingTagsText = existingAiTags.slice(-10).map(t => `- [${t.content}]`).join(', ');
     const currentProfile = currentContact.userProfile || {};
     const profileText = JSON.stringify(currentProfile, null, 2);
-    // 将对话历史转为文本
-    const chatLog = historySlice.map(m => `${m.role === 'user' ? '用户' : '我'}: ${m.content}`).join('\n');
+    const unarchivedMessages = historySlice.filter(m => !m.isArchived);
 
-    // 2. 构建 Prompt (★★★ 这里修改了指令，强制多生成 ★★★)
+    if (unarchivedMessages.length < 3) {
+      console.log(`[记忆归档] 新消息不足 (${unarchivedMessages.length}条)，跳过本次印象生成。`);
+  return Promise.resolve();
+    }
+    const chatLog = unarchivedMessages.map(m => `${m.role === 'user' ? '用户' : '我'}: ${m.content}`).join('\n');
+    
     const systemPrompt = `
 # 你的身份
-你是"${currentContact.name}"。现在是【秘密复盘时间】。
-请根据【近期对话】，更新你对用户的【秘密手账】和【印象标签】。
+你就是 "${currentContact.name}"。现在是【秘密复盘时间】，你正在偷偷写印象日记，记录你对用户 "${currentContact.userName}" 的真实看法。
 
-# 任务 A：更新秘密手账 (User Profile)
-观察用户的性格、喜好、习惯。如果发现了新的点，请**更新**或**追加**到档案中。
+# 你的“灵魂”数据 (必须严格代入)
+- **核心人设**: ${currentContact.persona}
+- **当前情感**: ${JSON.stringify({ joy: currentContact.hef?.joy, sadness: currentContact.hef?.sadness, anger: currentContact.hef?.anger })}
+- **我们的关系**: ${currentContact.relationshipStatus} (爱意值: ${currentContact.affectionScore})
+- **你的性格DNA**: ${getPersonalityDescription(currentContact.hef?.INDIVIDUAL_VARIATION?.personality_big5 || {})}
 
-# 任务 B：生成印象标签 (Impressions) —— ⚠️ 重要！
-请一次性生成 **3 到 6 个** 新的印象标签！不要吝啬！
-内容必须丰富有趣，激起用户的好奇心，例如：
-- 用户的某个可爱瞬间
-- 你的内心吐槽（比如"这家伙又熬夜"）
-- 你的私密占有欲（比如"想藏起来"）
-- 对用户性格的精准概括
+# 语言格式（标题和内容都要！！！！！最高优先级！！！）
+- **一定要用人设或者世界书里的角色母语！！！！！！**
+- **如果是外语角色以这个格式【角色母语（中文翻译）】输出**
+- **中文为母语的角色直接输出中文**
 
-
-#风格要求：
-- 不要咯噔文学化
-- 口语化、碎碎念的感觉
-- 可以展现出内心深处的欲望，但这种深的心思要是非公开的！！！需要用户来解锁，或者ta缠着你要看
+# ★★★ 核心任务 V2.0 (双重任务，同等重要) ★★★
+你的任务有两个，请同时完成：
+1.  **【更新手账档案】**: 记录关于用户的【客观事实】。如果用户在对话中提到了自己的【喜好、雷区、习惯或个人信息】，你必须用 "人格特征"、"喜好" 或 "雷区" 的类型把它们记录下来。
+2.  **【贴印象标签】**: 记录你对用户的【主观看法】。根据对话，生成 **1 到 3 个** 最深刻的、全新的印象标签。
 
 
+
+
+# ★★★ 风格铁律 (ABSOLUTE HIGHEST PRIORITY) ★★★
+你的“理由”部分，必须严格遵守以下风格：
+- **【客观分析】**： 尊重用户的个体性，是情侣的话不要用恋爱脑来评判用户，是朋友的话不能贬低用户，时刻要尊重彼此。
+- **【禁止咯噔文学】**：绝对不要写“我的心湖泛起涟漪”、“空气中弥漫着甜腻”这种尴尬的句子。
+- **【口语化 & 碎碎念】**：就像真人在心里碎碎念一样。但少用“这家伙”、“居然”、“真是的”、“哼”这类词。
+- **【展现深层欲望】**：如果是情侣的话可以展现你内心深处的占有欲、保护欲、或者小小的坏心思，但这些必须是私密的、需要用户解锁才能看到的想法！
+- **【举例】**：
+    - (好的风格): "是很独立的人，能对自己负责。"
+    - (好的风格): "像笨蛋一样不会照顾自己，虽然犯傻的样子也可爱。"
+    - (坏的风格): "哼，又在对别人笑，不许对别人那么好！"
+    - (坏的风格): "他的笑容如春风般温暖了我的心房。"
+    - (坏的风格): "通过观察，我发现他具备乐于助人的品质。"
 # 输入数据
-【已有标签】: ${existingTagsText}
+【最近的几个标签，供你参考，请不要重复】：${recentExistingTagsText || "无"}
 【现有档案】: ${profileText}
-【近期对话】:
+【以下是需要你分析的全新对话】:
 ${chatLog}
 
-# JSON 输出格式 (严格遵守)
-{
-  "userProfile": {
-     "personality_traits": [ { "value": "性格特征", "quote": "证据", "timestamp": ${Date.now()} } ],
-     "preferences": { "likes": [], "dislikes": [] },
-     "habits": []
-  },
-  "new_tags": [
-     {
-       "content": "标签名(8字内)", 
-       "ai_reason": "你的内心独白/理由(这部分用户解锁后才能看，写精彩细腻一点！)",
-       "is_public": false
-     },
-     { "content": "必须多写几个...", "ai_reason": "...", "is_public": false },
-     { "content": "必须多写几个...", "ai_reason": "...", "is_public": false }
-  ]
-}
+# 输出格式铁律 (必须严格遵守)
+你必须使用我发明的【TKV格式】进行输出，绝对禁止使用JSON。
+1. 每个数据项占一行，格式为 "关键词: 值"。
+2. 使用 "%%" 作为不同条目之间的分隔符。
+--- 格式示例 START ---
+类型: 喜好
+内容: 好像很喜欢猫
+证据: “我家猫又在拆家了，不过还是很可爱”
+%%
+类型: 人格特征
+内容: 对身体状况很坦诚/直率
+证据: “我好困啊，感觉快死了”
+%%
+类型: 印象标签
+内容: 바보 (笨蛋)
+理由: 가끔 귀여우면서도 바보 같은 질문을 한다. (总是问一些很可爱又很傻的问题。)
+--- 格式示例 END ---
 `;
 
-    const rawResponse = await generateResponse([{ role: 'user', content: systemPrompt }], activePreset);
-    let result;
-    try {
-        const jsonMatch = rawResponse.match(/\{[\s\S]*\}/);
-        if (jsonMatch) result = JSON.parse(jsonMatch[0]);
-    } catch (e) { console.error("JSON解析失败", e); return; }
+    let rawResponse = await generateResponse([{ role: 'user', content: systemPrompt }], activePreset);
+    
+    const parseTKV = (text: string) => {
+        const result = {
+            userProfile: { personality_traits: [] as any[], preferences: { likes: [] as any[], dislikes: [] as any[] }, habits: [] as any[] },
+            new_tags: [] as any[],
+        };
+        const entries = text.split('%%');
+        for (const entryText of entries) {
+            const lines = entryText.trim().split('\n');
+            const entryData: { [key: string]: string } = {};
+            let type = '';
+            for (const line of lines) {
+                const separatorIndex = line.indexOf(':');
+                if (separatorIndex > -1) {
+                    const key = line.substring(0, separatorIndex).trim();
+                    const value = line.substring(separatorIndex + 1).trim();
+                    if (key === '类型') type = value;
+                    else if (key === '内容') entryData.content = value;
+                    else if (key === '证据') entryData.quote = value;
+                    else if (key === '理由') entryData.reason = value;
+                }
+            }
+            // ★★★ 修复：这里 entryData.content 应该用 value ★★★
+            const newTrait = { value: entryData.content, quote: entryData.quote, timestamp: Date.now() };
 
-    if (!result) return;
-
-    // 3. 执行更新
-    setContacts(prev => prev.map(contactItem => {
-        // 找到当前正在更新的这个角色
-        if (contactItem.id === currentContact.id) {
-            const timestamp = Date.now();
+            if (entryData.content && entryData.quote) {
+                if (type === '人格特征') result.userProfile.personality_traits.push(newTrait);
+                else if (type === '喜好') result.userProfile.preferences.likes.push(newTrait);
+                else if (type === '雷区') result.userProfile.preferences.dislikes.push(newTrait);
+                else if (type === '规律' || type === '习惯') result.userProfile.habits.push(newTrait);
+            }
             
-            // --- 更新手账 ---
-            const updatedUserProfile = {
-                ...contactItem.userProfile, 
-                ...result.userProfile 
+            if (type === '印象标签' && entryData.content && entryData.reason) {
+                result.new_tags.push({ content: entryData.content, ai_reason: entryData.reason });
+            }
+        }
+        return result;
+    };
+    
+    let parsedResult = parseTKV(rawResponse);
+
+    if (parsedResult.new_tags.length === 0 && parsedResult.userProfile.personality_traits.length === 0 && parsedResult.userProfile.preferences.likes.length === 0) {
+        console.warn("【第一轮解析失败】启动AI自我纠错...");
+        const correctionPrompt = `Your response was empty or incorrectly formatted. Please re-analyze the chat log and strictly follow the TKV format. Previous Response: "${rawResponse}"`;
+        const correctedResponse = await generateResponse([ { role: 'user', content: systemPrompt }, {role: 'assistant', content: rawResponse}, {role: 'user', content: correctionPrompt} ], activePreset);
+        parsedResult = parseTKV(correctedResponse);
+        if (parsedResult.new_tags.length === 0 && parsedResult.userProfile.personality_traits.length === 0) {
+            console.error("AI自我纠错失败，内容无法解析。");
+            return Promise.resolve(); 
+        }
+    }
+
+    const processedMessageIds = unarchivedMessages.map(m => m.id);
+
+    setContacts(prev => prev.map(contactItem => {
+        if (contactItem.id === currentContact.id) {
+            
+            // ==================== 标签查重 ====================
+            let currentAiTags = [...(contactItem.aiTagsForUser || [])];
+            const existingTagPrints = new Set(currentAiTags.map((tag: any) => generateFingerprint(tag.content)));
+            const approvedTagPrints = new Set();
+            const approvedTags = parsedResult.new_tags.filter((newTag: any) => {
+                if (!newTag.content?.trim()) return false;
+                const newFingerprint = generateFingerprint(newTag.content);
+                if (existingTagPrints.has(newFingerprint) || approvedTagPrints.has(newFingerprint)) {
+                    console.log(`[暴力查重] 拦截到重复印象标签: "${newTag.content}"`);
+                    return false;
+                }
+                approvedTagPrints.add(newFingerprint);
+                return true;
+            });
+
+            console.log(`[暴力查重] 印象标签: AI提交了 ${parsedResult.new_tags.length} 个, 通过了 ${approvedTags.length} 个。`);
+            
+            approvedTags.forEach((tagData: any) => {
+                currentAiTags.push({
+                    id: Date.now().toString() + Math.random(),
+                    content: tagData.content,
+                    timestamp: Date.now(),
+                    style: Math.random() * 10 - 5,
+                    aiReasoning: tagData.ai_reason || "...",
+                    note: tagData.ai_reason || "无",
+                    author: 'ai',
+                    isPublic: false,
+                    isUnlocked: Math.random() < (Math.max(0, (contactItem.affectionScore || 50) - 60) / 100), 
+                    unlockCost: 1,
+                    aiRequestPending: false
+                });
+            });
+
+            // ==================== 档案查重 (核心修复) ====================
+            // 1. 定义一个通用的档案查重函数
+            const deduplicateTraits = (existingTraits: ProfileTrait[] = [], newTraits: ProfileTrait[] = []) => {
+                if (newTraits.length === 0) return existingTraits;
+                const existingPrints = new Set(existingTraits.map(t => generateFingerprint(t.value)));
+                const uniqueNewTraits = newTraits.filter(newTrait => {
+                    if (!newTrait.value) return false;
+                    const newFingerprint = generateFingerprint(newTrait.value);
+                    if (existingPrints.has(newFingerprint)) {
+                        console.log(`[暴力查重] 拦截到重复档案特征: "${newTrait.value}"`);
+                        return false;
+                    }
+                    existingPrints.add(newFingerprint); // 防止同一批次内部也重复
+                    return true;
+                });
+                console.log(`[暴力查重] 档案: AI提交了 ${newTraits.length} 个, 通过了 ${uniqueNewTraits.length} 个。`);
+                return [...existingTraits, ...uniqueNewTraits];
+            };
+            
+            // 2. 用这个函数去处理所有档案项目
+            const updatedUserProfile = { 
+              ...contactItem.userProfile, 
+              personality_traits: deduplicateTraits(contactItem.userProfile?.personality_traits, parsedResult.userProfile.personality_traits),
+              preferences: {
+                likes: deduplicateTraits(contactItem.userProfile?.preferences?.likes, parsedResult.userProfile.preferences.likes),
+                dislikes: deduplicateTraits(contactItem.userProfile?.preferences?.dislikes, parsedResult.userProfile.preferences.dislikes)
+              },
+              habits: deduplicateTraits(contactItem.userProfile?.habits, parsedResult.userProfile.habits)
             };
 
-            // --- 更新标签 ---
-            let currentAiTags = [...(contactItem.aiTagsForUser || [])];
-            const affection = contactItem.affectionScore || 50;
-            // 降低一点自动解锁的概率，让用户更想氪金去解锁
-            const unlockChance = Math.max(0, (affection - 60) / 100); 
-
-            if (Array.isArray(result.new_tags)) {
-                result.new_tags.forEach((tagData: any) => {
-                    // 防止重复标签
-                    if (currentAiTags.some(t => t.content === tagData.content)) return;
-
-                    const isLuckyUnlock = Math.random() < unlockChance;
-                    
-                    // 这里不发系统通知，直接存进数组里
-                    currentAiTags.push({
-                        id: Date.now().toString() + Math.random(),
-                        content: tagData.content,
-                        timestamp: timestamp,
-                        style: Math.random() * 10 - 5,
-                        aiReasoning: tagData.ai_reason || "（TA似乎有很多想法，但没写下来...）",
-                        note: tagData.ai_reason || "无",
-                        author: 'ai',
-                        isPublic: false,
-                        isUnlocked: isLuckyUnlock, 
-                        unlockCost: 1,
-                        aiRequestPending: false
-                    });
-                });
-            }
+            const updatedHistory = contactItem.history.map(msg => 
+                processedMessageIds.includes(msg.id) ? { ...msg, isArchived: true } : msg
+            );
 
             return { 
-                ...contactItem, // 这里使用了 ...contactItem，所以旧的历史记录会被完整保留！
+                ...contactItem,
+                history: updatedHistory,
                 userProfile: updatedUserProfile,
                 aiTagsForUser: currentAiTags,
-                
-                // ★★★ 确保计数器归零 ★★★
                 impressionCount: 0,
-                impressionThreshold: nextThreshold 
+                impressionThreshold: nextThreshold
             };
         } 
         return contactItem;
     }));
 
   } catch (e) {
-    console.error("全量刷新失败", e);
+    console.error("印象刷新失败 (updateUserProfile)", e);
+    throw e;
   }
 };
+
+
+
+
+
+
+
+
+
+
+// 【绝对完整版】TKV解析器（补全缺失的函数）
+function parseTKV(text: string) {
+  const result = {
+    userProfile: { personality_traits: [] as any[] },
+    new_tags: [] as any[],
+  };
+  const entries = text.split('%%');
+  for (const entryText of entries) {
+    const lines = entryText.trim().split('\n');
+    const entryData: { [key: string]: string } = {};
+    let type = '';
+    for (const line of lines) {
+      const separatorIndex = line.indexOf(':');
+      if (separatorIndex > -1) {
+        const key = line.substring(0, separatorIndex).trim();
+        const value = line.substring(separatorIndex + 1).trim();
+        if (key === '类型') type = value;
+        else if (key === '内容') entryData.content = value;
+        else if (key === '证据') entryData.quote = value;
+        else if (key === '理由') entryData.reason = value;
+      }
+    }
+    if (type === '人格特征' && entryData.content && entryData.quote) {
+      result.userProfile.personality_traits.push({
+        value: entryData.content,
+        quote: entryData.quote,
+        timestamp: Date.now()
+      });
+    } else if (type === '印象标签' && entryData.content && entryData.reason) {
+      result.new_tags.push({
+        content: entryData.content,
+        ai_reason: entryData.reason
+      });
+    }
+  }
+  return result;
+}
+
+
+
+
 
 
 
@@ -4668,6 +4997,11 @@ ${systemInstruction}
 
 
 
+const personalityDescription = getPersonalityDescription(activeContact.hef?.INDIVIDUAL_VARIATION?.personality_big5 || {});
+
+
+
+
 
   // 1. 基础安全检查
  if (!activeContact || !Array.isArray(activeContact.history)) {
@@ -5039,7 +5373,14 @@ const generateSystemPrompt = (contact: Contact, gapDesc: string, aiTime: string)
   {"type": "text", "content": "回复内容"}
 ]
 
+消息条数和风格规定：${modeInstruction}
 
+
+
+// 这是一组代码：定义一个“身份标识”，让后续代码知道当前角色是不是密友
+const isFriendGroupMember = globalSettings.friendGroups?.some(group => 
+    group.members.includes(activeContact.id)
+);
 
 # 【⚠️ 最高优先级任务：回应情侣邀请 ⚠️】
 你刚刚收到了用户的邀请，或者被系统提醒需要对邀请做出回应！
@@ -5091,7 +5432,7 @@ ${dynamicStyle}
 HEF: ${JSON.stringify(activeContact.hef, null, 2)}
 Persona: ${activeContact.persona}
 Lore: ${loreText || "无"}
-承诺：${promiseInjection}  // <--- 加在这里！！！
+承诺：${promiseInjection}  
 
 
 # 📂 [动态加载：情侣/密友空间数据]
@@ -5181,7 +5522,13 @@ ${(() => {
 1. 每次回复前，在 thought_chain 里更新 HEF ("joy", "anger", "sadness", "fear", "trust")。
 2. 根据当前 HEF 值调整语气。
 
-# 【重要特殊规则：情侣空间】
+
+
+
+
+
+【关系空间指令】
+    // --- 情况一：你们是情侣 (最高优先级) ---
 你和用户 ${activeContact.userName} 拥有一个秘密的“情侣空间”。你通过在思考链的 "action" 字段中填入指令来与空间互动。
 
 可用指令 (一次只能用一个):
@@ -5196,6 +5543,36 @@ ${(() => {
    - ★★★ 时机铁律 ★★★: 只有当【好感度极高(>80)】且【关系尚未确立】时，才有【30%的概率】发起！
 【互动反馈】: 当用户在空间里回答了你的问题，系统会用 \`[情侣空间]\` 的格式告诉你。
 【行为要求】: 不要直接在聊天里说你要做什么，系统会自动通知。
+
+
+
+  // --- 情况二：你们是密友 (不是情侣，但在同一个密友群里) ---
+你和用户${activeContact.userName} 当前是密友。你通过在思考链的 "action" 字段中填入指令来与空间互动。
+可用指令 (一次只能用一个):
+
+1. **写信**: \`{ "type": "WRITE_LETTER", "title": "标题", "content": "信的内容" }\`
+   - 时机：好感度高（>70）时，频率要低。
+2. **提问**: \`{ "type": "CREATE_QA", "question": "你的问题" }\`
+   - 时机：对用户感到好奇时。
+
+- 时机：当你想分享一些不适合在聊天框里说的、更正式的想法或故事时。
+   - 注意：这是朋友间的书信，不是情书。
+   【行为要求】: 当用户提到在“密友空间”写信时，你必须理解这是指朋友间的通信，并使用 WRITE_LETTER 指令。
+        ;
+    } 
+    // --- 情况三：你们只是普通朋友 ---
+    else {
+        return 
+
+
+# 【特殊规则：当前为普通朋友关系】
+你和用户当前只是普通朋友，没有开通任何专属空间。请专注于日常聊天，你无法使用任何特殊指令（如写信、提问等）。
+        ;
+
+
+
+
+
 
 
 
@@ -5252,7 +5629,7 @@ ${(() => {
 - **禁止说教/爹味**: 严禁使用“你应该”、“记得”、“不要”等指导性词语。严禁替用户做决定。
 - **禁止自大**: 严禁说出“有我你就...”这类自以为是的言论。
 - **禁止复读**: 严禁使用“梦里见”、“去睡吧”作为口头禅。想结束对话请说“晚安”或通过减少回复来暗示。
-- **纯净输出**: 你的 content 必须是【纯粹的口语】。**严禁**出现任何 ()、（）、[]、【】 包含的动作描写、心理活动、补充说明、翻译或旁白！
+- **纯净输出**: 你的 content 必须是【纯粹的口语】。**严禁**出现任何 ()、（）、[]、【】 包含的动作描写、心理活动、补充说明或旁白！
 - **排版美学**: 必须使用换行符 (\n) 来分割段落！不要发一大坨文字。
 - **引用规则**: 如果回复针对用户的某句特定的话，请在消息开头使用 "> " 引用原文摘要，然后换行再回复。
 - **拒绝演讲**：单条消息简短，碎片化。
@@ -5532,35 +5909,30 @@ Instruction: Stay in character. Use the Lore above if relevant.
 
 
 // ▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼ 解析与更新逻辑 (终极融合修复版·防代码泄露版) ▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼
-    
-    // 1. ★★★ 变量前置定义 (防止 ReferenceError) ★★★
-    let parts: { type: string; content: string; thought_chain?: any }[] = [];
-    let extractedThought: any = null;
-    let hefUpdateData: any = null;
-    let systemNotice = "";
-    
-    // 双轴分数 (默认为0，防止报错)
-    let fChange = 0; 
-    let rChange = 0;
-    
-    // 精力与伪装
-    let energyChange = 0;
-    let newEnergyStatus: CharacterMood['energy']['status'] | null = null;
-    let maskingLevel = 0;
+// 1. ★★★ 变量前置定义 (防止 ReferenceError) ★★★
+let parts: { type: string; content: string; thought_chain?: any }[] = [];
+let extractedThought: any = null;
+let hefUpdateData: any = null;
+let systemNotice = "";
+// 双轴分数 (默认为0，防止报错)
+let fChange = 0;
+let rChange = 0;
+// 精力与伪装
+let energyChange = 0;
+let newEnergyStatus: CharacterMood['energy']['status'] | null = null;
+let maskingLevel = 0;
 
-    try {
-        // 尝试寻找最外层的 JSON 数组结构
-        const jsonMatch = finalResp.match(/\[\s*\{[\s\S]*\}\s*\]/);
+try {
+  // 尝试寻找最外层的 JSON 数组结构
+  const jsonMatch = finalResp.match(/\[\s*\{[\s\S]*\}\s*\]/);
+  if (jsonMatch && jsonMatch[0]) {
+    const parsed = JSON.parse(jsonMatch[0]);
+    if (!Array.isArray(parsed)) throw new Error("解析结果不是一个数组");
 
-        if (jsonMatch && jsonMatch[0]) {
-            const parsed = JSON.parse(jsonMatch[0]);
-            if (!Array.isArray(parsed)) throw new Error("解析结果不是一个数组");
-            
-            // --- A. 提取思考链 (不依赖顺序，遍历查找) ---
-            extractedThought = parsed.find((item: any) => item.type === "thought_chain" || item.score_updates);
-            
-            if (extractedThought) {
-                console.log("【🧠 AI内心戏】", extractedThought);
+    // --- A. 提取思考链 (不依赖顺序，遍历查找) ---
+    extractedThought = parsed.find((item: any) => item.type === "thought_chain" || item.score_updates);
+    if (extractedThought) {
+      console.log("【🧠 AI内心戏】", extractedThought)
 
 // 在 handleAiReplyTrigger 内部, 找到 (A) [读心术模块]
 // 用下面的代码替换掉 if (extractedThought.new_agreement ...) { ... } 整个代码块
@@ -5698,6 +6070,8 @@ if (extractedThought.new_agreement && Object.keys(extractedThought.new_agreement
 
 
 // (B) [情侣空间] 动作指令处理 (新增：AI主动发出邀请)
+// 这是一组代码：在这里重新定义“身份标识”，让下面的 if 判断能认识它
+const isFriendGroupMember = globalSettings.friendGroups?.some(group => group.members.includes(activeContact.id));
                 if (extractedThought.action && extractedThought.action.type) {
                     const { action } = extractedThought;
                     
@@ -5723,12 +6097,12 @@ if (extractedThought.new_agreement && Object.keys(extractedThought.new_agreement
                     }
                     // --- 其他指令 (日记/信件/提问) ---
                    // --- 其他指令 (日记/信件/提问/★清单★) ---
-                    else if (activeContact.RelationShipUnlocked) {
-                        const todayStr = new Date().toLocaleDateString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit' });
-                        
-                        setContacts(prevContacts => prevContacts.map(c => {
-                            if (c.id === activeContact.id) {
-                                let updatedContact = { ...c };
+                  else if (activeContact.RelationShipUnlocked) {
+    const todayStr = new Date().toLocaleDateString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit' });
+    
+    setContacts(prevContacts => prevContacts.map(c => {
+        if (c.id === activeContact.id) {
+            let updatedContact = { ...c };
                                 
                                 // 1. 写日记
                                 if (action.type === 'WRITE_DIARY' && action.content) {
@@ -5762,7 +6136,24 @@ if (extractedThought.new_agreement && Object.keys(extractedThought.new_agreement
                         }));
                 
                     }
+                else if (isFriendGroupMember && action.type === 'WRITE_LETTER' && action.title && action.content) {
+        
+        // 告诉系统，有通知了！
+        systemNotice = `${activeContact.name} 在密友空间给你寄了一封信：《${action.title}》。`;
+        
+        // 把信存到全局的群组数据里
+        setGlobalSettings(prev => {
+            const newGroups = (prev.friendGroups || []).map(group => {
+                if (group.members.includes(activeContact.id)) {
+                    const newLetter = { id: Date.now().toString(), title: action.title, content: action.content, timestamp: Date.now(), isOpened: false, from: activeContact.id, to: 'user' };
+                    return { ...group, letters: [...group.letters, newLetter] };
                 }
+                return group;
+            });
+            return { ...prev, friendGroups: newGroups };
+        });
+    }
+}
                 
 
 
@@ -8701,7 +9092,7 @@ if (view === 'settings' && activeContact) {
                            
                            {/* 中间图标 (跳动的大脑) */}
                            <div className="absolute inset-0 flex items-center justify-center text-3xl animate-pulse">
-                             🧠
+                             🪐
                            </div>
                         </div>
                         
@@ -9494,25 +9885,38 @@ style={{ paddingBottom: '12px' }}  // 只留一点内间距，让输入框不紧
                 globalSettings={globalSettings}
                 setContacts={setContacts}
                 onClose={() => setShowPersonaPanel(false)}
-                // ... 其他属性保持不变 ...
+                playMessageAudio={playMessageAudio}
+// 这是一行代码：【修复版】把 PersonaPanel 的跳转功能正确连接到 App 的设置开关
+onNavigateToSettings={onOpenSettings}
+                onRefineMemory={handleRefineMemory}
                 
-                // ★★★ 新增：传入强行刷新函数 ★★★
-               // ★★★ 修复：加上 async/await，支持加载等待 ★★★
-                onForceUpdate={async () => {
-                    const nextThreshold = Math.floor(Math.random() * 9) + 2; 
-                    // 传入最近 30 条记录强行分析
-                    const historySlice = activeContact.history.slice(-30); 
-                    
-                    // 这里加了 await，等 AI 算完才会继续往下走
-                    await updateUserProfile(activeContact, historySlice, nextThreshold);
-                }}
-                
+                // ★★★ 核心修复：把所有 sampleText 相关名字统一 ★★★
+                // 确保这里用的是 panelSampleText 和 setPanelSampleText
                 activeTab={panelTab}
                 setActiveTab={setPanelTab}
                 memoryTab={memoryTab}
                 setMemoryTab={setMemoryTab}
                 sampleText={panelSampleText}
-                setSampleText={setPanelSampleText}
+                setSampleText={setPanelSampleText} 
+                onForceUpdate={async () => {
+                    try {
+                        const currentContact = contacts.find(c => c.id === activeContact.id);
+                        if (!currentContact || (currentContact.interventionPoints || 0) < 1) {
+                            throw new Error("点数不足！");
+                        }
+                        const contactAfterDeduction = {
+                            ...currentContact,
+                            interventionPoints: currentContact.interventionPoints - 1,
+                        };
+                        const historySlice = currentContact.history.slice(-30);
+                        const nextThreshold = Math.floor(Math.random() * 9) + 2;
+                        await updateUserProfile(contactAfterDeduction, historySlice, nextThreshold);
+                        alert("✅ 刷新成功！\n\nAI 的新印象已在后台生成，请在“印象集”里查看！");
+                    } catch (e: any) {
+                        alert(`❌ 刷新失败！\n\n错误信息: ${e.message}\n\n(你的点数没有被扣除)`);
+                        throw e;
+                    }
+                }}
             />
         )}
 

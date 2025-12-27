@@ -733,12 +733,14 @@ const CoupleBucketList: React.FC<{
     
     // ★★★ 核心修复1：数据源直接读取 Contact，而不是本地 useState ★★★
     // 这样保证了数据是“穿透”的，不会刷新就丢
-    const items: BucketItem[] = (contact as any).bucketList || [];
-
-    // 弹窗状态 (这些是临时的，可以用 useState)
-    const [activeItem, setActiveItem] = useState<BucketItem | null>(null);
-    const [inputVal, setInputVal] = useState("");
-
+  const items: BucketItem[] = (contact as any).bucketList || [];
+const [activeItem, setActiveItem] = useState<BucketItem | null>(null);
+const [inputVal, setInputVal] = useState("");
+const [isExpanded, setIsExpanded] = useState(false);
+// 这是一组代码：为“添加愿望”的新弹窗准备两个开关
+const [showAddModal, setShowAddModal] = useState(false); // 这个开关记住弹窗是否显示
+const [newWishTitle, setNewWishTitle] = useState("");   // 这个开关记住你在输入框里打的字
+const displayItems = isExpanded ? items : items.slice(0, 4);
     // ★★★ 核心修复2：提交逻辑重写 ★★★
     const handleSubmit = () => {
         if (!activeItem || !inputVal.trim()) return;
@@ -777,27 +779,16 @@ const CoupleBucketList: React.FC<{
         <div className="mt-8 px-2">
             <div className="flex justify-between items-center mb-4 px-1">
                 <span className="text-xs font-bold text-gray-500 flex items-center gap-1">📝 恋爱清单 100 件小事</span>
-                <button onClick={() => {
-                    const title = prompt("添加一个新的愿望:");
-                    if(title && title.trim()) {
-                        const newItem: BucketItem = { 
-                            id: Date.now().toString(), 
-                            title, 
-                            userContent: '', 
-                            aiContent: '', // 初始为空
-                            isDone: false, 
-                            isUnlocked: false // 初始锁定
-                        };
-                        // 直接更新大数据库
-                        onUpdate([...items, newItem]);
-                    }
-                }} className="text-[10px] bg-white text-gray-600 px-3 py-1.5 rounded-full font-bold hover:bg-gray-50 transition shadow-sm border border-gray-200">
-                    + 添加愿望
-                </button>
+    
+
+
+<button onClick={() => setShowAddModal(true)} className="text-[10px] bg-gray-800 text-white px-3 py-1.5 rounded-full font-bold shadow-sm active:scale-95">
+    + 添加
+</button>
             </div>
 
             <div className="grid grid-cols-2 gap-3">
-                {items.map(item => (
+               {displayItems.map(item => (
                     <div 
                         key={item.id} 
                         onClick={() => setActiveItem(item)}
@@ -821,6 +812,15 @@ const CoupleBucketList: React.FC<{
                     </div>
                 ))}
             </div>
+
+
+<div className="mt-4 flex justify-center">
+    {items.length > 4 && (
+        <button onClick={() => setIsExpanded(!isExpanded)} className="text-xs font-bold text-gray-500 bg-white hover:bg-gray-50 border border-gray-200 rounded-full px-6 py-2 transition-all shadow-sm">
+            {isExpanded ? '收起列表 ↑' : `展开剩余 ${items.length - 4} 个愿望 ↓`}
+        </button>
+    )}
+</div>
 
             {/* 填写/查看弹窗 */}
             {activeItem && (
@@ -883,6 +883,48 @@ const CoupleBucketList: React.FC<{
                     </div>
                 </div>
             )}
+
+
+
+{/* 这是一组代码：全新的、漂亮的“添加愿望”弹窗 */}
+{showAddModal && (
+    <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 backdrop-blur-sm p-6 animate-fadeIn" onClick={() => setShowAddModal(false)}>
+        <div className="bg-white w-full max-w-sm rounded-3xl p-6 shadow-2xl animate-scaleIn relative" onClick={e => e.stopPropagation()}>
+            <div className="text-center mb-6">
+                <span className="text-4xl block mb-2">✨</span>
+                <h3 className="text-lg font-bold text-gray-800">添加一个新的愿望</h3>
+                <p className="text-xs text-gray-400 mt-1">和 TA 一起去完成吧！</p>
+            </div>
+            <input 
+                className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm outline-none focus:border-pink-300 transition" 
+                placeholder="例如：一起去看日出" 
+                value={newWishTitle}
+                onChange={e => setNewWishTitle(e.target.value)}
+                autoFocus
+            />
+            <div className="flex gap-3 mt-6">
+                <button onClick={() => setShowAddModal(false)} className="flex-1 py-3 bg-gray-100 text-gray-500 rounded-xl font-bold text-sm">取消</button>
+                <button 
+                    onClick={() => {
+                        if(newWishTitle && newWishTitle.trim()) {
+                            const newItem: BucketItem = { id: Date.now().toString(), title: newWishTitle, userContent: '', aiContent: '', isDone: false, isUnlocked: false };
+                            onUpdate([...items, newItem]);
+                            setIsExpanded(true);
+                            setNewWishTitle(""); 
+                            setShowAddModal(false);
+                        }
+                    }} 
+                    className="flex-1 py-3 bg-pink-500 text-white rounded-xl font-bold text-sm shadow-lg shadow-pink-200 active:scale-95"
+                >
+                    好
+                </button>
+            </div>
+        </div>
+    </div>
+)}
+
+
+
         </div>
     );
 };
@@ -2467,8 +2509,12 @@ const RelationshipSpace: React.FC<RelationshipSpaceProps> = ({ contacts, setCont
         if (selectedLetter) { /* ... 原有信件详情代码 ... */ }
 
         return (
-            <div className={`h-full w-full ${theme.bg} flex flex-col overflow-hidden relative`} style={theme.style}>
-                {isRelationship && <FloatingHearts />}
+// 这是一组代码：【修复】为情侣空间根容器添加顶部内边距
+<div className={`h-full w-full ${theme.bg} flex flex-col overflow-hidden relative pt-[calc(44px+env(safe-area-inset-top))]`} style={theme.style}>
+        
+<div className="absolute inset-0 top-[calc(44px+env(safe-area-inset-top))] -z-0 pointer-events-none">
+    {isRelationship && <FloatingHearts />}
+</div>
 
                 <SafeAreaHeader 
                     // 标题动态化：群名 / 恋人名
@@ -2539,20 +2585,41 @@ const RelationshipSpace: React.FC<RelationshipSpaceProps> = ({ contacts, setCont
                     }
                 />
 
-                <div className="flex-1 overflow-y-auto custom-scrollbar pb-24 relative z-10">
+
+<div className="flex-1 overflow-y-auto custom-scrollbar pb-24">
                     {tab === 'hub' && (
                         <div className="p-4 space-y-2 animate-fadeIn pt-6">
                             
                             {/* ==================== 🅰️ 恋人模式 (原样保留) ==================== */}
                             {isRelationship && !isGroupMode && (
                                 <>
+
+                                
                                     <HeartbeatTouch contact={targetContact!} days={days} />
                                     {/* ... 拍立得、清单等 ... */}
+
+<div className="bg-white/60 backdrop-blur-md rounded-3xl p-4 mx-2 mb-6 shadow-lg border border-white/50">
+    <div className="relative flex flex-col items-center justify-center py-6 group">
+        {/* 背景光晕特效 */}
+        <div className={`absolute inset-0 bg-gradient-to-b ${isGroupMode ? 'from-sky-100/50' : 'from-rose-100/50'} to-transparent rounded-full blur-3xl -z-10`}></div>
+        
+        {/* 巨大的天数 */}
+        <h1 className={`text-7xl font-black ${isGroupMode ? 'text-sky-500' : 'text-rose-500'} drop-shadow-sm tracking-tighter animate-float-y select-none`}>
+            {days}
+        </h1>
+
+        {/* 下方的小标题 */}
+        <div className={`flex items-center gap-2 mt-3 px-4 py-1.5 rounded-full ${isGroupMode ? 'bg-sky-50 text-sky-600' : 'bg-rose-50 text-rose-600'} border border-white/50 shadow-sm`}>
+            <span className="text-lg animate-pulse">{isGroupMode ? '🏡' : '💞'}</span>
+            <span className="text-[10px] font-bold tracking-[0.2em] uppercase">
+                {isGroupMode ? 'DAYS ESTABLISHED' : 'DAYS IN LOVE'}
+            </span>
+        </div>
+    </div>
+</div>
                                     <PolaroidWall photos={(targetContact as any).couplePhotos || [null,null,null]} onUpload={handlePolaroidUpload} />
-                                    <div className="bg-white/60 backdrop-blur-md rounded-2xl p-4 shadow-sm border border-white/50 flex justify-between items-center mb-6 mx-2">
-                                        <div className="flex flex-col"><span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">In Love For</span><div className="flex items-baseline gap-1"><span className="text-3xl font-black text-rose-500">{days}</span><span className="text-xs font-bold text-rose-300">Days</span></div></div>
-                                        <div className="text-3xl animate-pulse">💞</div>
-                                    </div>
+                     
+
                             {/* 修复后的调用代码：加上了暗号 [CoupleSystem] */}
                                     <CoupleBucketList 
                                         contact={targetContact!} theme={theme}
@@ -2596,14 +2663,33 @@ const RelationshipSpace: React.FC<RelationshipSpaceProps> = ({ contacts, setCont
     userAvatar={globalSettings.avatar || "https://api.dicebear.com/7.x/avataaars/svg?seed=User"}
     userName={globalSettings.userName || "我"}
     
-    // 1. ★★★ 修复 onSend: 只负责保存+发一个不会跳转的系统提示 ★★★
-    onSend={(targetId, title, content, isReply) => {
-        handleSendLetter(targetId, title, content); // 调用保存函数
-        const systemPrefix = isGroupMode ? `[群空间:${targetGroup?.name}]` : '[CoupleSystem]';
-        // 发送一个“静默”的系统通知，只让AI知道，不会触发页面跳转
-        const notificationMsg = `${systemPrefix} 🔔 我给你寄了一封信，标题是《${title}》。`;
-        onRelationshipSpaceAction(targetId, notificationMsg);
-    }}
+// 这是一组代码：【最终修复版】的发信逻辑，能精确判断当前空间，杜绝串台
+onSend={(recipientId, title, content, isReply) => {
+    // 1. 准备一封新信
+    const newLetter: LoveLetter = {
+        id: Date.now().toString(),
+        title, content, timestamp: Date.now(), isOpened: false, from: 'user', to: recipientId
+    };
+
+    // 2. ★★★ 核心判断：当前是不是在群组模式？ ★★★
+    if (isGroupMode && targetGroup) {
+        // 如果是，就把信存到【群组】的数据里
+        const updatedGroup = { ...targetGroup, letters: [...targetGroup.letters, newLetter] };
+        setGlobalSettings(prev => ({
+            ...prev,
+            friendGroups: (prev.friendGroups || []).map(g => g.id === targetGroup.id ? updatedGroup : g)
+        }));
+        setTargetGroup(updatedGroup); // 更新当前视图
+    } else {
+        // 如果不是，就把信存到【情侣】的数据里
+        setContacts(prev => prev.map(c => c.id === targetContact!.id ? { ...c, letters: [...(c.letters || []), newLetter] } : c));
+    }
+
+    // 3. 发一个不会导致页面跳转的“静默通知”给 AI
+    const systemPrefix = isGroupMode ? `[群空间:${targetGroup?.name}]` : '[CoupleSystem]';
+    const notificationMsg = `${systemPrefix} 🔔 我给你寄了一封信，标题是《${title}》。`;
+    onRelationshipSpaceAction(recipientId, notificationMsg);
+}}
 
     // 2. ★★★ 新增 onTriggerAiReply: 只有在回复时，才触发AI思考 ★★★
     onTriggerAiReply={async (targetId, originalTitle, userReplyContent) => {
