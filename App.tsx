@@ -15,6 +15,16 @@ import { readTavernPng, fileToBase64 } from './utils/fileUtils';
 // ==================== 1. 辅助函数 & 初始数据 (必须放在组件外面！) ====================
 
 
+
+
+
+
+
+
+
+
+
+
 // 这是一组代码：【App.tsx】初始数据 (已将点数修改为 999 用于测试)
 const INITIAL_CONTACTS: Contact[] = [
   {
@@ -1343,6 +1353,7 @@ return (
         <RelationshipSpace
           contacts={contacts}
           setContacts={setContacts}
+           setGlobalSettings={setGlobalSettings} // <--- ★★★ 这一行必须加！！不然群组存不住！！
           globalSettings={globalSettings}
           onClose={() => setCurrentApp('home')}
           // ★★★ 新增：接收跳转请求，设置ID和时间戳，然后切换到聊天

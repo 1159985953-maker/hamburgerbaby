@@ -1,4 +1,5 @@
-// 这是一组代码：【types.ts 完整文件】
+// ==================== src/types.ts (完整覆盖) ====================
+
 export interface Song {
   id: string;
   title: string;
@@ -7,59 +8,26 @@ export interface Song {
   cover: string;
 }
 
-// 文件位置: src/types.ts
-
 export interface UserTag {
   id: string;
   content: string;
   timestamp: number;
   author: 'user' | 'ai';
-  isPublic: boolean;        // true=公开, false=私密
-  
-  // ★★★ 新增：AI是否正在申请查看 ★★★
+  isPublic: boolean;
   aiRequestPending?: boolean; 
-  
-  isUnlocked?: boolean;     // (对AI标签) 用户是否已解锁
-  unlockCost?: number;      // (对AI标签) 解锁花费
-  userQuote: string;        // 触发AI标签的原话
-  aiReasoning: string;      // AI的内心独白
-  note?: string;            // 用户的批注
-  rotation?: number;        // 旋转角度
-  strength?: number;        // 借用存 margin
+  isUnlocked?: boolean;
+  unlockCost?: number;
+  userQuote: string;
+  aiReasoning: string;
+  note?: string;
+  rotation?: number;
+  strength?: number;
 }
 
 export interface TaskCategory {
   id: string;
   name: string;
   color: string;
-}
-
-export interface FinanceCategory {
-  id: string;
-  name: string;
-  type: 'expense' | 'income';
-  icon: string;
-  color: string;
-}
-
-export interface AssetAccount {
-  id: string;
-  name: string;
-  type: 'cash' | 'debit' | 'credit' | 'alipay' | 'wechat' | 'other';
-  balance: number;
-  color: string;
-  icon: string;
-}
-
-export interface Transaction {
-  id: string;
-  type: 'expense' | 'income';
-  amount: number;
-  categoryId: string;
-  accountId: string;
-  date: string;
-  note?: string;
-  createdAt: number;
 }
 
 export interface TodoItem {
@@ -124,7 +92,7 @@ export interface WorldBookEntry {
 }
 
 export interface WorldBookCategory {
- id: string;
+  id: string;
   name: string;
   type: 'global' | 'selective';
   entries: WorldBookEntry[];
@@ -149,17 +117,17 @@ export interface ThemePreset {
 }
 
 export interface HEF {
-  META: { source_world: string; role_identity: string; continuity_principle: string; REALISM_RULE: boolean; };
-  CORE_DRIVES: { primary_motive: string; secondary_motives: string[]; value_priority: string; survival_threshold: string; non_negotiables: string[]; };
-  RELATIONAL_MASKS: { authority: { default_style: string; under_stress_switch: string; triggers: string[]; }; peers: { default_style: string; jealousy_points: string[]; trust_rules: string; }; intimates: { care_style: string; conflict_pattern: string; boundaries: string[]; }; strangers: { default_style: string; risk_policy: string; }; };
-  EMOTIONAL_DYNAMICS: { baseline_mood: string; top_triggers_positive: string[]; top_triggers_negative: string[]; carryover_rules: string; escalation_curve: string; recovery_protocol: string; };
-  CONFLICTS_DEFENSES: { inner_conflicts: string[]; defense_mechanisms: string[]; dissonance_explanations: string[]; mask_break_conditions: string[]; };
-  CULTURE_SCRIPTS: { worldview: string; core_values: string[]; taboos: string[]; language_register: string; pet_phrases: string[]; role_expectations: string; };
-  DEVELOPMENT_HISTORY: { key_events: string[]; unresolved_threads: string[]; current_stage: string; growth_arc_goal: string; constraints_from_past: string[]; };
-  INDIVIDUAL_VARIATION: { personality_big5: { openness: number; conscientiousness: number; extraversion: number; agreeableness: number; neuroticism: number; }; habits_quirks: string[]; speech_style: string; body_language: string; irrationalities: string[]; };
-  RESOURCES_LIMITS: { skills: string[]; assets: string[]; constraints: string[]; risk_tolerance: string; };
-  SCENE_EXECUTOR: { step_1_context_parse: string; step_2_state_load: string; step_3_policy_select: string; step_4_output_rules: string; step_5_memory_update: string; };
-  REALISM_SELF_CHECK: { checks: string[]; pass_threshold: number; };
+  META: any;
+  CORE_DRIVES: any;
+  RELATIONAL_MASKS: any;
+  EMOTIONAL_DYNAMICS: any;
+  CONFLICTS_DEFENSES: any;
+  CULTURE_SCRIPTS: any;
+  DEVELOPMENT_HISTORY: any;
+  INDIVIDUAL_VARIATION: any;
+  RESOURCES_LIMITS: any;
+  SCENE_EXECUTOR: any;
+  REALISM_SELF_CHECK: any;
   joy?: number; anger?: number; sadness?: number; fear?: number; trust?: number;
 }
 
@@ -172,7 +140,9 @@ export interface QAEntry {
 }
 
 export interface LoveLetter {
-  id: string; title: string; content: string; timestamp: number; isOpened: boolean; from: 'user' | 'ai'; unlockDate?: number;
+  isFavorite?: boolean;
+  id: string; title: string; content: string; timestamp: number; isOpened: boolean; from: 'user' | 'ai'; unlockDate?: number; 
+  to?: string; // ★ 新增：这封信是写给谁的 (contactId)
 }
 
 export interface AgreementTrigger {
@@ -200,6 +170,28 @@ export interface UserProfile {
   habits?: ProfileTrait[];
 }
 
+// ★★★ 核心新增：多人空间组结构 ★★★
+export interface FriendGroup {
+    id: string;
+    name: string;
+    members: string[]; // 成员ID列表
+    letters: LoveLetter[];
+    
+    questions: QAEntry[];
+    garden: any;
+    created: number;
+}
+
+// ★★★ 核心新增：恋爱清单结构 ★★★
+export interface BucketItem {
+    id: string;
+    title: string;
+    userContent: string;
+    aiContent: string;
+    isDone: boolean;
+    isUnlocked: boolean;
+}
+
 export interface Agreement {
   id: string;
   content: string;
@@ -219,8 +211,8 @@ export interface EmotionalNeed {
   updated_at: number;
 }
 
-// 【Types.ts 更新：增加 chatCountForPoint 字段用于100句换1点】
 export interface Contact {
+  
   garden?: { seed: string; level: number; exp: number; lastWaterDate?: string; lastFertilizeDate?: string; flowerHistory?: { role: 'user' | 'assistant'; content: string; timestamp: number }[]; lastShadowAction?: string; aiWateredToday?: boolean; };
   userTags: UserTag[];
   isAffectionLocked?: boolean;
@@ -243,7 +235,7 @@ export interface Contact {
   timezone: string;
   contextDepth: number;
   summaryTrigger: number;
-  RelationShipUnlocked: boolean;
+  RelationShipUnlocked: boolean; // 旧字段，逐渐废弃，改用 status
   enabledWorldBooks: string[];
   voiceId?: string;
   playlist?: Song[];
@@ -252,16 +244,17 @@ export interface Contact {
   unread?: number;
   proactiveConfig?: { enabled: boolean; minGapMinutes: number; maxDaily: number; };
   proactiveLastSent?: { [date: string]: number; };
-  
-  // ★★★ 新增：聊天计数器 (满100句换1点) ★★★
   chatCountForPoint?: number; 
-  // ★★★ 新增：印象生成进度条 ★★★
-  impressionCount?: number;      // 当前已聊句数
-  impressionThreshold?: number;  // 下次触发阈值 (30-100随机)
+  impressionCount?: number;
+  impressionThreshold?: number;
   pendingProactive?: boolean;
   affectionScore: number;
   friendshipScore?: number;
   relationshipStatus: string;
+  
+  // ★★★ 核心：邀请状态 (none=未邀请, inviting=等待同意, accepted=已建成, rejected=被拒) ★★★
+  invitationStatus?: 'none' | 'inviting' | 'accepted' | 'rejected';
+  
   aiDND: { enabled: boolean; until: number; reason?: string; };
   longTermMemories: { id: string; content: string; importance: number; timestamp: number; meta?: any; }[];
   interventionPoints: number;
@@ -280,6 +273,8 @@ export interface Contact {
   emotionalNeed?: EmotionalNeed;
   userProfile?: UserProfile;
   aiTagsForUser?: UserTag[];
+  couplePhotos?: (string | null)[]; // 拍立得照片墙
+  bucketList?: BucketItem[];        // 恋爱清单
 }
 
 export interface Widget {
@@ -310,4 +305,5 @@ export interface GlobalSettings {
   minimax?: { groupId: string; apiKey: string; model: string; serviceArea?: 'domestic' | 'international'; };
   userPresets?: any[];
   lifeAIHistory?: { role: 'user' | 'assistant', content: string }[];
+  friendGroups?: FriendGroup[]; 
 }

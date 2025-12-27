@@ -1,10 +1,9 @@
-// src/components/SafeAreaHeader.tsx
 import React from 'react';
 
 interface SafeAreaHeaderProps {
-  title: string;
-  left?: React.ReactNode;   // 左侧内容
-  right?: React.ReactNode;  // 右侧内容
+  title: any; // 改成 any 或 ReactNode 以兼容之前的组件调用
+  left?: React.ReactNode;
+  right?: React.ReactNode;
 }
 
 const SafeAreaHeader: React.FC<SafeAreaHeaderProps> = ({ title, left, right }) => {
@@ -16,7 +15,7 @@ const SafeAreaHeader: React.FC<SafeAreaHeaderProps> = ({ title, left, right }) =
         left: 0,
         right: 0,
         zIndex: 50,
-        background: 'rgba(255, 255, 255, 0.95)', // 稍微透一点点，更有质感
+        background: 'rgba(255, 255, 255, 0.95)',
         backdropFilter: 'blur(12px)',
         WebkitBackdropFilter: 'blur(12px)',
         borderBottom: '1px solid rgba(0, 0, 0, 0.05)',
@@ -31,18 +30,12 @@ const SafeAreaHeader: React.FC<SafeAreaHeaderProps> = ({ title, left, right }) =
         boxSizing: 'border-box',
       }}
     >
-      {/* 左侧容器：保持不变 */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', minWidth: '40px' }}>
         {left}
       </div>
-
-      {/* 中间标题：保持居中 */}
       <div style={{ fontWeight: '600', fontSize: '1.1rem', flexGrow: 1, textAlign: 'center' }}>
         {title}
       </div>
-
-      {/* ★★★ 核心修复在这里！★★★ */}
-      {/* 以前是 width: '40px' (死宽度)，现在改成 flex 布局，自动适应内容宽度 */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', minWidth: '40px' }}>
         {right}
       </div>

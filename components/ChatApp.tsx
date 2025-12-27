@@ -4033,37 +4033,40 @@ ${chatLog}
 
 
 
+// 这是一组代码：【修复版】重Roll逻辑 (保护系统提示不被删除)
   const handleRegenerateLast = async () => {
     if (!activeContact) return;
     
     // 1. 获取当前完整历史记录
     const fullHistory = [...activeContact.history];
     
-    // 2. 从后往前找，找到最后一条用户消息的索引
-    // 我们要保留这条用户消息，并删除它之后的所有AI回复
-    let lastUserIndex = -1;
+    // 2. ★★★ 核心修复：寻找“锚点” ★★★
+    // 我们要找到最后一条“不是AI”的消息（即用户消息 OR 系统提示）
+    // 之前只找 'user'，导致 'system' (信件提示) 被误删。
+    // 现在：只要是 user 或者 system，都视为“用户回合”，保留下来！
+    let lastAnchorIndex = -1;
     for (let i = fullHistory.length - 1; i >= 0; i--) {
-        if (fullHistory[i].role === 'user') {
-            lastUserIndex = i;
+        if (fullHistory[i].role === 'user' || fullHistory[i].role === 'system') {
+            lastAnchorIndex = i;
             break;
         }
     }
     
-    if (lastUserIndex === -1) {
-      alert("没有可以回复的用户消息！");
+    if (lastAnchorIndex === -1) {
+      alert("没有可以回复的消息锚点！");
       return;
     }
 
-    // 3. 【核心】生成“干净的”历史记录：截断到最后一条用户消息
-    const cleanHistory = fullHistory.slice(0, lastUserIndex + 1);
+    // 3. 生成“干净的”历史记录：保留到锚点为止
+    // 这样，你寄信的系统提示就会被保留，AI会基于它重新生成回复！
+    const cleanHistory = fullHistory.slice(0, lastAnchorIndex + 1);
 
-    // 4. 立即更新UI，让用户看到旧回复瞬间消失
+    // 4. 立即更新UI，让用户看到旧的AI回复瞬间消失，但系统提示还在
     setContacts(prev => prev.map(c =>
       c.id === activeContact.id ? { ...c, history: cleanHistory } : c
     ));
 
-    // 5. 【关键】把这份干净的历史，作为参数，直接喂给 AI 函数！
-    // 这样AI就永远不会读到被删除的旧回复了，从根源解决问题。
+    // 5. 触发 AI 重新生成
     handleAiReplyTrigger(cleanHistory);
   };
 
@@ -4893,7 +4896,7 @@ ${(() => {
 1. **写日记**: \`{ "type": "WRITE_DIARY", "content": "日记内容" }\`
    - 时机：感触很深或情绪强烈时。
 2. **写信**: \`{ "type": "WRITE_LETTER", "title": "标题", "content": "信的内容" }\`
-   - 时机：好感度很高（>80）时，频率要低。
+   - 时机：好感度高（>70）时，频率要低。
 3. **提问**: \`{ "type": "CREATE_QA", "question": "你的问题" }\`
    - 时机：对用户感到好奇时。
 
@@ -5311,7 +5314,40 @@ if (extractedThought.new_agreement && Object.keys(extractedThought.new_agreement
 
 
 
+// 这是一组代码：AI 同意邀请的逻辑判断
+                // (B.0) [核心新增] 邀请函自动审批系统
+                // 如果当前处于邀请中 (inviting)，且 AI 说了同意，就自动晋级！
+                if (activeContact.invitationStatus === 'inviting') {
+                    // 既检查思考链，也检查回复内容
+                    const aiContent = (extractedThought?.inner_monologue || "") + " " + parts.map(p => p.content).join(' ');
+                    
+                    // 关键词检测 (中英文)
+                    const isAccept = /同意|愿意|好啊|答应|accept|yes|ok|没问题|可以/i.test(aiContent);
+                    const isReject = /拒绝|不要|不想|no|reject|sorry|抱歉|不行/i.test(aiContent);
 
+                    if (isAccept) {
+                        systemNotice = "🎉 恭喜！TA 接受了你的入住邀请！空间已成功建成！";
+                        setContacts(prev => prev.map(c => {
+                            if (c.id === activeContact.id) {
+                                return {
+                                    ...c,
+                                    invitationStatus: 'accepted', // 状态变为已接受
+                                    RelationShipUnlocked: true,   // 解锁空间入口
+                                    created: Date.now() // 纪念日从今天开始
+                                };
+                            }
+                            return c;
+                        }));
+                    } else if (isReject) {
+                        systemNotice = "💔 很遗憾，TA 婉拒了你的邀请...";
+                        setContacts(prev => prev.map(c => {
+                            if (c.id === activeContact.id) {
+                                return { ...c, invitationStatus: 'rejected' };
+                            }
+                            return c;
+                        }));
+                    }
+                }
 
 
 
@@ -5341,6 +5377,56 @@ if (extractedThought.new_agreement && Object.keys(extractedThought.new_agreement
                         return c;
                     }));
                 }
+                
+
+
+
+
+
+
+
+
+// ==================== (B.1) [新增] 邀请函自动审批系统 ====================
+                // 如果当前处于邀请中 (inviting)，且 AI 说了同意，就自动晋级！
+                if (activeContact.invitationStatus === 'inviting') {
+                    const aiContent = extractedThought?.inner_monologue || parts.map(p => p.content).join(' ');
+                    const isAccept = /同意|愿意|好啊|答应|accept|yes|ok/i.test(aiContent);
+                    const isReject = /拒绝|不要|不想|no|reject/i.test(aiContent);
+
+                    if (isAccept) {
+                        systemNotice = "🎉 恭喜！TA 接受了你的入住邀请！关系已正式确立！";
+                        setContacts(prev => prev.map(c => {
+                            if (c.id === activeContact.id) {
+                                return {
+                                    ...c,
+                                    invitationStatus: 'accepted',
+                                    relationshipStatus: 'Honeymoon', // 正式晋级为热恋
+                                    RelationShipUnlocked: true,
+                                    created: Date.now() // 纪念日从今天开始
+                                };
+                            }
+                            return c;
+                        }));
+                    } else if (isReject) {
+                        systemNotice = "💔 很遗憾，TA 婉拒了你的邀请...";
+                        setContacts(prev => prev.map(c => {
+                            if (c.id === activeContact.id) {
+                                return { ...c, invitationStatus: 'rejected' };
+                            }
+                            return c;
+                        }));
+                    }
+                }
+
+
+
+
+
+
+
+
+
+          
 
                 // (C) [双轴情感结算系统 V3.0]
                 let rawRomance = 0;
@@ -8446,15 +8532,27 @@ return (
 
 // [这是修复代码] 系统消息渲染 (增加废话过滤器)
 // ==================== ⬇️ 替换这里：系统消息智能渲染 (支持卡片) ⬇️ ====================
+   // ==================== ⬇️ 替换这里：系统消息智能渲染 (含情侣/密友专属皮肤) ⬇️ ====================
     if (msg.role === 'system') {
         let cardData = null;
         let displayContent = msg.content;
         let isRecall = false;
 
-        // 1. 尝试解析是不是“回忆卡片” (JSON格式)
+        // ★★★ 1. 识别特殊标签 (暗号) ★★★
+        const isCoupleSystem = displayContent.includes('[CoupleSystem]');
+        const isFriendSystem = displayContent.includes('[FriendSystem]');
+        const isGroupNotice = displayContent.includes('[群空间:'); // 兼容你之前的群组逻辑
+
+        // 清理暗号，只留内容
+        displayContent = displayContent
+            .replace('[CoupleSystem]', '')
+            .replace('[FriendSystem]', '')
+            .replace('【系统通知】', '')
+            .trim();
+
+        // 2. 尝试解析是不是“回忆卡片” (JSON格式)
         try {
             if (msg.content.includes('"type": "memory_share_card"') || msg.content.includes('"type":"memory_share_card"')) {
-                // 清理可能存在的非JSON前缀
                 const jsonStart = msg.content.indexOf('{');
                 const jsonEnd = msg.content.lastIndexOf('}');
                 if (jsonStart !== -1 && jsonEnd !== -1) {
@@ -8462,19 +8560,15 @@ return (
                     cardData = JSON.parse(jsonStr);
                 }
             }
-        } catch (e) {
-            console.log("不是卡片数据，按普通文本渲染");
-        }
+        } catch (e) { console.log("不是卡片数据"); }
 
-        // 2. 如果是卡片，直接渲染大卡片组件！
+        // 3. 渲染逻辑分流
         if (cardData) {
             return <SharedMemoryCard key={msg.id} data={cardData} />;
         }
 
-        // 3. 如果不是卡片，走普通系统通知逻辑 (过滤废话)
-        displayContent = displayContent.replace('【系统通知】', '').trim();
+        // 垃圾过滤
         if (displayContent.includes('约定: 无') || displayContent.includes('约定：无')) return null;
-        
         isRecall = msg.content.includes("撤回");
 
         return (
@@ -8487,13 +8581,39 @@ return (
               </div>
             )}
            
-            <div className="flex justify-center my-4 animate-slideUp px-8">
+            <div className="flex justify-center my-4 animate-slideUp px-4 w-full">
                 {isRecall ? (
                     <span className="text-[10px] text-gray-400 italic bg-gray-50 border border-gray-100 px-3 py-1 rounded-full">
                        {msg.role === 'user' ? '你' : activeContact.name} 撤回了一条消息 🗑️
                     </span>
+                ) : isCoupleSystem ? (
+                    // ==================== 💖 情侣专属样式 (粉色浪漫) ====================
+                    <div className="relative bg-gradient-to-r from-rose-50 to-pink-50 p-4 rounded-2xl shadow-sm border border-pink-100 max-w-[85%] flex items-start gap-3">
+                        <div className="text-2xl pt-1 animate-pulse">💌</div>
+                        <div>
+                            <h4 className="text-xs font-bold text-rose-500 uppercase tracking-wider mb-1">Sweet Memory</h4>
+                            <p className="text-xs text-gray-700 leading-relaxed font-medium">
+                                {displayContent}
+                            </p>
+                        </div>
+                        {/* 装饰爱心 */}
+                        <div className="absolute -top-2 -right-2 text-lg opacity-50 rotate-12">💖</div>
+                    </div>
+                ) : (isFriendSystem || isGroupNotice) ? (
+                    // ==================== ✨ 密友专属样式 (蓝色活力) ====================
+                    <div className="relative bg-gradient-to-r from-sky-50 to-blue-50 p-4 rounded-2xl shadow-sm border border-blue-100 max-w-[85%] flex items-start gap-3">
+                        <div className="text-2xl pt-1">📢</div>
+                        <div>
+                            <h4 className="text-xs font-bold text-blue-500 uppercase tracking-wider mb-1">Squad Update</h4>
+                            <p className="text-xs text-gray-700 leading-relaxed font-medium">
+                                {displayContent}
+                            </p>
+                        </div>
+                        {/* 装饰星星 */}
+                        <div className="absolute -top-2 -right-2 text-lg opacity-50 rotate-12">🌟</div>
+                    </div>
                 ) : (
-                    // 以前的黄色便签样式
+                    // ==================== 🟡 原版通用样式 (黄色便签) ====================
                     <div className="relative bg-[#FFFBEB] text-[#78350F] text-xs px-4 py-3 rounded-sm shadow-md border border-[#FDE68A] transform -rotate-1 hover:rotate-0 transition-transform duration-300 max-w-[80%]">
                         <div className="absolute -top-1.5 left-1/2 -translate-x-1/2 w-16 h-4 bg-yellow-200/60 opacity-80 rotate-1 shadow-sm backdrop-blur-[1px]"></div>
                         <div className="flex flex-col items-center gap-1 text-center">
@@ -8508,7 +8628,6 @@ return (
           </React.Fragment>
         );
     }
-
 
 
 
