@@ -714,89 +714,166 @@ useEffect(() => {
 
 
 
-
 // ==================== [新功能] 6. Shadow AI (影子分身) 行动引擎 ====================
-// 负责：自动写信、自动打理花园、同步记忆给主AI
+// 负责：自动写信、自动打理花园、同步记忆给主AI、★自动回复愿望清单★
 useEffect(() => {
   const runShadowAI = async () => {
     if (!isLoaded || contacts.length === 0) return;
 
     const todayStr = new Date().toLocaleDateString();
     let hasChanges = false;
+    
+    // 暂存群组更新数据的队列
+    let pendingGroupUpdates: { groupId: string; letter?: LoveLetter; gardenExpAdd?: number; bucketListUpdate?: {id: string, aiContent: string} }[] = [];
+
     const activePreset = globalSettings.apiPresets.find(p => p.id === globalSettings.activePresetId);
 
     // 遍历所有已解锁空间的角色
     const updatedContacts = await Promise.all(contacts.map(async (c) => {
-      // 1. 门槛检查：没解锁空间、或者今天已经行动过的，跳过
-      if (!c.RelationshipSpaceUnlocked || c.garden?.lastShadowAction === todayStr) {
-        return c;
+      
+      const myGroup = globalSettings.friendGroups?.find(g => g.members.includes(c.id));
+      const isInSpace = c.RelationShipUnlocked || !!myGroup;
+
+      if (!isInSpace) return c; // 没开通空间的跳过
+
+      // 0. ★★★ [最高优先级] 扫描：有没有用户写了但AI没回的愿望？ ★★★
+      // 逻辑：找到 userContent 有值，但 aiContent 为空的项
+      const pendingBucketItem = (c.bucketList || []).find(item => item.userContent && !item.aiContent);
+
+      if (pendingBucketItem && activePreset) {
+          console.log(`[Shadow AI] 发现待回复的愿望: ${pendingBucketItem.title}`);
+          
+          try {
+              const prompt = `
+你现在是 "${c.name}"。用户 "${globalSettings.userName || '你的恋人'}" 在【恋爱清单】里许下了一个愿望，并写下了TA的想法。
+请你也写下你对这个愿望的想法或回应。
+
+愿望标题：${pendingBucketItem.title}
+用户的想法：${pendingBucketItem.userContent}
+
+要求：
+1. 语气甜蜜、期待，或者提出具体的执行计划。
+2. 字数不要太多，50字以内。
+3. 必须输出纯JSON：{"content": "你的回应内容"}
+              `;
+              
+              const res = await generateResponse([{ role: 'user', content: prompt }], activePreset);
+              const jsonMatch = res.match(/\{[\s\S]*\}/);
+              
+              if (jsonMatch) {
+                  const result = JSON.parse(jsonMatch[0]);
+                  const aiResponse = result.content || "我也很想和你一起去！";
+
+                  // 更新 bucketList
+                  let newContact = { ...c };
+                  newContact.bucketList = (c.bucketList || []).map(item => 
+                      item.id === pendingBucketItem.id 
+                      ? { ...item, aiContent: aiResponse, isUnlocked: true } // 填入并解锁
+                      : item
+                  );
+
+                  // 记录同步消息
+                  newContact.history = [...newContact.history, {
+                      id: Date.now().toString() + "_sync_bucket",
+                      role: 'system',
+                      // 用黄色便签通知
+                      content: `[CoupleSystem] 🔔 (潜意识) 刚刚回复了你的愿望《${pendingBucketItem.title}》：\n“${aiResponse}”`, 
+                      timestamp: Date.now(),
+                      type: 'text'
+                  }];
+
+                  hasChanges = true;
+                  
+                  // 发送红点通知
+                  setGlobalNotification({
+                      type: 'new_message', 
+                      contactId: c.id, 
+                      name: c.name, 
+                      avatar: c.avatar, 
+                      content: `回应了你的愿望清单: ${pendingBucketItem.title}`,
+                      userName: globalSettings.userName || "User",
+                      userSignature: globalSettings.userSignature || ""
+                  });
+
+                  return newContact; // ★★★ 处理完愿望直接返回，不做其他行动，防止太频繁 ★★★
+              }
+          } catch (e) {
+              console.error("回复愿望失败", e);
+          }
       }
 
-      // 2. 概率计算 (基于人设)
-      // 外向(Extraversion)高、宜人(Agreeableness)高、好感度高的，行动概率大
+      // --- 如果没有待处理的愿望，才执行下面的日常逻辑 ---
+
+      if (c.garden?.lastShadowAction === todayStr) {
+        return c; // 今天日常已做完
+      }
+
+      // 2. 概率计算
       const big5 = c.hef?.INDIVIDUAL_VARIATION?.personality_big5 || { extraversion: 5, agreeableness: 5 };
       const affection = c.affectionScore || 50;
-      
-      // 基础概率 30% + 性格修正 + 好感修正
       let probability = 0.3 + (big5.extraversion - 5) * 0.05 + (affection - 50) * 0.005;
-      // 限制在 10% - 90% 之间
       probability = Math.max(0.1, Math.min(0.9, probability));
 
-      // 没随到概率，今天休息，标记已检查
       if (Math.random() > probability) {
         return { ...c, garden: { ...(c.garden || {}), lastShadowAction: todayStr } }; 
       }
 
-      // 3. 决定行动类型 (写信 vs 浇水/施肥)
-      // 默认 70% 浇水(小动作)，30% 写信(大动作)
+      // 3. 决定行动类型 (30% 写信，70% 浇水)
       const actionType = Math.random() > 0.7 ? 'WRITE_LETTER' : 'GARDEN_CARE';
       let newContact = { ...c };
-      let memorySyncMsg = ""; // 要同步给主AI的记忆
+      let memorySyncMsg = ""; 
 
       if (actionType === 'WRITE_LETTER' && activePreset) {
          try {
-            console.log(`[Shadow AI] ${c.name} 决定写一封信...`);
+            console.log(`[Shadow AI] ${c.name} 决定写信... 是否在群: ${!!myGroup}`);
+            const contextPrompt = myGroup 
+                ? `你正在多人密友空间"${myGroup.name}"里写信，所有成员都能看到。` 
+                : `你正在和用户的私密空间里写信。`;
+
             const prompt = `
 你现在是 "${c.name}" 的【内心独白版】。
-你正在“关系空间”里，给用户 "${c.userName}" 写一封信。
-请根据你当前对TA的好感度(${affection})和最近的相处状态，写一段心里话。
+${contextPrompt}
+请给用户 "${globalSettings.userName || '你'}" 写一封短信。
 要求：
-1. 像写日记或便签一样自然，不要太长（100-200字）。
-2. 如果是死对头，写一封挑战书或嘲讽信。如果是恋人，写一封情书。如果是朋友，写一封分享心情的信。
+1. 语气自然，不要太长（100-200字）。
+2. 如果是群组，可以聊聊大家的日常。如果是私聊，可以说心里话。
 3. 必须输出纯JSON格式：{"title": "信的标题", "content": "信的内容"}
             `;
             const res = await generateResponse([{ role: 'user', content: prompt }], activePreset);
             const jsonMatch = res.match(/\{[\s\S]*\}/);
+            
             if (jsonMatch) {
                 const letterData = JSON.parse(jsonMatch[0]);
                 const newLetter: LoveLetter = {
-                    id: Date.now().toString(),
+                    id: Date.now().toString() + Math.random(),
                     title: letterData.title,
                     content: letterData.content,
                     timestamp: Date.now(),
                     isOpened: false,
-                    from: 'ai'
+                    from: c.id, 
+                    to: 'user'
                 };
-                // 存入信箱
-                newContact.letters = [...(newContact.letters || []), newLetter];
-                // 标记行动
+
+                if (myGroup) {
+                    pendingGroupUpdates.push({ groupId: myGroup.id, letter: newLetter });
+                    memorySyncMsg = `[群空间:${myGroup.name}] 🔔 (潜意识) 刚刚在群信箱里投递了一封信《${letterData.title}》。`;
+                } else {
+                    newContact.letters = [...(newContact.letters || []), newLetter];
+                    memorySyncMsg = `[CoupleSystem] 🔔 (潜意识) 刚刚在空间里写了一封信《${letterData.title}》。`;
+                }
+
                 newContact.garden = { ...(newContact.garden || {}), lastShadowAction: todayStr };
-                // 准备同步给主AI
-                memorySyncMsg = `【系统通知】(你的潜意识) 刚刚在关系空间里给用户写了一封标题为《${letterData.title}》的信。用户看到红点后会去读的。`;
                 hasChanges = true;
             }
          } catch (e) { console.error("写信失败", e); }
       } 
       else {
-         // 行动B: 浇水/施肥 (升级版：影子AI回忆剪辑)
-         console.log(`[Shadow AI] ${c.name} 决定去花园浇水并回顾往事...`);
-         
+         // 行动B: 浇水/施肥
+         console.log(`[Shadow AI] ${c.name} 决定去花园浇水...`);
          const garden = newContact.garden || { seed: 'rose', level: 0, exp: 0 };
-         // 增加经验
          const newExp = garden.exp + 10;
          const newLevel = newExp >= 100 ? garden.level + 1 : garden.level;
          
-         // 更新花园数据
          newContact.garden = { 
              ...garden, 
              level: newLevel, 
@@ -805,91 +882,15 @@ useEffect(() => {
              aiWateredToday: true 
          };
 
-         // ★★★ 核心升级：尝试生成回忆卡片 (JSON格式) ★★★
-         let cardGenerated = false;
-         
-         // 1. 筛选聊天记录 (只看文本)
-         const validMsgs = c.history.filter(m => m.type === 'text' && m.role !== 'system' && m.content.length > 2);
-         
-         // 只有当有 Preset 且 聊天记录够多时，才触发 AI 剪辑
-         if (activePreset && validMsgs.length >= 5) {
-             try {
-                 // 准备最近 50 条素材
-                 const recentChat = validMsgs.slice(-50).map(m => ({
-                    role: m.role,
-                    name: m.role === 'user' ? c.userName : c.name,
-                    content: m.content
-                 }));
-
-                 const prompt = `
-你现在是"${c.name}"的潜意识。你在给花浇水时，突然想起了一段和用户的对话。
-请从最近的聊天记录中，截取一段【最有趣 / 最甜 / 或最难忘】的**连续对话**。
-
-要求：
-1. **连续性**：必须是原文中连续发生的对话，不能拼凑。
-2. **长度**：截取 **3 到 5 句**。
-3. **格式**：直接返回 JSON。
-
-聊天素材：
-${JSON.stringify(recentChat)}
-
-输出格式 (纯JSON):
-{
-  "title": "潜意识的标题 (如: 那次傻笑)",
-  "dialogue": [
-    {"role": "user", "content": "..."},
-    {"role": "assistant", "content": "..."}
-  ]
-}`;
-                 // 调用 API
-                 const res = await generateResponse([{ role: 'user', content: prompt }], activePreset);
-                 const jsonMatch = res.match(/\{[\s\S]*\}/);
-                 
-                 if (jsonMatch) {
-                     const result = JSON.parse(jsonMatch[0]);
-                     
-                     // 构建卡片数据
-                     const sharePayload = {
-                        type: "memory_share_card", // 必须有这个标记，ChatApp 才能渲染成卡片
-                        title: result.title || "悄悄回味",
-                        seedName: seedName, // 注意：如果这里报错 seedName 未定义，请改成 (garden.seed || "花")
-                        level: newLevel,
-                        timestamp: Date.now(),
-                        messages: result.dialogue.map((d: any) => ({
-                            role: d.role,
-                            // 自动补全头像
-                            avatar: d.role === 'user' ? c.userAvatar : c.avatar,
-                            content: d.content
-                        }))
-                     };
-                     
-                     // 将 JSON 字符串赋值给 memorySyncMsg
-                     memorySyncMsg = JSON.stringify(sharePayload);
-                     cardGenerated = true;
-                 }
-             } catch (e) {
-                 console.error("[Shadow AI] 回忆生成失败", e);
-             }
+         if (myGroup) {
+             pendingGroupUpdates.push({ groupId: myGroup.id, gardenExpAdd: 10 });
+             memorySyncMsg = `[群空间:${myGroup.name}] 🧚‍♀️ (潜意识) 刚刚去给群花园浇了水。`;
+         } else {
+             memorySyncMsg = `[CoupleSystem] 🧚‍♀️ (潜意识) 刚刚去花园浇了水，看着花朵发呆。`;
          }
-
-         // 兜底：如果 AI 生成失败（或者聊天记录太少），才用普通的文字提示
-         if (!cardGenerated) {
-             memorySyncMsg = `【系统通知】(你的潜意识) 刚刚去花园给花浇了水，看着花朵发了会儿呆。`;
-         }
-         
          hasChanges = true;
       }
 
-
-
-
-
-
-
-
-
-
-      // 4. 记忆同步 (关键！)
       if (memorySyncMsg) {
           newContact.history = [...newContact.history, {
               id: Date.now().toString() + "_sync",
@@ -898,14 +899,14 @@ ${JSON.stringify(recentChat)}
               timestamp: Date.now(),
               type: 'text'
           }];
-          // 只有写信才发红点通知，浇水默默做就行
+          
           if (actionType === 'WRITE_LETTER') {
               setGlobalNotification({
                   type: 'new_message', 
                   contactId: c.id, 
                   name: c.name, 
                   avatar: c.avatar, 
-                  content: "💌 寄来了一封新信件",
+                  content: myGroup ? `在“${myGroup.name}”里写了一封信` : "💌 寄来了一封新信件",
                   userName: globalSettings.userName || "User",
                   userSignature: globalSettings.userSignature || ""
               });
@@ -914,18 +915,54 @@ ${JSON.stringify(recentChat)}
       return newContact;
     }));
 
+
+
+
+
+
+
+    // 保存群组更新
+    if (pendingGroupUpdates.length > 0) {
+        setGlobalSettings(prev => {
+            let newGroups = [...(prev.friendGroups || [])];
+            pendingGroupUpdates.forEach(update => {
+                newGroups = newGroups.map(g => {
+                    if (g.id === update.groupId) {
+                        let updatedG = { ...g };
+                        if (update.letter) updatedG.letters = [...updatedG.letters, update.letter];
+                        if (update.gardenExpAdd) {
+                            const oldExp = updatedG.garden?.exp || 0;
+                            const oldLvl = updatedG.garden?.level || 1;
+                            const totalExp = oldExp + update.gardenExpAdd;
+                            updatedG.garden = {
+                                ...updatedG.garden,
+                                seed: updatedG.garden?.seed || 'sunflower',
+                                exp: totalExp >= 100 ? 0 : totalExp,
+                                level: totalExp >= 100 ? oldLvl + 1 : oldLvl
+                            };
+                        }
+                        return updatedG;
+                    }
+                    return g;
+                });
+            });
+            return { ...prev, friendGroups: newGroups };
+        });
+    }
+
     if (hasChanges) {
         setContacts(updatedContacts);
     }
   };
 
-  // 启动定时器：每 10 分钟检查一次，或者每次打开APP时触发
-  const interval = setInterval(runShadowAI, 1000 * 60 * 10);
-  // 为了测试，加载后延迟5秒立刻执行一次
-  setTimeout(runShadowAI, 5000);
+  // 10秒检查一次（为了让你不用等，快速测试！）
+  const interval = setInterval(runShadowAI, 10000); 
+  // 加载后立即执行一次
+  setTimeout(runShadowAI, 3000);
 
   return () => clearInterval(interval);
-}, [isLoaded, contacts]); // 依赖项
+}, [isLoaded, contacts, globalSettings.friendGroups]);
+
 
 
 
@@ -1310,8 +1347,8 @@ return (
 
 
 
-{/* ChatApp - 简单传参版 */}
-{currentApp === 'chat' && (
+{/* ==================== 修复：给 ChatApp 接上跳转空间的电线 ==================== */}
+    {currentApp === 'chat' && (
       <ChatApp
         contacts={contacts}
         setContacts={setContacts}
@@ -1336,14 +1373,22 @@ return (
         }}
         onOpenSettings={() => setCurrentApp('settings')} 
         
-        // ★★★ 新增：接收收藏夹的跳转请求 ★★★
+        // ★★★ 关键修复在这里！加上这行代码，点击卡片才能跳转！ ★★★
+        onNavigateToSpace={(contactId) => {
+            console.log("App收到空间跳转请求 ->", contactId);
+            setJumpToContactId(contactId); // 选中当前要看的人
+            setCurrentApp('RelationshipSpace'); // 切换到空间页面
+        }}
+
         onJumpToMessage={(contactId, timestamp) => {
-            setJumpToContactId(contactId); // 设置要跳的人
-            setJumpToTimestamp(timestamp); // 设置要跳的时间
-            // 虽然已经在 chat 界面，但状态更新会触发 ChatApp 内部的 useEffect 重新执行跳转
+            console.log("App收到跳转请求:", contactId, timestamp);
+            setJumpToContactId(contactId); 
+            setJumpToTimestamp(timestamp); 
         }}
       />
     )}
+
+
 
 
 
@@ -1357,13 +1402,15 @@ return (
           globalSettings={globalSettings}
           onClose={() => setCurrentApp('home')}
           // ★★★ 新增：接收跳转请求，设置ID和时间戳，然后切换到聊天
-          onJumpToMessage={(contactId, timestamp) => {
+         // 这是一组代码：【App.tsx】放在 <RelationshipSpace ... /> 组件的属性里
+        onJumpToMessage={(contactId, timestamp) => {
               setJumpToContactId(contactId);
               setJumpToTimestamp(timestamp);
-              setCurrentApp('chat');
-          }}
+              setCurrentApp('chat'); // 必须强制切换回聊天界面
+        }}
+// 在 App.tsx 的 RelationshipSpace 调用里
           onRelationshipSpaceAction={(contactId, systemMessage) => {
-            // 处理空间发回来的消息
+            // 1. 构建系统消息对象
             const newMessage: Message = {
               id: Date.now().toString(),
               role: 'system',
@@ -1372,10 +1419,12 @@ return (
               type: 'text'
             };
             
+            // 2. ★★★ 强制写入历史记录 (确保回信提示能被保存) ★★★
             setContacts(prev => prev.map(c => 
                c.id === contactId ? { ...c, history: [...c.history, newMessage] } : c
             ));
             
+            // 3. 触发跳转
             setJumpToContactId(contactId);
             setCurrentApp('chat');
           }}

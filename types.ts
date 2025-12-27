@@ -170,27 +170,7 @@ export interface UserProfile {
   habits?: ProfileTrait[];
 }
 
-// ★★★ 核心新增：多人空间组结构 ★★★
-export interface FriendGroup {
-    id: string;
-    name: string;
-    members: string[]; // 成员ID列表
-    letters: LoveLetter[];
-    
-    questions: QAEntry[];
-    garden: any;
-    created: number;
-}
 
-// ★★★ 核心新增：恋爱清单结构 ★★★
-export interface BucketItem {
-    id: string;
-    title: string;
-    userContent: string;
-    aiContent: string;
-    isDone: boolean;
-    isUnlocked: boolean;
-}
 
 export interface Agreement {
   id: string;
@@ -210,6 +190,46 @@ export interface EmotionalNeed {
   trigger_reason: string;
   updated_at: number;
 }
+
+
+
+
+
+
+
+
+
+
+// 这是一组代码：【types.ts】修正后的恋爱清单定义
+export interface BucketItem {
+    id: string;
+    title: string;
+    userContent: string; // 我的答案
+    aiContent: string;   // AI的答案
+    isDone: boolean;     // 是否完成
+    isUnlocked: boolean; // ★★★ 核心：是否解锁（只有双方都填了，或者你填了以后才为true）
+}
+
+export interface FriendGroup {
+    id: string;
+    name: string;
+    members: string[]; // 成员ID列表
+    letters: LoveLetter[]; // 群组信箱
+    questions: QAEntry[];  // 群组问答
+    garden: { seed: string; level: number; exp: number; lastWaterDate?: string; flowerHistory?: any[] }; // 群组花园
+    created: number;
+}
+
+
+
+
+
+
+
+
+
+
+
 
 export interface Contact {
   
