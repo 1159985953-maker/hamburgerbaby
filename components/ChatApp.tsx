@@ -3217,7 +3217,7 @@ const ChatApp: React.FC<ChatAppProps> = ({
 // 在 ChatApp 组件的状态定义区域
 
   const [editingMsgId, setEditingMsgId] = useState<string | null>(null); // 当前正在编辑的消息ID
-  const [historyLimit, setHistoryLimit] = useState(30); 
+   const [historyLimit, setHistoryLimit] = useState(30); 
   // 用来记录加载前的滚动高度，防止加载时画面乱跳
   const prevScrollHeightRef = useRef(0);
   const chatContainerRef = useRef<HTMLDivElement>(null);
@@ -7254,6 +7254,7 @@ const readTavernPng = async (file: File): Promise<any | null> => {
   }, [historyLimit, activeContact?.id]); // 依赖项：条数变了，或者换人了
   // ==================== ★★★ 【新代码结束】 ★★★ ====================
 
+  const scrollToBottom = (behavior: ScrollBehavior = 'auto') => {
 
 
 
@@ -7265,8 +7266,6 @@ const readTavernPng = async (file: File): Promise<any | null> => {
 
 
 
-
-const scrollToBottom = (behavior: ScrollBehavior = 'auto') => {
   // ★★★ 核心逻辑：如果正在跳转，就直接退出，什么都不做 ★★★
   if (isJumpingRef.current) {
     console.log("✋ 自动滚动被跳转暂停");
@@ -7559,15 +7558,12 @@ useEffect(() => {
   isBackgroundRef.current = isBackground;
 }, [isBackground]);
 useEffect(() => { viewRef.current = view; }, [view]);
-
-  useEffect(() => { activeContactIdRef.current = activeContactId; }, [activeContactId]);
-// ==================== ★★★ 【修改代码】切换角色时重置分页 ★★★ ====================
-  useEffect(() => { 
+useEffect(() => { 
       activeContactIdRef.current = activeContactId;
       // 切换人时，重置回只看最后 30 条
       setHistoryLimit(30);
   }, [activeContactId]);
-  // ==================== ★★★ 【修改结束】 ★★★ ====================
+
 
 
 
@@ -9806,24 +9802,35 @@ return (
 
 
 
-{/* 核心消息列表 */}
+
+
+
+
+{/* ==================== ★★★ 【修改代码】绑定 Ref 和 Scroll 事件 ★★★ ==================== */}
 <div 
   ref={chatContainerRef} // 1. 绑定 Ref
   onScroll={handleScrollEvents} // 2. 绑定滚动事件
   className={`flex-1 overflow-y-auto p-4 space-y-0.5 z-0 ${musicPlayerOpen && !isPlayerMinimized ? 'pt-4' : 'pt-2'}`}
   style={activeContact.chatBackground ? { backgroundImage: `url(${activeContact.chatBackground})`, backgroundSize: 'cover', backgroundPosition: 'center' } : {}}
 >
- {activeContact.customCSS && <style dangerouslySetInnerHTML={{ __html: activeContact.customCSS }} />}
+{/* ==================== ★★★ 【修改结束】 ★★★ ==================== */}
+  {activeContact.customCSS && <style dangerouslySetInnerHTML={{ __html: activeContact.customCSS }} />}
   
   
-    {activeContact.history.length > historyLimit && (
+  
+  {activeContact.history.length > historyLimit && (
       <div className="w-full py-4 text-center text-xs text-gray-400 animate-pulse">
          ⏳ 下拉查看更多历史...
       </div>
   )}
 
 
-{/* 这是一组代码：消息渲染循环核心 (修复了重复渲染邀请卡片的问题) */}
+
+
+
+
+  {/* ==================== ★★★ 【修改代码】只渲染最后 N 条 ★★★ ==================== */}
+  {/* 原来是 activeContact.history.map，现在改成 slice 切片后再 map */}
   {activeContact.history
       .slice(-historyLimit) // 重点：只取最后 historyLimit 条
       .map((msg, index, arr) => { // 注意：这里的 index 是切片后的索引
@@ -10289,6 +10296,19 @@ const isLoverInvitation = msg.content.includes('[LoverInvitation]') || msg.conte
       </React.Fragment>
     );
 })}
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

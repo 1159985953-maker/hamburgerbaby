@@ -228,7 +228,9 @@ export interface FriendGroup {
 
 // ==================== [types.ts] 升级后的相册定义 (只增不改) ====================
 
-// 1. 装饰物（贴纸/文字）的定义 - 增加了字体、颜色等样式
+// ==================== [types.ts] 升级后的相册定义 (支持排版、字体、背景) ====================
+
+// 1. 装饰物（贴纸/文字）的定义
 export interface AlbumDecoration {
   id: string;
   type: 'sticker' | 'text'; 
@@ -237,25 +239,27 @@ export interface AlbumDecoration {
   y: number;       // 纵坐标百分比
   rotate: number;  // 旋转角度
   scale: number;   // 缩放大小
-  // --- ★★★ 新增：文字专属样式 ★★★ ---
+  // ★★★ 新增：文字专属样式 ★★★
   fontFamily?: string;  // 字体
   color?: string;       // 颜色
-  fontWeight?: string;  // 粗体
-  fontStyle?: string;   // 斜体
+  fontWeight?: string;  // 粗体 (bold)
+  fontStyle?: string;   // 斜体 (italic)
 }
 
-// 2. 每一页的定义 - 增加了照片数组、布局和背景
+// 2. 每一页的定义
 export interface AlbumPage {
   id: string;
   type: 'photo_frame' | 'free_journal'; // 是照片页还是手帐页
-  photo?: string; // 保留你旧的单图字段，以兼容旧数据
   photos?: string[]; // ★★★ 新增：照片数组 (支持多张)
   layout?: '1-photo' | '2-photos' | '3-photos'; // ★★★ 新增：照片布局模式
   background?: string; // ★★★ 新增：页面背景色/纸纹
   decorations: AlbumDecoration[]; // 这一页上面的贴纸和字
+  
+  // 兼容旧数据的字段 (可以保留)
+  photo?: string; 
 }
 
-// 3. 相册的定义 (保持不变)
+// 3. 相册的定义
 export interface PhotoAlbum {
   id: string;
   title: string;
