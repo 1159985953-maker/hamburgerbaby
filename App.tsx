@@ -61,7 +61,7 @@ const INITIAL_CONTACTS: Contact[] = [
     aiDND: { enabled: false, until: 0 },
     
     // ★★★ 修改这里：点数设为 999 ★★★
-    interventionPoints: 999,
+    interventionPoints: 3,
     
     longTermMemories: [],
     currentChatMode: 'Casual',
@@ -509,8 +509,15 @@ if (savedSettings) {
           maxDaily: 2
         },
         // 清掉任何残留的 pendingProactive 标记
-        pendingProactive: false
+        pendingProactive: false,
+        // 这是一组代码：新增：如果 impressionThreshold 未定义，则初始化为默认值
+impressionThreshold: sanitized.impressionThreshold || (Math.floor(Math.random() * (150 - 90 + 1)) + 90), // Default to 'normal' mode (90-150)
+// 确保 chatCountForPoint 和 impressionCount 也有默认值 (防止旧存档缺失)
+chatCountForPoint: sanitized.chatCountForPoint || 0,
+impressionCount: sanitized.impressionCount || 0,
+        
       };
+      
     });
     const contactsWithPoints = repaired.map(c => ({
 ...c,
@@ -1408,26 +1415,37 @@ return (
               setJumpToTimestamp(timestamp);
               setCurrentApp('chat'); // 必须强制切换回聊天界面
         }}
-// 在 App.tsx 的 RelationshipSpace 调用里
-          onRelationshipSpaceAction={(contactId, systemMessage) => {
-            // 1. 构建系统消息对象
-            const newMessage: Message = {
-              id: Date.now().toString(),
-              role: 'system',
-              content: systemMessage,
-              timestamp: Date.now(),
-              type: 'text'
-            };
-            
-            // 2. ★★★ 强制写入历史记录 (确保回信提示能被保存) ★★★
-            setContacts(prev => prev.map(c => 
-               c.id === contactId ? { ...c, history: [...c.history, newMessage] } : c
-            ));
-            
-            // 3. 触发跳转
-            setJumpToContactId(contactId);
-            setCurrentApp('chat');
-          }}
+// 这是一组代码：请用这段新代码覆盖 App.tsx 中旧的 onRelationshipSpaceAction
+onRelationshipSpaceAction={(contactId, systemMessage) => {
+    // 1. 构建系统消息对象
+    const newMessage: Message = {
+      id: Date.now().toString(),
+      role: 'system',
+      content: systemMessage,
+      timestamp: Date.now(),
+      type: 'text'
+    };
+    
+    // 2. ★★★ 核心修复：检查这条消息是不是“邀请函” ★★★
+    const isLoverInvite = systemMessage.includes('[LoverInvitation]');
+
+    // 3. 更新 contacts 状态
+    setContacts(prev => prev.map(c => {
+       if (c.id === contactId) {
+           // 如果是邀请函，除了加入历史，还要把角色的邀请状态设置为 'inviting'
+           if (isLoverInvite) {
+               return { ...c, history: [...c.history, newMessage], invitationStatus: 'inviting' };
+           }
+           // 否则，只加入历史记录
+           return { ...c, history: [...c.history, newMessage] };
+       }
+       return c;
+    }));
+    
+    // 4. 触发跳转，让用户能立刻看到这条消息或邀请函
+    setJumpToContactId(contactId);
+    setCurrentApp('chat');
+}}
         />
       </div>
     )}

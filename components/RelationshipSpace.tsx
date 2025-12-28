@@ -178,35 +178,40 @@ const PolaroidWall: React.FC<{ photos: (string | null)[], onUpload: (e: any, i: 
     </div>
   );
 };
-// ==================== ⬇️ 替换 HeartbeatTouch 组件 ⬇️ ====================
-// 3. 💓 心动触碰 (去油腻版：纯粹的心跳共鸣)
-const HeartbeatTouch: React.FC<{ contact: Contact, days: number }> = ({ contact, days }) => {
+// 这是一组代码：【RelationshipSpace.tsx】修改后的头像组件 (点击跳转聊天版)
+// 3. 💓 心动触碰 (点击头像跳转聊天)
+const HeartbeatTouch: React.FC<{ contact: Contact, days: number, onChat: () => void }> = ({ contact, days, onChat }) => {
     const [animate, setAnimate] = useState(false);
     
-    const handlePoke = () => {
+    const handlePoke = (e: React.MouseEvent) => {
+        e.stopPropagation(); // 防止冒泡
         setAnimate(true);
-        // 只有震动反馈，没有文字，此时无声胜有声
+        // 震动反馈
         if (navigator.vibrate) navigator.vibrate([50, 50, 50]);
+        
+        // ★★★ 核心：立即触发跳转聊天 ★★★
+        onChat();
+
         setTimeout(() => setAnimate(false), 800);
     };
 
     return (
         <div className="relative text-center z-10 mb-8 mt-4">
-            <div className="inline-block relative group" onClick={handlePoke}>
+            <div className="inline-block relative group cursor-pointer" onClick={handlePoke}>
                 {/* 呼吸灯光晕 */}
                 <div className={`absolute inset-0 rounded-full bg-rose-400 blur-xl opacity-20 group-hover:opacity-40 transition-opacity duration-1000 ${animate ? 'animate-ping opacity-60' : 'animate-pulse'}`}></div>
                 
                 {/* 头像 */}
                 <img 
                     src={contact.avatar} 
-                    className={`w-32 h-32 rounded-full border-4 border-white shadow-2xl object-cover relative z-10 cursor-pointer transition-all duration-300 ${animate ? 'scale-90 grayscale-[20%]' : 'hover:scale-105'}`} 
+                    className={`w-32 h-32 rounded-full border-4 border-white shadow-2xl object-cover relative z-10 transition-all duration-300 ${animate ? 'scale-90 grayscale-[20%]' : 'hover:scale-105'}`} 
                 />
                 
-                {/* 状态徽章 */}
+                {/* 状态徽章 (增加了箭头提示) */}
                 <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 z-20">
                     <span className="bg-white/90 backdrop-blur text-rose-500 text-[10px] font-black px-3 py-1 rounded-full shadow-sm border border-rose-100 flex items-center gap-1 whitespace-nowrap">
                         <span className="w-1.5 h-1.5 bg-green-400 rounded-full animate-pulse"></span>
-                        在线
+                        去聊天 ➜
                     </span>
                 </div>
             </div>
@@ -272,12 +277,11 @@ const getTheme = (status: string) => {
 
 
 
-// 这是一组代码：【RelationshipSpace.tsx】修复后的信纸 (自己寄的信不显示回信按钮)
+// 这是一组代码：【RelationshipSpace.tsx】修复后的信纸组件 (已移除导致报错的通知逻辑)
 const LetterPaperModal: React.FC<{
     isOpen: boolean;
     mode: 'read' | 'write';
     themeColor: string;
-    // 增加 isSentByUser 字段来判断是谁写的
     initialData?: { id: string; title: string; content: string; fromName?: string; toName?: string; date?: string; isFavorite?: boolean; hasReplied?: boolean; isSentByUser?: boolean };
     replyContext?: string;
     onClose: () => void;
@@ -351,7 +355,6 @@ const LetterPaperModal: React.FC<{
                     {mode === 'read' && ( <button onClick={handleSaveImage} className="bg-white text-gray-600 px-4 py-2 rounded-full font-bold text-xs shadow hover:bg-gray-100 transition flex items-center gap-1">📸 保存图片</button> )}
                     {mode === 'write' && ( <button onClick={() => onSend && onSend(title, content, signature)} disabled={!title.trim() || !content.trim()} className={`${btnBg} text-white px-6 py-2 rounded-full font-bold text-xs shadow-lg active:scale-95 transition disabled:opacity-50`}>📮 寄出</button> )}
                     
-                    {/* ★★★ 核心修改：如果是自己发的信 (isSentByUser)，绝对不显示回信按钮 ★★★ */}
                     {mode === 'read' && initialData && !initialData.isSentByUser && ( 
                         <button 
                             disabled={initialData.hasReplied} 
@@ -2002,6 +2005,44 @@ const GroupManageModal: React.FC<{
 // ==================== [RelationshipSpace.tsx] 主组件逻辑重写 ====================
 const RelationshipSpace: React.FC<RelationshipSpaceProps> = ({ contacts, setContacts, onClose, onRelationshipSpaceAction, globalSettings, setGlobalSettings, onJumpToMessage }) => {
 
+const [notification, setNotification] = useState<{ title: string; message: string; icon: string; } | null>(null);
+// 这是一组代码：【RelationshipSpace.tsx】新增的全局通知系统
+// ==================== [新增] 空间内全局通知系统 ====================
+
+const prevContactRef = useRef<Contact | null>(null);
+const prevGroupRef = useRef<FriendGroup | null>(null);
+
+// 1. 通知自动消失的计时器
+useEffect(() => {
+    if (notification) {
+        const timer = setTimeout(() => {
+            setNotification(null);
+        }, 4000); // 4秒后自动消失
+        return () => clearTimeout(timer);
+    }
+}, [notification]);
+
+// 2. 渲染通知UI的组件
+const NotificationBanner: React.FC = () => {
+    if (!notification) return null;
+    return (
+        <div 
+            className="absolute top-[calc(env(safe-area-inset-top)+56px)] left-4 right-4 z-[500] bg-white/90 backdrop-blur-xl rounded-2xl p-3 shadow-2xl border border-white/50 flex items-center gap-3 cursor-pointer animate-slideDown"
+            onClick={() => setNotification(null)}
+        >
+            <div className="w-10 h-10 rounded-full bg-white/50 flex items-center justify-center text-xl shadow-inner">
+                {notification.icon}
+            </div>
+            <div className="flex-1 min-w-0">
+                <p className="font-bold text-sm text-gray-800 truncate">{notification.title}</p>
+                <p className="text-xs text-gray-500 truncate">{notification.message}</p>
+            </div>
+        </div>
+    );
+};
+
+
+
     // ★★★ 核心修复：直接从全局设置里读取群组，没有就为空数组 ★★★
     const groups = globalSettings.friendGroups || [];
 
@@ -2042,6 +2083,7 @@ const RelationshipSpace: React.FC<RelationshipSpaceProps> = ({ contacts, setCont
     const [activeGroup, setActiveGroup] = useState<FriendGroup | null>(null);
     // (如果你的代码里是 setActiveContact，请确保它下面有这一行)
   const [targetId, setTargetId] = useState<string | null>(null);
+  
   const [tab, setTab] = useState<'hub' | 'garden'>('hub');
   const [selectedLetter, setSelectedLetter] = useState<LoveLetter | null>(null);
   const [showSettings, setShowSettings] = useState(false);
@@ -2065,7 +2107,64 @@ const RelationshipSpace: React.FC<RelationshipSpaceProps> = ({ contacts, setCont
 
 
 
+  const currentRelationship = contacts.find(c => c.RelationShipUnlocked);
+  const targetContact = contacts.find(c => c.id === targetId);
+// 这是一组代码：【RelationshipSpace.tsx】正确位置的通知监听逻辑 (插入到 targetContact 定义之后)
+    useEffect(() => {
+        // 只有在空间内部时才监听
+        if (view !== 'space') return;
 
+        const isGroupMode = !!targetGroup;
+        const currentData = isGroupMode ? targetGroup : targetContact;
+        const prevData = isGroupMode ? prevGroupRef.current : prevContactRef.current;
+
+        if (currentData && prevData) {
+            // --- 侦测 1: AI寄来了新信件 ---
+            const newLetters = (currentData.letters || []).filter(l => 
+                l.from !== 'user' && !(prevData.letters || []).some(pl => pl.id === l.id)
+            );
+            if (newLetters.length > 0) {
+                setNotification({
+                    icon: '💌',
+                    title: `${isGroupMode ? '新信件抵达' : (targetContact?.name || 'TA')} 寄来一封信`,
+                    message: newLetters[0].title || "无标题信件"
+                });
+            }
+
+            // --- 侦测 2: AI回答了你的提问 ---
+            const newAnswers = (currentData.questions || []).filter(q => 
+                q.aiAnswer && !(prevData.questions || []).find(pq => pq.id === q.id)?.aiAnswer
+            );
+            if (newAnswers.length > 0) {
+                setNotification({
+                    icon: '💡',
+                    title: '收到了新的回答',
+                    message: `关于 “${newAnswers[0].question.slice(0, 20)}...”`
+                });
+            }
+
+            // --- 侦测 3: AI回应了你的愿望清单 (仅对联系人有效) ---
+            if (!isGroupMode && 'bucketList' in currentData) {
+                const newBucketResponses = (currentData.bucketList || []).filter(b => 
+                    b.aiContent && !((prevData as any).bucketList || []).find((pb:any) => pb.id === b.id)?.aiContent
+                );
+                if (newBucketResponses.length > 0) {
+                    setNotification({
+                        icon: '✨',
+                        title: '愿望清单有新回应',
+                        message: `关于 “${newBucketResponses[0].title}”`
+                    });
+                }
+            }
+        }
+
+        // 更新“上一秒”的数据
+        if (isGroupMode) {
+            prevGroupRef.current = targetGroup;
+        } else {
+            prevContactRef.current = targetContact;
+        }
+    }, [targetContact, targetGroup, view]);
 
 
 
@@ -2092,23 +2191,25 @@ const RelationshipSpace: React.FC<RelationshipSpaceProps> = ({ contacts, setCont
 
 
 
+// ==================== [修复代码 1/4] 修复发送邀请逻辑 (RelationshipSpace.tsx) ====================
+// 请用这段代码完全替换原来的 handleSendInvite 函数
+const handleSendInvite = (contact: Contact, type: 'lover' | 'friend') => {
+    if (type === 'lover') {
+        // 1. 定义带有“暗号”的邀请内容
+        // 注意：[LoverInvitation] 是系统识别的关键，绝对不能删！
+        const invitationContent = `[LoverInvitation] 我想邀请你一起开启我们的专属空间💕`;
 
-// 这是一组代码：【最终版】发送邀请指令 (确保暗号能被正确识别)
-   const handleSendInvite = (contact: Contact, type: 'lover' | 'friend') => {
-        if (type === 'lover') {
-            
-            // ★★★ 核心修改：把又长又啰嗦的文字，换成你指定的简洁版 ★★★
-            // 同时，我们保留了 [LoverInvitation] 这个暗号，让 ChatApp 能识别它
-            const invitationContent = `[LoverInvitation] 邀请你开通情侣空间💕`;
-
-            onRelationshipSpaceAction(contact.id, invitationContent);
-            
-            // 后面的逻辑不变
-            setContacts(prev => prev.map(c => c.id === contact.id ? { ...c, invitationStatus: 'inviting_lover' } : c));
-            alert(`已向 ${contact.name} 发送邀请！\n请去聊天窗口等待 TA 的回复...`);
-            setShowCandidates(false);
-        }
-    };
+        // 2. 调用 App.tsx 传下来的动作函数
+        // 这会做两件事：A.把消息存进历史记录 B.把状态改为 inviting
+        onRelationshipSpaceAction(contact.id, invitationContent);
+        
+        // 3. 提示用户并关闭弹窗
+        alert(`已向 ${contact.name} 发送邀请！\n请去聊天窗口等待 TA 的回复...`);
+        setShowCandidates(false);
+        // 自动跳回列表，方便用户去聊天页查看
+        setView('list'); 
+    }
+};
 
 
 
@@ -2199,8 +2300,6 @@ const RelationshipSpace: React.FC<RelationshipSpaceProps> = ({ contacts, setCont
         reader.readAsDataURL(file);
     };
 
-  const currentRelationship = contacts.find(c => c.RelationShipUnlocked);
-  const targetContact = contacts.find(c => c.id === targetId);
 
   const getUnreadCount = (c: Contact) => (c.letters || []).filter(l => !l.isOpened && l.from === 'ai').length;
   const RelationshipUnread = currentRelationship ? getUnreadCount(currentRelationship) : 0;
@@ -2490,6 +2589,12 @@ const RelationshipSpace: React.FC<RelationshipSpaceProps> = ({ contacts, setCont
     const activeData = isGroupMode ? targetGroup : targetContact;
 
     if (view === 'space' && activeData) {
+
+
+
+
+
+
         // --- 模式判定 ---
         const isRelationship = !isGroupMode && (targetContact?.RelationShipUnlocked || targetContact?.relationshipStatus === 'Honeymoon');
         
@@ -2511,7 +2616,7 @@ const RelationshipSpace: React.FC<RelationshipSpaceProps> = ({ contacts, setCont
         return (
 // 这是一组代码：【修复】为情侣空间根容器添加顶部内边距
 <div className={`h-full w-full ${theme.bg} flex flex-col overflow-hidden relative pt-[calc(44px+env(safe-area-inset-top))]`} style={theme.style}>
-        
+         <NotificationBanner />
 <div className="absolute inset-0 top-[calc(44px+env(safe-area-inset-top))] -z-0 pointer-events-none">
     {isRelationship && <FloatingHearts />}
 </div>
@@ -2595,38 +2700,108 @@ const RelationshipSpace: React.FC<RelationshipSpaceProps> = ({ contacts, setCont
                                 <>
 
                                 
-                                    <HeartbeatTouch contact={targetContact!} days={days} />
+                                 {/* 这是一组代码：【RelationshipSpace.tsx】传入跳转指令 */}
+                                    <HeartbeatTouch 
+                                        contact={targetContact!} 
+                                        days={days} 
+                                        onChat={() => {
+                                            // 利用 onJumpToMessage 机制，跳到最新时间点 = 打开聊天窗口
+                                            if (onJumpToMessage) {
+                                                onJumpToMessage(targetContact!.id, Date.now());
+                                            }
+                                        }}
+                                    />
                                     {/* ... 拍立得、清单等 ... */}
 
-<div className="bg-white/60 backdrop-blur-md rounded-3xl p-4 mx-2 mb-6 shadow-lg border border-white/50">
-    <div className="relative flex flex-col items-center justify-center py-6 group">
-        {/* 背景光晕特效 */}
-        <div className={`absolute inset-0 bg-gradient-to-b ${isGroupMode ? 'from-sky-100/50' : 'from-rose-100/50'} to-transparent rounded-full blur-3xl -z-10`}></div>
-        
-        {/* 巨大的天数 */}
-        <h1 className={`text-7xl font-black ${isGroupMode ? 'text-sky-500' : 'text-rose-500'} drop-shadow-sm tracking-tighter animate-float-y select-none`}>
-            {days}
-        </h1>
+{/* ==================== 🌟 改造区域：丰富版·糖果色天数面板 ==================== */}
+                                    <div className="relative mx-4 mb-8">
+                                        
+                                        {/* 1. 主卡片容器 (暖色渐变 + 边框) */}
+                                        <div className="relative rounded-[2rem] p-5  text-center overflow-hidden transition-transform duration-500 hover:scale-[1.02] shadow-[0_8px_30px_rgb(0,0,0,0.08)] border-4 border-white/80"
+                                            style={{
+                                                // 🍬 糖果渐变底色
+                                                background: isGroupMode 
+                                                    ? 'linear-gradient(180deg, #ffffff 0%, #eff6ff 100%)' // 蓝白渐变
+                                                    : 'linear-gradient(180deg, #fff0f5 0%, #ffe4e6 100%)', // 粉白渐变
+                                            }}
+                                        >
+                                            {/* 2. 背景纹理 (波点装饰 - 填充空白感的核心) */}
+                                            <div className="absolute inset-0 opacity-30 pointer-events-none" 
+                                                style={{ 
+                                                    backgroundImage: isGroupMode 
+                                                        ? 'radial-gradient(#93c5fd 1.5px, transparent 1.5px)' 
+                                                        : 'radial-gradient(#f472b6 1.5px, transparent 1.5px)', 
+                                                    backgroundSize: '20px 20px' 
+                                                }}
+                                            ></div>
 
-        {/* 下方的小标题 */}
-        <div className={`flex items-center gap-2 mt-3 px-4 py-1.5 rounded-full ${isGroupMode ? 'bg-sky-50 text-sky-600' : 'bg-rose-50 text-rose-600'} border border-white/50 shadow-sm`}>
-            <span className="text-lg animate-pulse">{isGroupMode ? '🏡' : '💞'}</span>
-            <span className="text-[10px] font-bold tracking-[0.2em] uppercase">
-                {isGroupMode ? 'DAYS ESTABLISHED' : 'DAYS IN LOVE'}
-            </span>
-        </div>
-    </div>
-</div>
+                                       
+
+                                            {/* 4. 悬浮装饰物 (丰富画面) */}
+                                            <div className="absolute top-4 left-6 text-2xl opacity-60 animate-bounce" style={{ animationDuration: '3s' }}>☁️</div>
+                                            <div className="absolute bottom-6 right-6 text-xl opacity-60 animate-bounce" style={{ animationDuration: '2.5s' }}>✨</div>
+                                            <div className="absolute top-10 right-10 text-lg opacity-40 animate-spin-slow">✴️</div>
+
+                                            {/* 5. 核心内容区域 */}
+                                            <div className="relative z-10 flex flex-col items-center justify-center animate-float-y">
+                                                
+                                                {/* 小标题 */}
+                                                <div className={`text-[10px] font-black tracking-[0.3em] uppercase mb-[-10px] px-3 py-1 rounded-full bg-white/60 backdrop-blur-sm shadow-sm
+                                                    ${isGroupMode ? 'text-blue-400' : 'text-rose-400'}`}>
+                                                    ESTABLISHED
+                                                </div>
+
+                                                {/* 巨大的数字 */}
+                                                <h1 className="text-[100px] leading-none font-black tracking-tighter select-none drop-shadow-sm font-sans" 
+                                                    style={{
+                                                        // 更加鲜艳的渐变字
+                                                        backgroundImage: isGroupMode 
+                                                            ? 'linear-gradient(to bottom, #60a5fa, #1e40af)' 
+                                                            : 'linear-gradient(to bottom, #fb7185, #be123c)',
+                                                        WebkitBackgroundClip: 'text',
+                                                        WebkitTextFillColor: 'transparent',
+                                                        filter: 'drop-shadow(2px 4px 0px rgba(255,255,255,0.8))' // 白色描边效果
+                                                    }}
+                                                >
+                                                    {days}
+                                                </h1>
+
+                                                {/* 底部胶囊 */}
+                                                <div className={`mt-[-10px] px-8 py-2 rounded-2xl shadow-sm backdrop-blur-md flex items-center gap-2 border border-white/50
+                                                    ${isGroupMode ? 'bg-white/60 text-blue-600' : 'bg-white/60 text-rose-600'}`}>
+                                                    <span className="text-sm">
+                                                        {isGroupMode ? '🌱' : '👩‍❤️‍💋‍👨'}
+                                                    </span>
+                                                    <span className="text-xs font-bold tracking-widest">
+                                                        {isGroupMode ? 'DAYS TOGETHER' : 'DAYS IN LOVE'}
+                                                    </span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
                                     <PolaroidWall photos={(targetContact as any).couplePhotos || [null,null,null]} onUpload={handlePolaroidUpload} />
                      
 
                             {/* 修复后的调用代码：加上了暗号 [CoupleSystem] */}
-                                    <CoupleBucketList 
-                                        contact={targetContact!} theme={theme}
-                                        onUpdate={(items) => setContacts(prev => prev.map(c => c.id === targetContact!.id ? { ...c, bucketList: items } : c))}
-                                        // ★★★ 重点：加上 [CoupleSystem] 前缀 ★★★
-                                        onShare={(item) => onRelationshipSpaceAction(targetContact!.id, `[CoupleSystem] 我们在恋爱清单里更新了愿望：${item.title} \n(我的想法: ${item.userContent})`)}
-                                    />
+                           {/* ==================== 改造区域 1：恋爱清单 (暖黄波点板块) ==================== */}
+                            <div className="mx-2 mb-6 pt-6 pb-6 px-4 rounded-3xl relative shadow-inner border border-yellow-100 overflow-hidden"
+                                style={{
+                                    backgroundColor: '#fffbeb', // 暖黄色底
+                                    backgroundImage: 'radial-gradient(#fcd34d 2px, transparent 2px)', // 波点纹理
+                                    backgroundSize: '24px 24px' // 波点间距
+                                }}
+                            >
+                                {/* 装饰：右上角的胶带 */}
+                                <div className="absolute top-0 right-8 w-8 h-12 bg-yellow-400/30 backdrop-blur-sm -rotate-3 rounded-b-md shadow-sm"></div>
+
+                                {/* 修复后的调用代码：加上了暗号 [CoupleSystem] */}
+                                <CoupleBucketList 
+                                    contact={targetContact!} theme={theme}
+                                    onUpdate={(items) => setContacts(prev => prev.map(c => c.id === targetContact!.id ? { ...c, bucketList: items } : c))}
+                                    // ★★★ 重点：加上 [CoupleSystem] 前缀 ★★★
+                                    onShare={(item) => onRelationshipSpaceAction(targetContact!.id, `[CoupleSystem] 我们在恋爱清单里更新了愿望：${item.title} \n(我的想法: ${item.userContent})`)}
+                                />
+                            </div>
                                 </>
                             )}
 
@@ -2773,23 +2948,32 @@ onSend={(recipientId, title, content, isReply) => {
                     
 
                             {/* 问答 */}
-                            <div className="px-2 mt-6">
-                                <div className="flex justify-between items-center mb-4 px-1">
-                                    <span className="text-xs font-bold text-gray-500 flex items-center gap-1">
-                                        {isGroupMode ? "📢 大家来回答" : "🧩 灵魂默契度"}
+{/* ==================== 改造区域 2：问答互动 (清爽蓝斜纹板块) ==================== */}
+                            <div className="mx-2 mt-6 mb-24 pt-6 pb-8 px-4 rounded-3xl relative shadow-inner border border-blue-100 overflow-hidden"
+                                style={{
+                                    // 蓝色斜纹背景 (类似信箱，但换成了蓝色系)
+                                    background: `repeating-linear-gradient(135deg, #f0f9ff, #f0f9ff 10px, #e0f2fe 10px, #e0f2fe 20px)`
+                                }}
+                            >
+                                <div className="flex justify-between items-center mb-6 px-1 relative z-10">
+                                    <span className="text-sm font-black text-blue-800/70 flex items-center gap-2 uppercase tracking-wider">
+                                        <span className="text-xl">🧩</span> 
+                                        {isGroupMode ? "GROUP QUIZ" : "SOUL SYNC"}
                                     </span>
-                                  {/* 这是一组代码：修复后的提问按钮，点击先清空目标，触发弹窗逻辑 */}
+                                    
+                                    {/* 这是一组代码：修复后的提问按钮，点击先清空目标，触发弹窗逻辑 */}
                                     <button 
                                         onClick={() => { 
                                             setTargetId(null); // 先清空目标，强制触发选人
                                             setQuestionDraft(""); 
                                             setShowQuestionModal(true); 
                                         }} 
-                                        className="text-[10px] bg-white text-gray-600 px-3 py-1.5 rounded-full font-bold hover:bg-gray-50 transition shadow-sm border border-gray-200"
+                                        className="text-xs bg-white text-blue-600 px-4 py-2 rounded-full font-bold hover:bg-blue-50 transition shadow-sm border border-blue-200 flex items-center gap-1 active:scale-95"
                                     >
-                                        + 提问
+                                        <span>+</span> 提问
                                     </button>
                                 </div>
+
                                 <QACardStack 
                                     questions={questions} 
                                     theme={theme} 
