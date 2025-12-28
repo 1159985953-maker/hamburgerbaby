@@ -843,7 +843,7 @@ ${contextPrompt}
 请给用户 "${globalSettings.userName || '你'}" 写一封短信。
 要求：
 1. 语气自然，不要太长（100-200字）。
-2. 如果是群组，可以聊聊大家的日常。如果是私聊，可以说心里话。
+2. 如果是群组，可以聊聊大家的日常。如果是私聊，可以说心里话，绝对不可以编造记忆，只能从世界书、人设里获取信息。
 3. 必须输出纯JSON格式：{"title": "信的标题", "content": "信的内容"}
             `;
             const res = await generateResponse([{ role: 'user', content: prompt }], activePreset);
@@ -874,6 +874,12 @@ ${contextPrompt}
             }
          } catch (e) { console.error("写信失败", e); }
       } 
+
+
+
+
+
+
       else {
          // 行动B: 浇水/施肥
          console.log(`[Shadow AI] ${c.name} 决定去花园浇水...`);
@@ -891,9 +897,9 @@ ${contextPrompt}
 
          if (myGroup) {
              pendingGroupUpdates.push({ groupId: myGroup.id, gardenExpAdd: 10 });
-             memorySyncMsg = `[群空间:${myGroup.name}] 🧚‍♀️ (潜意识) 刚刚去给群花园浇了水。`;
+             memorySyncMsg = `[群空间:${myGroup.name}] 刚刚去给群花园浇了水。`;
          } else {
-             memorySyncMsg = `[CoupleSystem] 🧚‍♀️ (潜意识) 刚刚去花园浇了水，看着花朵发呆。`;
+             memorySyncMsg = `[CoupleSystem] 刚刚去花园浇了水，看着花朵发呆。`;
          }
          hasChanges = true;
       }
