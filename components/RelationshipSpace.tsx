@@ -17,6 +17,69 @@ import {FriendGroup, BucketItem } from '../types';
 
 
 
+
+
+
+// ==================== 🎨 素材箱 (请贴在文件顶部，Import下方) ====================
+
+
+// ==================== [第二步] 素材库：贴纸、字体、颜色等 ====================
+
+// 1. 字体库 (支持中文风格)
+const FONTS = [
+    { name: "默认黑体", value: "sans-serif" },
+    { name: "可爱手写", value: "'ZCOOL KuaiLe', cursive" }, 
+    { name: "文艺宋体", value: "Songti SC, serif" },
+    { name: "圆润体", value: "'Varela Round', sans-serif" },
+    { name: "复古楷体", value: "KaiTi, serif" },
+];
+
+// 2. 颜色盘 (给文字和页面用的)
+const TEXT_COLORS = [
+    "#000000", "#5d4037", "#880e4f", "#1a237e", "#1b5e20", 
+    "#e53935", "#fb8c00", "#fdd835", "#43a047", "#1e88e5", 
+    "#8e24aa", "#ff4081", "#ffffff", "#607d8b"
+];
+
+// 3. 页面背景纸 (给页面换色用的)
+const PAPER_TEXTURES = [
+    { name: "米白道林", value: "#fdfbf7" },
+    { name: "少女粉", value: "#fff0f5" },
+    { name: "清爽蓝", value: "#f0f9ff" },
+    { name: "护眼绿", value: "#f0fff4" },
+    { name: "暗夜黑", value: "#2c2c2c" },
+    { name: "羊皮纸", value: "#faebd7" },
+];
+
+// 4. 照片布局模式 (1张/2张/3张)
+const PHOTO_LAYOUTS = [
+    { id: '1-photo', icon: '🖼️', label: '单张' },
+    { id: '2-photos', icon: ' B ', label: '双图' },
+    { id: '3-photos', icon: ' C ', label: '三图' },
+];
+
+// 5. 贴纸包 (超级全面！手帐风！Emoji库)
+const STICKER_PACKS = [
+    { name: "心情", items: ["❤️", "✨", "🌸", "🎀", "🔥", "💢", "💤", "🎵", "📷", "💡", "😭", "😍", "🥳", "🤔"] },
+    { name: "装饰", items: ["🩹", "📌", "📎", "🔖", "🏷️", "✉️", "👑", "💎", "🌟", "🌙", "☁️", "🌈", "🍀"] },
+    { name: "动物", items: ["🐱", "🐶", "🐰", "🦊", "🐻", "🐼", "🐨", "🐯", "🦁", "🐧", "🦄", "🦋", "🐞", "🐣"] },
+    { name: "食物", items: ["🍓", "🍎", "🍔", "🍟", "🍕", "🍦", "🍩", "🍪", "🍫", "🍬", "☕", "🍺", "🎂", "🍿"] },
+    { name: "复古", items: ["🎞️", "📻", "📺", "🕯️", "🕰️", "🗝️", "📜", "🖋️", "🥀", "🎻", "🎷", "📀", "🎙️", "🔭"] },
+];
+
+// 6. 封面材质库
+const COVERS = [
+    { name: '经典牛皮', style: 'linear-gradient(to bottom right, #5d4037, #3e2723)', bgSize: 'cover' },
+    { name: '复古深红', style: 'linear-gradient(to bottom right, #880e4f, #560027)', bgSize: 'cover' },
+    { name: '午夜蓝调', style: 'linear-gradient(to bottom right, #1a237e, #0d1b60)', bgSize: 'cover' },
+    { name: '森林迷雾', style: 'linear-gradient(to bottom right, #1b5e20, #003300)', bgSize: 'cover' },
+    { name: '少女粉格', style: 'repeating-linear-gradient(45deg, #fce4ec, #fce4ec 10px, #f8bbd0 10px, #f8bbd0 20px)', bgSize: 'auto' },
+    { name: '极简牛皮', style: '#e6ccb2', bgSize: 'cover' },
+];
+
+
+
+
 // ==================== [更新] 真实信封样式表 ====================
 const MailboxStyles = () => (
   <style>{`
@@ -1693,6 +1756,11 @@ const DatePickerModal: React.FC<{ isOpen: boolean; currentDate: string; onClose:
     );
 };
 
+
+
+
+
+
 // 2. 💔 分手确认窗 (红色警戒风格)
 const BreakupModal: React.FC<{ isOpen: boolean; name: string; onClose: () => void; onConfirm: () => void; }> = ({ isOpen, name, onClose, onConfirm }) => {
     if (!isOpen) return null;
@@ -1712,6 +1780,9 @@ const BreakupModal: React.FC<{ isOpen: boolean; name: string; onClose: () => voi
         </div>
     );
 };
+
+
+
 
 // 这是一组代码：【修复版】候选人列表 (修复按钮点击事件 + 优化UI)
 const CandidateSelectionModal: React.FC<{ isOpen: boolean; contacts: Contact[]; onClose: () => void; onSelect: (contact: Contact) => void; }> = ({ isOpen, contacts, onClose, onSelect }) => {
@@ -1856,6 +1927,10 @@ const FriendInvitationModal: React.FC<{
 
 
 
+
+
+
+
 // 5. 🏠 创建多人空间弹窗 (New!)
 const CreateGroupModal: React.FC<{
     isOpen: boolean;
@@ -1920,6 +1995,12 @@ const CreateGroupModal: React.FC<{
         </div>
     );
 };
+
+
+
+
+
+
 
 
 
@@ -1996,6 +2077,779 @@ const GroupManageModal: React.FC<{
         </div>
     );
 };
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+const AlbumBookModal: React.FC<{
+    isOpen: boolean;
+    album: PhotoAlbum;
+    onClose: () => void;
+    onUpdate: (updatedAlbum: PhotoAlbum) => void;
+}> = ({ isOpen, album, onClose, onUpdate }) => {
+    // 状态管理
+const [pageIndex, setPageIndex] = useState(0); 
+const draggingRef = useRef<any>(null); 
+const [activeDecoId, setActiveDecoId] = useState<string | null>(null);
+const bookRef = useRef<HTMLDivElement>(null);
+const [isEditingCover, setIsEditingCover] = useState(false);
+
+// ★★★ 新增：文字输入UI的专属状态 ★★★
+const [isTextModalOpen, setIsTextModalOpen] = useState(false); // 控制弹窗显示/隐藏
+const [textInputValue, setTextInputValue] = useState(''); // 存储输入框的文字
+const [editingDecoId, setEditingDecoId] = useState<string | null>(null); // 记录正在编辑的文字ID
+    useEffect(() => { if (isOpen) setPageIndex(0); }, [isOpen]);
+
+    if (!isOpen) return null;
+
+    // 数据修正：确保 pages 是偶数个，方便左右对开显示
+    // 逻辑：pageIndex 0 显示 [封面, 封二(空)]
+    // pageIndex 1 显示 [Page1, Page2]
+    // pageIndex 2 显示 [Page3, Page4]
+    // ...
+    const pages = album.pages || [];
+
+    // 计算总共有多少个“对开页”视图
+    // 封面算第0个视图。内容页每2页算一个视图。
+    // 如果 pages.length 是 3，那就是 [1,2], [3, 空] -> 需要 2 个内容视图
+    const totalContentSpreads = Math.ceil(pages.length / 2);
+    const maxIndex = totalContentSpreads; // 0 到 maxIndex
+
+    // ================== 核心逻辑：拖拽与操作 ==================
+    
+    const handleDragStart = (e: React.MouseEvent | React.TouchEvent, pageId: string, deco: AlbumDecoration) => {
+        e.stopPropagation();
+        setActiveDecoId(deco.id); // 选中它
+        
+        const clientX = 'touches' in e ? e.touches[0].clientX : (e as React.MouseEvent).clientX;
+        const clientY = 'touches' in e ? e.touches[0].clientY : (e as React.MouseEvent).clientY;
+
+        draggingRef.current = {
+            pageId,
+            decoId: deco.id,
+            startX: clientX,
+            startY: clientY,
+            initialX: deco.x,
+            initialY: deco.y
+        };
+    };
+
+    const handleDragMove = (e: React.MouseEvent | React.TouchEvent) => {
+        if (!draggingRef.current) return;
+        
+        const clientX = 'touches' in e ? e.touches[0].clientX : (e as React.MouseEvent).clientX;
+        const clientY = 'touches' in e ? e.touches[0].clientY : (e as React.MouseEvent).clientY;
+        
+        // 计算移动的百分比
+        // 假设单页宽度大概是 书本宽度的一半
+        const pageElem = document.getElementById(`page-${draggingRef.current.pageId}`);
+        if (!pageElem) return;
+        
+        const rect = pageElem.getBoundingClientRect();
+        const deltaX = ((clientX - draggingRef.current.startX) / rect.width) * 100;
+        const deltaY = ((clientY - draggingRef.current.startY) / rect.height) * 100;
+
+        const newX = Math.max(0, Math.min(100, draggingRef.current.initialX + deltaX));
+        const newY = Math.max(0, Math.min(100, draggingRef.current.initialY + deltaY));
+
+        // 实时更新 (为了性能，这里可以用 ref 优化，但为了代码简单直接 set)
+        const updatedPages = album.pages.map(p => {
+            if (p.id === draggingRef.current.pageId) {
+                return {
+                    ...p,
+                    decorations: p.decorations.map(d => d.id === draggingRef.current.decoId ? { ...d, x: newX, y: newY } : d)
+                };
+            }
+            return p;
+        });
+        onUpdate({ ...album, pages: updatedPages });
+    };
+
+    const handleDragEnd = () => {
+        draggingRef.current = null;
+    };
+
+    const updateDecoration = (pageId: string, decoId: string, updates: Partial<AlbumDecoration>) => {
+        const updatedPages = album.pages.map(p => {
+            if (p.id === pageId) {
+                return {
+                    ...p,
+                    decorations: p.decorations.map(d => d.id === decoId ? { ...d, ...updates } : d)
+                };
+            }
+            return p;
+        });
+        onUpdate({ ...album, pages: updatedPages });
+    };
+
+    const deleteDecoration = (pageId: string, decoId: string) => {
+        const updatedPages = album.pages.map(p => {
+            if (p.id === pageId) {
+                return { ...p, decorations: p.decorations.filter(d => d.id !== decoId) };
+            }
+            return p;
+        });
+        onUpdate({ ...album, pages: updatedPages });
+        setActiveDecoId(null);
+    };
+
+    // ================== 页面渲染逻辑 ==================
+
+    // 渲染单个内容页 (左页或右页)
+    const renderContentPage = (page: AlbumPage | undefined, pageNum: number, isRight: boolean) => {
+        if (!page) {
+            // 空白页：显示“添加页”按钮
+            return (
+                <div className="w-full h-full flex flex-col items-center justify-center p-8 border-2 border-dashed border-gray-200/50 rounded-lg m-4 group hover:bg-gray-50/30 transition">
+                    <h3 className="text-gray-400 font-bold mb-4">空白页</h3>
+                    <div className="flex gap-4">
+                        <button 
+                            onClick={() => {
+                                const newPage: AlbumPage = { id: Date.now().toString(), type: 'photo_frame', photo: null, decorations: [] };
+                                onUpdate({ ...album, pages: [...album.pages, newPage] });
+                            }}
+                            className="flex flex-col items-center gap-2 p-3 bg-white rounded-xl shadow-sm hover:shadow-md hover:scale-105 transition cursor-pointer"
+                        >
+                            <span className="text-2xl">🖼️</span>
+                            <span className="text-xs font-bold text-gray-600">添加照片页</span>
+                        </button>
+                        <button 
+                            onClick={() => {
+                                const newPage: AlbumPage = { id: Date.now().toString(), type: 'free_journal', photo: null, decorations: [] };
+                                onUpdate({ ...album, pages: [...album.pages, newPage] });
+                            }}
+                            className="flex flex-col items-center gap-2 p-3 bg-white rounded-xl shadow-sm hover:shadow-md hover:scale-105 transition cursor-pointer"
+                        >
+                            <span className="text-2xl">📝</span>
+                            <span className="text-xs font-bold text-gray-600">添加手账页</span>
+                        </button>
+                    </div>
+                </div>
+            );
+        }
+
+
+// ==================== [第4步] 核心逻辑升级 ====================
+
+    // 1. 添加新页 (支持选择是 照片页 还是 手账页)
+    const handleAddPage = (type: 'photo_frame' | 'free_journal') => {
+        const newPage: AlbumPage = { 
+            id: Date.now().toString(), 
+            type, 
+            photos: [], // 初始化空照片数组 (给多图布局用)
+            layout: '1-photo', // 默认单图布局
+            background: '#fdfbf7', // 默认米色纸
+            decorations: [] 
+        };
+        // 这里的 album.pages || [] 是为了防止旧数据是 undefined
+        onUpdate({ ...album, pages: [...(album.pages || []), newPage] });
+        // 自动翻到新的一页
+        setTimeout(() => setPageIndex((album.pages || []).length + 1), 50);
+    };
+
+    // 2. 上传照片 (支持多图：需要传入 photoIndex)
+    const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>, pageId: string, photoIndex: number) => {
+        if (e.target.files?.[0]) {
+            const reader = new FileReader();
+            reader.readAsDataURL(e.target.files[0]);
+            reader.onload = (ev) => {
+                const updatedPages = (album.pages || []).map(p => {
+                    if (p.id === pageId) {
+                        // 复制旧照片数组
+                        const newPhotos = [...(p.photos || [])];
+                        // 更新指定位置的照片
+                        newPhotos[photoIndex] = ev.target?.result as string; 
+                        return { ...p, photos: newPhotos };
+                    }
+                    return p;
+                });
+                onUpdate({ ...album, pages: updatedPages });
+            };
+        }
+    };
+
+    // 3. 添加装饰 (贴纸/文字)
+    const addDecoration = (type: 'sticker' | 'text', content: string) => {
+        // 计算当前显示的页面索引 (封面是0, 也就是 pages[pageIndex-1])
+        // 这里简化逻辑：我们默认加到当前右侧的页面，如果右侧没有就加左侧
+        // 但为了操作精准，我们先简单点：加到 pageIndex 对应的页面
+        // 修正：pageIndex 1 对应 pages[0] 和 pages[1]
+        
+        // 简单策略：获取当前视图中存在的最后一页
+        const pIdx = (pageIndex - 1) * 2; // 左页索引
+        const targetPage = (album.pages || [])[pIdx + 1] || (album.pages || [])[pIdx];
+
+        if (!targetPage) return alert("请先添加页面，并翻到内页！");
+        
+        const newDeco: AlbumDecoration = {
+            id: Date.now().toString(),
+            type, content,
+            x: 50, y: 50, // 默认居中
+            rotate: (Math.random() * 20) - 10, scale: 1,
+            // 默认文字样式
+            fontFamily: 'sans-serif', color: '#000', fontSize: 16, fontWeight: 'normal', fontStyle: 'normal'
+        };
+        
+        const newPages = (album.pages || []).map(p => {
+            if (p.id === targetPage.id) {
+                return { ...p, decorations: [...(p.decorations || []), newDeco] };
+            }
+            return p;
+        });
+        
+        onUpdate({ ...album, pages: newPages });
+        setActiveDecoId(newDeco.id); // 添加后自动选中
+    };
+
+    // 4. 更新装饰属性 (移动、缩放、改字体等核心函数)
+    const updateActiveDeco = (updates: Partial<AlbumDecoration>) => {
+        if (!activeDecoId) return;
+        const newPages = (album.pages || []).map(p => ({
+            ...p,
+            decorations: p.decorations.map(d => d.id === activeDecoId ? { ...d, ...updates } : d)
+        }));
+        onUpdate({ ...album, pages: newPages });
+    };
+
+    // 5. 拖拽开始
+    const handleDragStart = (e: any, pageId: string, deco: AlbumDecoration) => {
+        e.stopPropagation();
+        setActiveDecoId(deco.id);
+        
+        // 兼容鼠标和触摸
+        const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+        const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+        
+        draggingRef.current = { 
+            pageId, 
+            decoId: deco.id, 
+            startX: clientX, 
+            startY: clientY, 
+            initialX: deco.x, 
+            initialY: deco.y 
+        };
+    };
+
+    // 6. 拖拽移动 (计算百分比坐标)
+    const handleDragMove = (e: any) => {
+        if (!draggingRef.current) return;
+        
+        const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+        const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+        
+        // 假设页面宽度大概是 400px (这是一个估算值，用于将像素转为百分比，保证响应式)
+        // 为了更精准，你可以用 useRef 获取实际 DOM 宽度，但这里简便起见用固定比例
+        const deltaX = ((clientX - draggingRef.current.startX) / 400) * 100;
+        const deltaY = ((clientY - draggingRef.current.startY) / 500) * 100;
+
+        const newPages = (album.pages || []).map(p => {
+            if (p.id === draggingRef.current.pageId) {
+                return {
+                    ...p,
+                    decorations: p.decorations.map(d => d.id === draggingRef.current.decoId ? 
+                        { ...d, x: draggingRef.current.initialX + deltaX, y: draggingRef.current.initialY + deltaY } : d)
+                };
+            }
+            return p;
+        });
+        onUpdate({ ...album, pages: newPages });
+    };
+// ==================== [第3步新增] 页面渲染核心 ====================
+
+    // A. 小助手：画一个照片坑位
+    const PhotoSlot = ({ page, index, style, onUpload }: any) => {
+        // 从数组里取第 index 张照片
+        const url = page.photos?.[index]; 
+        return (
+            <div className={`bg-white p-2 shadow-md transition-transform hover:scale-105 pointer-events-auto ${style}`}>
+                {url ? (
+                    <img src={url} className="w-full h-full object-cover bg-gray-100" />
+                ) : (
+                    <label className="w-full h-full flex flex-col items-center justify-center bg-gray-50 text-gray-400 cursor-pointer border border-dashed border-gray-300">
+                        <span className="text-xl">+</span>
+                        {/* 上传时传入 index，确保照片填入正确的位置 */}
+                        <input type="file" className="hidden" accept="image/*" onChange={(e) => onUpload(e, page.id, index)} />
+                    </label>
+                )}
+                {/* 装饰胶带 */}
+                <div className="absolute -top-2 left-1/2 -translate-x-1/2 w-8 h-4 bg-yellow-200/80 transform -rotate-1 shadow-sm"></div>
+            </div>
+        );
+    };
+
+    // B. 主画师：画整个页面 (支持多图布局 + DIY文字)
+    const renderPage = (page: AlbumPage | undefined, idx: number, isRight: boolean) => {
+        if (!page) {
+            // 空白页显示
+            return (
+                <div className="w-full h-full flex flex-col items-center justify-center p-6 border-2 border-dashed border-gray-200/50 m-2 rounded-lg">
+                    <span className="text-gray-300 text-xs mb-2">这里是空的</span>
+                    {/* 我们稍后会在底部工具栏做添加按钮，这里先留空 */}
+                </div>
+            );
+        }
+
+        return (
+            <div 
+                id={`page-${page.id}`}
+                className={`w-full h-full relative overflow-hidden group select-none ${isRight ? 'rounded-r-lg' : 'rounded-l-lg'}`}
+                style={{ background: page.background || '#fdfbf7' }}
+                // 点击空白处取消选中装饰
+                onClick={() => setActiveDecoId(null)}
+            >
+                {/* 页码 */}
+                <div className="absolute bottom-2 left-1/2 -translate-x-1/2 text-[9px] text-gray-300 font-mono">- {idx} -</div>
+
+                {/* --- 1. 照片区域 (根据布局 1/2/3 自动变化) --- */}
+                {page.type === 'photo_frame' && (
+                    <div className="absolute inset-0 p-4 flex flex-col items-center justify-center pointer-events-none">
+                        
+                        {/* 布局 1: 单张大图 */}
+                        {(!page.layout || page.layout === '1-photo') && (
+                            <PhotoSlot page={page} index={0} style="w-[90%] aspect-[3/4] rotate-[-2deg]" onUpload={handlePhotoUpload} />
+                        )}
+                        
+                        {/* 布局 2: 双图并排 */}
+                        {page.layout === '2-photos' && (
+                            <div className="flex flex-col gap-4 w-full h-full justify-center items-center">
+                                <PhotoSlot page={page} index={0} style="w-[70%] aspect-[4/3] rotate-2" onUpload={handlePhotoUpload} />
+                                <PhotoSlot page={page} index={1} style="w-[70%] aspect-[4/3] rotate-[-2]" onUpload={handlePhotoUpload} />
+                            </div>
+                        )}
+                        
+                        {/* 布局 3: 三张叠放 */}
+                        {page.layout === '3-photos' && (
+                            <div className="relative w-full h-full">
+                                <div className="absolute top-4 left-4 z-10"><PhotoSlot page={page} index={0} style="w-32 h-32 rotate-[-5deg]" onUpload={handlePhotoUpload} /></div>
+                                <div className="absolute top-8 right-4 z-20"><PhotoSlot page={page} index={1} style="w-32 h-32 rotate-[5deg]" onUpload={handlePhotoUpload} /></div>
+                                <div className="absolute bottom-10 left-1/2 -translate-x-1/2 z-30"><PhotoSlot page={page} index={2} style="w-40 h-40 rotate-0" onUpload={handlePhotoUpload} /></div>
+                            </div>
+                        )}
+                    </div>
+                )}
+
+                {/* --- 2. 装饰层 (文字/贴纸) --- */}
+                {page.decorations.map(deco => {
+                    const isActive = activeDecoId === deco.id;
+                    return (
+                        <div 
+                            key={deco.id}
+                            className={`absolute cursor-move transition-all ${isActive ? 'z-50' : 'z-10'}`}
+                            style={{
+                                left: `${deco.x}%`, top: `${deco.y}%`,
+                                transform: `translate(-50%, -50%) rotate(${deco.rotate}deg) scale(${deco.scale})`,
+                                border: isActive ? '1px dashed #3b82f6' : 'none', // 选中时显示虚线框
+                                padding: '4px'
+                            }}
+                            // 绑定拖拽事件 (稍后我们会更新这几个函数)
+                            onMouseDown={(e) => handleDragStart(e, page.id, deco)}
+                            onTouchStart={(e) => handleDragStart(e, page.id, deco)}
+                        >
+                            {/* 根据类型显示：文字支持样式，贴纸直接显示 */}
+                            {deco.type === 'text' ? (
+                                <span style={{
+                                    fontFamily: deco.fontFamily, 
+                                    color: deco.color,
+                                    fontWeight: deco.fontWeight, 
+                                    fontStyle: deco.fontStyle,
+                                    fontSize: '16px', 
+                                    whiteSpace: 'nowrap'
+                                }}>
+                                    {deco.content}
+                                </span>
+                            ) : (
+                                <span className="text-4xl filter drop-shadow-sm">{deco.content}</span>
+                            )}
+                            
+                            {/* 选中时显示的小叉叉 (删除按钮) */}
+                            {isActive && (
+                                <button 
+                                    className="absolute -top-3 -right-3 w-5 h-5 bg-red-500 text-white rounded-full text-xs flex items-center justify-center shadow-sm"
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        // 临时删除逻辑，下一步我们会更新完整的 deleteDecoration 函数
+                                        const newDecorations = page.decorations.filter(d => d.id !== deco.id);
+                                        const newPages = (album.pages || []).map(p => p.id === page.id ? { ...p, decorations: newDecorations } : p);
+                                        onUpdate({ ...album, pages: newPages });
+                                        setActiveDecoId(null);
+                                    }}
+                                >×</button>
+                            )}
+                        </div>
+                    );
+                })}
+            </div>
+        );
+    };
+
+
+        return (
+            <div 
+                id={`page-${page.id}`}
+                className={`w-full h-full relative overflow-hidden group select-none ${isRight ? 'rounded-r-lg' : 'rounded-l-lg'}`}
+                style={{ 
+                    background: '#fdfbf7', 
+                    backgroundImage: page.type === 'free_journal' ? 'radial-gradient(#e5e7eb 1px, transparent 1px)' : undefined,
+                    backgroundSize: '20px 20px'
+                }}
+                onClick={() => setActiveDecoId(null)} // 点击空白处取消选中
+            >
+                {/* 页码 */}
+                <div className={`absolute bottom-3 ${isRight ? 'right-4' : 'left-4'} text-[10px] text-gray-300 font-mono`}>{pageNum}</div>
+
+                {/* --- 1. 照片页布局 --- */}
+                {page.type === 'photo_frame' && (
+                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                        <div className="relative w-[80%] aspect-[3/4] bg-white p-3 shadow-lg transform rotate-1 transition-transform pointer-events-auto hover:rotate-0 hover:scale-105 hover:z-10">
+                            {page.photo ? (
+                                <img src={page.photo} className="w-full h-full object-cover bg-gray-100" />
+                            ) : (
+                                <label className="w-full h-full bg-gray-50 flex flex-col items-center justify-center cursor-pointer border-2 border-dashed border-gray-200 hover:bg-gray-100 text-gray-400">
+                                    <span className="text-3xl mb-2">+</span>
+                                    <span className="text-xs">点击上传照片</span>
+                                    <input type="file" className="hidden" accept="image/*" 
+                                        onChange={(e) => {
+                                            if (e.target.files?.[0]) {
+                                                const reader = new FileReader();
+                                                reader.onload = (ev) => {
+                                                    const updatedPages = album.pages.map(p => p.id === page.id ? { ...p, photo: ev.target?.result as string } : p);
+                                                    onUpdate({ ...album, pages: updatedPages });
+                                                };
+                                                reader.readAsDataURL(e.target.files[0]);
+                                            }
+                                        }} 
+                                    />
+                                </label>
+                            )}
+                            {/* 胶带装饰 (固定) */}
+                            <div className="absolute -top-3 left-1/2 -translate-x-1/2 w-20 h-6 bg-rose-200/80 transform -rotate-1 backdrop-blur-sm shadow-sm"></div>
+                        </div>
+                    </div>
+                )}
+
+                {/* --- 2. 装饰层 (贴纸/文字) - 可拖拽 --- */}
+                {page.decorations.map(deco => {
+                    const isActive = activeDecoId === deco.id;
+                    return (
+                        <div 
+                            key={deco.id} 
+                            className={`absolute cursor-move transition-shadow ${isActive ? 'z-50' : 'z-10'}`}
+                            style={{ 
+                                left: `${deco.x}%`, 
+                                top: `${deco.y}%`, 
+                                transform: `translate(-50%, -50%) rotate(${deco.rotate}deg) scale(${deco.scale})`,
+                                touchAction: 'none' // 防止手机上拖拽时触发滚动
+                            }}
+                            onMouseDown={(e) => handleDragStart(e, page.id, deco)}
+                            onTouchStart={(e) => handleDragStart(e, page.id, deco)}
+                        >
+                            {/* 选中框 */}
+                            {isActive && (
+                                <div className="absolute inset-[-8px] border border-blue-400 rounded-lg pointer-events-none border-dashed animate-pulse"></div>
+                            )}
+                            
+                            {/* 内容 */}
+                            {deco.type === 'text' ? (
+                                <div 
+                                    style={{ 
+                                        fontFamily: deco.fontFamily || 'sans-serif', 
+                                        color: deco.color || '#000',
+                                        fontSize: '16px',
+                                        whiteSpace: 'nowrap',
+                                        fontWeight: 'bold'
+                                    }}
+                                >
+                                    {deco.content}
+                                </div>
+                            ) : (
+                                <div className="text-4xl filter drop-shadow-sm">{deco.content}</div>
+                            )}
+                        </div>
+                    );
+                })}
+
+                {/* --- 3. 页面操作栏 (仅当页激活时显示) --- */}
+                <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition flex gap-1 bg-white/80 p-1 rounded-lg shadow-sm backdrop-blur-sm z-40">
+                    <button 
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            if(confirm("确定删除这页吗？")) {
+                                const newPages = album.pages.filter(p => p.id !== page.id);
+                                onUpdate({ ...album, pages: newPages });
+                            }
+                        }}
+                        className="p-1 hover:bg-red-50 text-red-500 rounded text-xs" title="删除页面"
+                    >
+                        🗑️
+                    </button>
+                </div>
+            </div>
+        );
+    };
+
+    // 获取当前视图左右两页的数据
+    const leftPageIdx = (pageIndex - 1) * 2;
+    const rightPageIdx = leftPageIdx + 1;
+    const leftPage = pageIndex === 0 ? null : pages[leftPageIdx]; // index 0 的时候左边是封面背面，这里简化为空
+    const rightPage = pageIndex === 0 ? null : pages[rightPageIdx];
+
+    return (
+        <div 
+            className="fixed inset-0 z-[200] bg-black/85 backdrop-blur-md flex flex-col items-center justify-center animate-fadeIn p-4 overflow-hidden" 
+            onClick={onClose}
+            onMouseMove={handleDragMove}
+            onMouseUp={handleDragEnd}
+            onTouchMove={handleDragMove}
+            onTouchEnd={handleDragEnd}
+        >
+            {/* 书本主体容器 (横屏大尺寸) */}
+            <div 
+                ref={bookRef}
+                className="relative w-full max-w-5xl aspect-[1.6/1] rounded-lg shadow-2xl flex transition-all duration-500 perspective-1000"
+                onClick={e => e.stopPropagation()}
+            >
+                {/* === 封面视图 (Index 0) === */}
+                {pageIndex === 0 ? (
+                    <div className="w-full h-full flex items-center justify-center relative rounded-r-xl rounded-l-md shadow-2xl transform-style-3d origin-left transition-transform duration-700"
+                        style={{ 
+                            background: album.coverStyle,
+                            backgroundImage: COVERS.find(c => c.style === album.coverStyle)?.texture || album.coverStyle,
+                            backgroundSize: COVERS.find(c => c.style === album.coverStyle)?.bgSize
+                        }}
+                    >
+                        {/* 封面装饰 */}
+                        <div className="absolute left-0 top-0 bottom-0 w-8 bg-black/20 rounded-l-md shadow-inner z-10"></div> {/* 书脊 */}
+                        <div className="border-4 border-white/30 p-12 text-center backdrop-blur-sm bg-white/10 rounded-lg shadow-lg max-w-[60%] relative">
+                            <h1 className="text-5xl font-black drop-shadow-md mb-4" style={{ color: album.coverTitleColor || '#fff' }}>{album.title}</h1>
+                            <p className="text-sm font-mono opacity-80 text-white uppercase tracking-[0.3em]">Photo Album</p>
+                            
+                            {/* 封面编辑按钮 */}
+                            <button 
+                                onClick={() => setIsEditingCover(!isEditingCover)}
+                                className="absolute -top-4 -right-4 w-8 h-8 bg-white text-gray-800 rounded-full shadow-md flex items-center justify-center hover:scale-110 transition z-20"
+                            >
+                                ✏️
+                            </button>
+                        </div>
+
+                        {/* 封面编辑器 */}
+                        {isEditingCover && (
+                            <div className="absolute bottom-10 bg-white p-4 rounded-xl shadow-xl flex flex-col gap-3 animate-slideUp z-50 w-[90%] max-w-lg">
+                                <h4 className="text-xs font-bold text-gray-500 uppercase">选择封面质感</h4>
+                                <div className="flex gap-2 overflow-x-auto pb-2">
+                                    {COVERS.map(cover => (
+                                        <div key={cover.name} 
+                                             onClick={() => onUpdate({ ...album, coverStyle: cover.style })}
+                                             className={`w-12 h-12 rounded-full cursor-pointer flex-shrink-0 border-2 ${album.coverStyle === cover.style ? 'border-blue-500 scale-110' : 'border-transparent'}`}
+                                             style={{ background: cover.style, backgroundImage: cover.texture, backgroundSize: cover.bgSize }}
+                                             title={cover.name}
+                                        />
+                                    ))}
+                                </div>
+                                <h4 className="text-xs font-bold text-gray-500 uppercase">修改标题</h4>
+                                <input 
+                                    className="w-full bg-gray-100 p-2 rounded text-sm outline-none font-bold"
+                                    value={album.title}
+                                    onChange={(e) => onUpdate({ ...album, title: e.target.value })}
+                                />
+                            </div>
+                        )}
+
+                        {/* 打开按钮 */}
+                        <button 
+                            onClick={() => setPageIndex(1)} 
+                            className="absolute right-8 bottom-1/2 translate-y-1/2 text-white/50 hover:text-white text-6xl transition animate-pulse"
+                        >
+                            ›
+                        </button>
+                    </div>
+                ) : (
+                    /* === 内页视图 (对开) === */
+                    <div className="w-full h-full flex relative bg-[#3e2723] rounded-lg p-1 shadow-2xl">
+                        {/* 左页 */}
+                        <div className="flex-1 bg-[#fdfbf7] rounded-l-md border-r border-gray-300 relative shadow-inner overflow-hidden">
+                            {renderContentPage(leftPage, leftPageIdx + 1, false)}
+                            <div className="absolute top-0 right-0 w-8 h-full bg-gradient-to-l from-black/10 to-transparent pointer-events-none z-20"></div>
+                        </div>
+
+                        {/* 右页 */}
+                        <div className="flex-1 bg-[#fdfbf7] rounded-r-md relative shadow-inner overflow-hidden">
+                            {renderContentPage(rightPage, rightPageIdx + 1, true)}
+                            <div className="absolute top-0 left-0 w-6 h-full bg-gradient-to-r from-black/5 to-transparent pointer-events-none z-20"></div>
+                        </div>
+
+                        {/* 左右翻页触控区 */}
+                        <button onClick={() => setPageIndex(p => p - 1)} className="absolute left-[-50px] top-1/2 -translate-y-1/2 w-12 h-24 bg-white/10 hover:bg-white/20 rounded-l-xl flex items-center justify-center text-white text-3xl transition">‹</button>
+                        <button onClick={() => setPageIndex(p => p + 1)} className="absolute right-[-50px] top-1/2 -translate-y-1/2 w-12 h-24 bg-white/10 hover:bg-white/20 rounded-r-xl flex items-center justify-center text-white text-3xl transition">{pageIndex > maxIndex ? '↺' : '›'}</button>
+                    </div>
+                )}
+            </div>
+
+            {/* === 底部 DIY 工具栏 (悬浮) === */}
+            {pageIndex > 0 && (
+                <div className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-white/95 backdrop-blur-xl border border-white/50 rounded-2xl shadow-2xl p-2 flex flex-col gap-2 w-[90%] max-w-2xl animate-slideUp z-[210]" onClick={e => e.stopPropagation()}>
+                    
+                    {/* 1. 如果选中了组件，显示调节工具 */}
+                    {activeDecoId && (
+                        <div className="flex items-center justify-between bg-blue-50 p-2 rounded-xl mb-1">
+                            <span className="text-xs font-bold text-blue-600 px-2">调节选中组件</span>
+                            <div className="flex items-center gap-4">
+                                <label className="flex items-center gap-1 text-[10px] font-bold text-gray-500">
+                                    <span>🔄 旋转</span>
+                                    <input type="range" min="-180" max="180" defaultValue="0" 
+                                        onChange={(e) => {
+                                            const val = parseInt(e.target.value);
+                                            // 找到当前所在的页和组件
+                                            const currentPage = [leftPage, rightPage].find(p => p?.decorations.some(d => d.id === activeDecoId));
+                                            if(currentPage) updateDecoration(currentPage.id, activeDecoId, { rotate: val });
+                                        }} 
+                                        className="w-20 h-1 bg-gray-300 rounded-lg appearance-none cursor-pointer"
+                                    />
+                                </label>
+                                <label className="flex items-center gap-1 text-[10px] font-bold text-gray-500">
+                                    <span>🔍 大小</span>
+                                    <input type="range" min="0.5" max="3" step="0.1" defaultValue="1" 
+                                        onChange={(e) => {
+                                            const val = parseFloat(e.target.value);
+                                            const currentPage = [leftPage, rightPage].find(p => p?.decorations.some(d => d.id === activeDecoId));
+                                            if(currentPage) updateDecoration(currentPage.id, activeDecoId, { scale: val });
+                                        }} 
+                                        className="w-20 h-1 bg-gray-300 rounded-lg appearance-none cursor-pointer"
+                                    />
+                                </label>
+                                <button 
+                                    onClick={() => {
+                                        const currentPage = [leftPage, rightPage].find(p => p?.decorations.some(d => d.id === activeDecoId));
+                                        if(currentPage) deleteDecoration(currentPage.id, activeDecoId);
+                                    }}
+                                    className="bg-red-100 text-red-500 px-3 py-1 rounded-lg text-xs font-bold"
+                                >
+                                    删除
+                                </button>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* 2. 素材添加栏 */}
+                    <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pb-1">
+                        <button 
+                            onClick={() => {
+                                const text = prompt("输入文字内容:");
+                                if(!text) return;
+                                // 默认加到右页，如果右页不存在加到左页
+                                const targetPage = rightPage || leftPage;
+                                if(!targetPage) return alert("请先添加页面！");
+                                
+                                const newDeco: AlbumDecoration = {
+                                    id: Date.now().toString(), type: 'text', content: text,
+                                    x: 50, y: 50, rotate: 0, scale: 1, fontFamily: 'sans-serif', color: '#000'
+                                };
+                                const newPages = album.pages.map(p => p.id === targetPage.id ? { ...p, decorations: [...p.decorations, newDeco] } : p);
+                                onUpdate({ ...album, pages: newPages });
+                            }}
+                            className="bg-black text-white px-4 py-2 rounded-xl text-xs font-bold flex-shrink-0 shadow-lg hover:scale-105 transition"
+                        >
+                            T 加字
+                        </button>
+                        
+                        <div className="w-px h-6 bg-gray-200 mx-1"></div>
+
+                        {STICKER_PACKS.map((pack, i) => (
+                            <div key={i} className="flex gap-1 bg-gray-50 p-1.5 rounded-xl border border-gray-100 flex-shrink-0">
+                                {pack.items.map(emoji => (
+                                    <button 
+                                        key={emoji}
+                                        onClick={() => {
+                                            const targetPage = rightPage || leftPage;
+                                            if(!targetPage) return alert("请先添加页面！");
+                                            const newDeco: AlbumDecoration = {
+                                                id: Date.now().toString(), type: 'sticker', content: emoji,
+                                                x: 50, y: 50, rotate: (Math.random()*20)-10, scale: 1
+                                            };
+                                            const newPages = album.pages.map(p => p.id === targetPage.id ? { ...p, decorations: [...p.decorations, newDeco] } : p);
+                                            onUpdate({ ...album, pages: newPages });
+                                        }}
+                                        className="text-2xl hover:scale-125 transition active:scale-90 w-8 h-8 flex items-center justify-center"
+                                    >
+                                        {emoji}
+                                    </button>
+                                ))}
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+};
+
+
+
+
+
+
+
+const PhotoAlbumShelf: React.FC<{ 
+    albums: PhotoAlbum[], 
+    onOpen: (album: PhotoAlbum) => void,
+    onCreate: () => void,
+    onDelete: (albumId: string) => void  // 确保这个删除函数被传入了
+}> = ({ albums, onOpen, onCreate, onDelete }) => {
+    return (
+        <div className="mx-2 mt-8 relative">
+            <div className="h-4 bg-[#5d4037] rounded-t-lg mx-1 shadow-md"></div>
+            <div className="bg-[#8d6e63] px-4 py-6 shadow-inner relative flex overflow-x-auto gap-6 custom-scrollbar min-h-[160px] items-end"
+                 style={{ backgroundImage: `linear-gradient(to bottom, rgba(0,0,0,0.1), transparent), repeating-linear-gradient(45deg, transparent, transparent 10px, rgba(0,0,0,0.05) 10px, rgba(0,0,0,0.05) 20px)` }}>
+                
+                {albums.map((album) => (
+                    <div key={album.id} onClick={() => onOpen(album)}
+                         className="flex-shrink-0 w-24 h-32 rounded-r-md shadow-xl cursor-pointer transform hover:-translate-y-2 transition-transform duration-300 relative group"
+                         style={{ background: album.coverStyle }}>
+                        
+                        {/* 删除按钮 (核心功能) */}
+                        <button onClick={(e) => { 
+                                e.stopPropagation(); // 阻止点击事件传递到父级div，防止打开相册
+                                if (window.confirm(`确定要删除相册《${album.title}》吗？`)) {
+                                    onDelete(album.id); 
+                                }
+                            }}
+                            className="absolute -top-2 -right-2 z-20 w-6 h-6 bg-red-500 text-white rounded-full flex items-center justify-center text-xs opacity-0 group-hover:opacity-100 transition shadow-md hover:bg-red-600">×</button>
+
+                        <div className="absolute left-0 top-0 bottom-0 w-3 bg-black/20 rounded-l-sm"></div>
+                        <div className="absolute top-4 left-4 right-2 text-white font-serif font-bold text-sm leading-tight drop-shadow-md break-words pointer-events-none">{album.title}</div>
+                        <div className="absolute bottom-4 left-0 w-full h-4 bg-white/20 pointer-events-none"></div>
+                    </div>
+                ))}
+
+                <div onClick={onCreate} className="flex-shrink-0 w-24 h-32 bg-white/20 border-2 border-dashed border-white/50 rounded-md flex flex-col items-center justify-center cursor-pointer hover:bg-white/30 transition text-white/80 group">
+                    <span className="text-3xl mb-1 group-hover:scale-110 transition">+</span>
+                    <span className="text-[10px] font-bold">新相册</span>
+                </div>
+            </div>
+            <div className="h-6 bg-[#4e342e] rounded-b-lg shadow-lg relative z-10 mx-[-4px]"></div>
+        </div>
+    );
+};
+
+
+
+
 
 
 
@@ -2083,7 +2937,7 @@ const NotificationBanner: React.FC = () => {
     const [activeGroup, setActiveGroup] = useState<FriendGroup | null>(null);
     // (如果你的代码里是 setActiveContact，请确保它下面有这一行)
   const [targetId, setTargetId] = useState<string | null>(null);
-  
+  const [editAlbum, setEditAlbum] = useState<PhotoAlbum | null>(null); // 控制相册弹窗
   const [tab, setTab] = useState<'hub' | 'garden'>('hub');
   const [selectedLetter, setSelectedLetter] = useState<LoveLetter | null>(null);
   const [showSettings, setShowSettings] = useState(false);
@@ -2274,12 +3128,26 @@ const handleSendInvite = (contact: Contact, type: 'lover' | 'friend') => {
         setShowBreakup(false); setShowSettings(false); setView('landing'); setTargetId(null);
     };
 
+
+
+
+
+
+
+
     // 处理日期修改
     const handleSaveAnniversary = (dateStr: string) => {
         if (!targetContact) return;
         const newTime = new Date(dateStr).getTime();
         setContacts(prev => prev.map(c => c.id === targetContact.id ? { ...c, created: newTime } : c));
     };
+
+
+
+
+
+
+
 
     // 拍立得照片上传处理
     const handlePolaroidUpload = async (e: React.ChangeEvent<HTMLInputElement>, index: number) => {
@@ -2301,6 +3169,12 @@ const handleSendInvite = (contact: Contact, type: 'lover' | 'friend') => {
     };
 
 
+
+
+
+
+
+    
   const getUnreadCount = (c: Contact) => (c.letters || []).filter(l => !l.isOpened && l.from === 'ai').length;
   const RelationshipUnread = currentRelationship ? getUnreadCount(currentRelationship) : 0;
   
@@ -2711,7 +3585,7 @@ const handleSendInvite = (contact: Contact, type: 'lover' | 'friend') => {
                                             }
                                         }}
                                     />
-                                    {/* ... 拍立得、清单等 ... */}
+           
 
 {/* ==================== 🌟 改造区域：丰富版·糖果色天数面板 ==================== */}
                                     <div className="relative mx-4 mb-8">
@@ -2779,8 +3653,66 @@ const handleSendInvite = (contact: Contact, type: 'lover' | 'friend') => {
                                             </div>
                                         </div>
                                     </div>
-                                    <PolaroidWall photos={(targetContact as any).couplePhotos || [null,null,null]} onUpload={handlePolaroidUpload} />
-                     
+
+                     {/* 2. 拍立得墙 (放大版：h-56) */}
+                                    <div className="scale-110 origin-top mb-12 mt-4">
+                                        <PolaroidWall photos={(targetContact as any).couplePhotos || [null, null, null]} onUpload={handlePolaroidUpload} />
+                                    </div>
+
+
+
+{/* 3. 📸 全新：相册书柜系统 */}
+<PhotoAlbumShelf 
+    albums={targetContact!.photoAlbums || []}
+    onOpen={(album) => setEditAlbum(album)} 
+    onDelete={(albumId) => {
+        if (confirm("确定要销毁这本相册吗？里面的回忆也会消失哦！")) {
+            setContacts(prev => prev.map(c => {
+                if (c.id === targetContact!.id) {
+                    return { ...c, photoAlbums: (c.photoAlbums || []).filter(a => a.id !== albumId) };
+                }
+                return c;
+            }));
+        }
+    }}
+    onCreate={() => {
+        const title = prompt("给新相册起个名字:", "我们的回忆");
+        if(!title) return;
+        // 随机给一个好看的封面
+        const covers = ['linear-gradient(45deg, #ff9a9e 0%, #fecfef 99%, #fecfef 100%)', 'linear-gradient(120deg, #a1c4fd 0%, #c2e9fb 100%)', 'linear-gradient(to top, #cfd9df 0%, #e2ebf0 100%)', '#5d4037'];
+        const randomCover = covers[Math.floor(Math.random() * covers.length)];
+        
+        const newAlbum: PhotoAlbum = {
+            id: Date.now().toString(),
+            title,
+            coverStyle: randomCover,
+            pages: [], 
+            created: Date.now()
+        };
+        const currentAlbums = targetContact!.photoAlbums || [];
+        setContacts(prev => prev.map(c => c.id === targetContact!.id ? { ...c, photoAlbums: [...currentAlbums, newAlbum] } : c));
+    }}
+/>
+
+{/* 挂载相册弹窗 */}
+{editAlbum && (
+    <AlbumBookModal 
+        isOpen={!!editAlbum}
+        album={editAlbum}
+        onClose={() => setEditAlbum(null)}
+        onUpdate={(updatedAlbum) => {
+            setEditAlbum(updatedAlbum); // 更新弹窗视图
+            setContacts(prev => prev.map(c => { // 保存到总数据
+                if(c.id === targetContact!.id) {
+                    const newAlbums = (c.photoAlbums || []).map(a => a.id === updatedAlbum.id ? updatedAlbum : a);
+                    return { ...c, photoAlbums: newAlbums };
+                }
+                return c;
+            }));
+        }}
+    />
+)}
+
 
                             {/* 修复后的调用代码：加上了暗号 [CoupleSystem] */}
                            {/* ==================== 改造区域 1：恋爱清单 (暖黄波点板块) ==================== */}
@@ -3156,5 +4088,13 @@ onSend={(recipientId, title, content, isReply) => {
 
   return <div className="h-full flex items-center justify-center text-gray-400">Loading...</div>;
 };
+
+
+
+
+
+
+
+
 
 export default RelationshipSpace;

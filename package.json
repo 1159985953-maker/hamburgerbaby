@@ -18,7 +18,8 @@
     "html2canvas": "^1.4.1",
     "localforage": "^1.10.0",
     "react": "^18.3.1",
-    "react-dom": "^18.3.1"
+    "react-dom": "^18.3.1",
+    "react-draggable": "^4.5.0"
   },
   "devDependencies": {
     "@types/node": "^22.14.0",

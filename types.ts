@@ -226,10 +226,44 @@ export interface FriendGroup {
 }
 
 
+// ==================== [types.ts] 升级后的相册定义 (只增不改) ====================
 
+// 1. 装饰物（贴纸/文字）的定义 - 增加了字体、颜色等样式
+export interface AlbumDecoration {
+  id: string;
+  type: 'sticker' | 'text'; 
+  content: string; 
+  x: number;       // 横坐标百分比
+  y: number;       // 纵坐标百分比
+  rotate: number;  // 旋转角度
+  scale: number;   // 缩放大小
+  // --- ★★★ 新增：文字专属样式 ★★★ ---
+  fontFamily?: string;  // 字体
+  color?: string;       // 颜色
+  fontWeight?: string;  // 粗体
+  fontStyle?: string;   // 斜体
+}
 
+// 2. 每一页的定义 - 增加了照片数组、布局和背景
+export interface AlbumPage {
+  id: string;
+  type: 'photo_frame' | 'free_journal'; // 是照片页还是手帐页
+  photo?: string; // 保留你旧的单图字段，以兼容旧数据
+  photos?: string[]; // ★★★ 新增：照片数组 (支持多张)
+  layout?: '1-photo' | '2-photos' | '3-photos'; // ★★★ 新增：照片布局模式
+  background?: string; // ★★★ 新增：页面背景色/纸纹
+  decorations: AlbumDecoration[]; // 这一页上面的贴纸和字
+}
 
-
+// 3. 相册的定义 (保持不变)
+export interface PhotoAlbum {
+  id: string;
+  title: string;
+  coverStyle: string; 
+  coverTitleColor?: string; 
+  pages: AlbumPage[];
+  created: number;
+}
 
 
 
@@ -237,7 +271,7 @@ export interface FriendGroup {
 
 
 export interface Contact {
-  
+  photoAlbums?: PhotoAlbum[]; // 📸 核心新增：相册柜
   garden?: { seed: string; level: number; exp: number; lastWaterDate?: string; lastFertilizeDate?: string; flowerHistory?: { role: 'user' | 'assistant'; content: string; timestamp: number }[]; lastShadowAction?: string; aiWateredToday?: boolean; };
   userTags: UserTag[];
   isAffectionLocked?: boolean;
