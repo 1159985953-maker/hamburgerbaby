@@ -2204,7 +2204,7 @@ const compressImage = (file: File): Promise<string> => {
 // ==================== ✨ 新版超级相册 (这是新加入的，旧的在下面躺着呢别怕) ====================
 // 功能包含：横屏大书本、DIY字体颜色、多图布局、背景更换
 
-// ==================== 📖 终极版相册 (横屏UI + 全功能回归) ====================
+// ==================== 📖 终极修正版相册 (沉浸式横屏 + 纸质感 + 强同步) ====================
 const AlbumBookModal: React.FC<{
     isOpen: boolean;
     album: PhotoAlbum;
@@ -2213,59 +2213,76 @@ const AlbumBookModal: React.FC<{
 }> = ({ isOpen, album, onClose, onUpdate }) => {
     // 状态
     const [pageIndex, setPageIndex] = useState(0); 
-    const [editingPageId, setEditingPageId] = useState<string | null>(null); // 正在编辑哪一页
-    const [draggingId, setDraggingId] = useState<string | null>(null); // 正在拖谁
-    const [activeDecoId, setActiveDecoId] = useState<string | null>(null); // 选中了谁(用来旋转/缩放)
+    const [editingPageId, setEditingPageId] = useState<string | null>(null); 
+    const [draggingId, setDraggingId] = useState<string | null>(null); 
+    const [activeDecoId, setActiveDecoId] = useState<string | null>(null); 
     const draggingRef = useRef<any>(null); 
     
     // UI状态
     const [showTextModal, setShowTextModal] = useState(false);
     const [isEditingCover, setIsEditingCover] = useState(false);
-    const [customStickers, setCustomStickers] = useState<string[]>([]); // 用户自制贴纸库
+    const [customStickers, setCustomStickers] = useState<string[]>([]); 
 
     const pages = album.pages || [];
 
-    useEffect(() => { if (isOpen) setPageIndex(0); }, [isOpen]);
+    // 每次打开，强制重置状态，并确保从第0页(封面)开始
+    useEffect(() => { 
+        if (isOpen) {
+            setPageIndex(0);
+            setEditingPageId(null);
+            setActiveDecoId(null);
+        }
+    }, [isOpen]);
 
-    // --- 工具：更新页面数据 ---
+    // ★★★ 核心修复：更强的数据同步函数 ★★★
+    // 每次修改页面，都直接生成新的 album 对象并往上报
     const updatePage = (pageId: string, updates: Partial<AlbumPage>) => {
         const newPages = pages.map(p => p.id === pageId ? { ...p, ...updates } : p);
-        onUpdate({ ...album, pages: newPages });
+        const newAlbum = { ...album, pages: newPages };
+        onUpdate(newAlbum); // 立即保存！解决贴纸不保存问题
     };
 
-    // --- 工具：更新选中组件 (旋转/缩放) ---
-    const updateActiveDeco = (updates: Partial<AlbumDecoration>) => {
-        if (!editingPageId || !activeDecoId) return;
-        const currentPage = pages.find(p => p.id === editingPageId);
-        if (!currentPage) return;
-        
-        const newDecorations = currentPage.decorations.map(d => d.id === activeDecoId ? { ...d, ...updates } : d);
-        updatePage(editingPageId, { decorations: newDecorations });
+    // 修改封面后的同步
+    const updateCover = (updates: Partial<PhotoAlbum>) => {
+        const newAlbum = { ...album, ...updates };
+        onUpdate(newAlbum); // 立即保存！解决封面不同步问题
     };
 
     // --- 拖拽逻辑 ---
     const handleDragStart = (e: any, pageId: string, deco: AlbumDecoration) => {
         if (editingPageId !== pageId) return;
-        e.stopPropagation();
+        e.stopPropagation(); // 防止触发翻页或背景点击
         setDraggingId(deco.id);
-        setActiveDecoId(deco.id); // 选中它，显示滑块
+        setActiveDecoId(deco.id); 
+        
+        // 兼容鼠标和触摸
         const clientX = e.touches ? e.touches[0].clientX : e.clientX;
         const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+        
         draggingRef.current = { decoId: deco.id, startX: clientX, startY: clientY, initialX: deco.x, initialY: deco.y };
     };
 
     const handleDragMove = (e: any) => {
         if (!draggingRef.current || !editingPageId) return;
+        e.preventDefault(); // 防止屏幕滚动
+        
         const clientX = e.touches ? e.touches[0].clientX : e.clientX;
         const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+        
+        // 计算移动距离 (百分比)
         const deltaX = ((clientX - draggingRef.current.startX) / 300) * 100;
         const deltaY = ((clientY - draggingRef.current.startY) / 400) * 100;
 
-        updatePage(editingPageId, {
-            decorations: pages.find(p => p.id === editingPageId)?.decorations.map(d => 
-                d.id === draggingRef.current.decoId ? { ...d, x: draggingRef.current.initialX + deltaX, y: draggingRef.current.initialY + deltaY } : d
-            ) || []
-        });
+        const targetPage = pages.find(p => p.id === editingPageId);
+        if (!targetPage) return;
+
+        const newDecorations = targetPage.decorations.map(d => 
+            d.id === draggingRef.current.decoId 
+            ? { ...d, x: draggingRef.current.initialX + deltaX, y: draggingRef.current.initialY + deltaY } 
+            : d
+        );
+
+        updatePage(editingPageId, { decorations: newDecorations });
     };
 
     const handleDragEnd = () => { draggingRef.current = null; setDraggingId(null); };
@@ -2281,48 +2298,53 @@ const AlbumBookModal: React.FC<{
         }
     };
 
-    // --- 渲染页面 (复用之前的逻辑，微调样式) ---
+    // --- 渲染单个页面 (增加了纸质纹理) ---
     const renderPage = (page: AlbumPage | undefined, pageNum: number, isRight: boolean) => {
-        if (!page) return <div className="w-full h-full flex items-center justify-center text-gray-300 text-xs border-2 border-dashed border-gray-100 m-4 rounded-lg">空白页</div>;
+        if (!page) return <div className="w-full h-full flex items-center justify-center text-gray-300 text-xs border-2 border-dashed border-gray-200/50 m-4 rounded-lg bg-[#fdfbf7]">空白页</div>;
+        
         const isEditing = editingPageId === page.id;
 
         return (
             <div className={`w-full h-full relative overflow-hidden group select-none ${isRight ? 'rounded-r-lg' : 'rounded-l-lg'}`}
                 style={{ 
                     backgroundColor: page.background || '#fdfbf7',
-                    backgroundImage: page.type === 'free_journal' ? 'radial-gradient(#ccc 1px, transparent 1px)' : 'none',
-                    backgroundSize: '20px 20px'
+                    // ★★★ 纸质感核心：噪点纹理 + 书脊阴影 ★★★
+                    backgroundImage: `
+                        ${isRight ? 'linear-gradient(to right, rgba(0,0,0,0.15), transparent 15%)' : 'linear-gradient(to left, rgba(0,0,0,0.15), transparent 15%)'},
+                        ${page.type === 'free_journal' ? 'radial-gradient(#aaa 1px, transparent 1px)' : 'url("data:image/svg+xml,%3Csvg viewBox=\'0 0 200 200\' xmlns=\'http://www.w3.org/2000/svg\'%3E%3Cfilter id=\'noiseFilter\'%3E%3CfeTurbulence type=\'fractalNoise\' baseFrequency=\'0.8\' numOctaves=\'3\' stitchTiles=\'stitch\'/%3E%3C/filter%3E%3Crect width=\'100%25\' height=\'100%25\' filter=\'url(%23noiseFilter)\' opacity=\'0.08\'/%3E%3C/svg%3E")'}
+                    `,
+                    backgroundSize: '100% 100%, 20px 20px',
+                    boxShadow: isRight ? 'inset 5px 0 10px rgba(0,0,0,0.05)' : 'inset -5px 0 10px rgba(0,0,0,0.05)'
                 }}
-                onClick={() => setActiveDecoId(null)} // 点击空白处取消选中
+                onClick={(e) => { e.stopPropagation(); setActiveDecoId(null); }} // 点击页面空白处取消选中装饰
             >
-                {/* 遮罩 */}
-                {editingPageId && !isEditing && <div className="absolute inset-0 bg-black/40 z-50 backdrop-blur-[1px]" />}
+                {/* 遮罩：非编辑状态下暗显 */}
+                {editingPageId && !isEditing && <div className="absolute inset-0 bg-black/40 z-[40] backdrop-blur-[1px]" />}
                 
-                {/* 类型角标 */}
-                {isEditing && <div className="absolute top-2 left-2 bg-black/10 text-gray-500 text-[10px] px-2 py-1 rounded-full z-40">{page.type === 'photo_frame' ? '🖼️' : '📝'}</div>}
-
-                {/* 照片层 */}
+                {/* 1. 照片层 */}
                 {page.type === 'photo_frame' && (
                     <div className="absolute inset-0 p-6 flex items-center justify-center pointer-events-none">
-                        <div className={`relative bg-white p-2 shadow-md transition-transform ${page.layout === '2-photos' ? 'w-[70%]' : 'w-[85%]'} aspect-[3/4] rotate-[-1deg]`}>
-                            {page.photos?.[0] ? <img src={page.photos[0]} className="w-full h-full object-cover bg-gray-100" /> : 
-                            <label className="w-full h-full flex flex-col items-center justify-center bg-gray-50 text-gray-400 cursor-pointer pointer-events-auto border-2 border-dashed border-gray-200">
-                                <span className="text-2xl">+</span><input type="file" className="hidden" accept="image/*" onChange={e => {
+                        <div className={`relative bg-white p-2 shadow-lg transition-transform ${page.layout === '2-photos' ? 'w-[70%]' : 'w-[85%]'} aspect-[3/4] rotate-[-1deg]`} style={{ boxShadow: '2px 4px 8px rgba(0,0,0,0.1)' }}>
+                            {page.photos?.[0] ? <img src={page.photos[0]} className="w-full h-full object-cover bg-gray-50" /> : 
+                            <label className="w-full h-full flex flex-col items-center justify-center bg-gray-50 text-gray-300 cursor-pointer pointer-events-auto border-2 border-dashed border-gray-200">
+                                <span className="text-3xl">+</span><input type="file" className="hidden" accept="image/*" onChange={e => {
                                     if(e.target.files?.[0]) {
                                         const reader = new FileReader();
-                                        reader.onload = ev => updatePage(page.id, { photos: [ev.target?.result as string] });
+                                        reader.onload = ev => updatePage(page.id, { photos: [ev.target?.result as string] }); // 立即保存照片
                                         reader.readAsDataURL(e.target.files[0]);
                                     }
                                 }} />
                             </label>}
+                            {/* 胶带效果 */}
+                            <div className="absolute -top-3 left-1/2 -translate-x-1/2 w-16 h-4 bg-yellow-200/60 transform rotate-1 backdrop-blur-sm shadow-sm"></div>
                         </div>
                     </div>
                 )}
 
-                {/* 装饰层 */}
+                {/* 2. 装饰层 */}
                 {page.decorations.map(deco => (
                     <div key={deco.id} 
-                        className={`absolute ${isEditing ? 'cursor-move' : ''} ${activeDecoId === deco.id ? 'z-50 border-2 border-blue-400 rounded' : 'z-10'}`}
+                        className={`absolute ${isEditing ? 'cursor-move' : ''} ${activeDecoId === deco.id ? 'z-50 border border-blue-400 rounded-sm' : 'z-10'}`}
                         style={{ 
                             left: `${deco.x}%`, top: `${deco.y}%`, 
                             transform: `translate(-50%, -50%) rotate(${deco.rotate}deg) scale(${deco.scale})`
@@ -2332,24 +2354,23 @@ const AlbumBookModal: React.FC<{
                     >
                         {deco.type === 'text' ? (
                             <div style={{ fontFamily: deco.fontFamily, color: deco.color, fontWeight: deco.fontWeight, fontSize: '16px', whiteSpace: 'nowrap' }}>{deco.content}</div>
-                        ) : <img src={deco.content.startsWith('data:') ? deco.content : undefined} alt={deco.content.startsWith('data:') ? 'sticker' : deco.content} className="w-auto h-auto" style={{ maxWidth: '100px' }} onError={(e) => { (e.target as HTMLElement).innerText = deco.content }} /> 
-                        }
-                        {/* 如果是emoji，直接显示emoji文字，上面img是为了兼容自制贴纸图片 */}
-                        {!deco.content.startsWith('data:') && <div className="text-4xl filter drop-shadow-md">{deco.content}</div>}
+                        ) : <img src={deco.content.startsWith('data:') ? deco.content : undefined} className="w-auto h-auto" style={{ maxWidth: '120px' }} onError={(e) => { (e.target as HTMLElement).style.display='none'; }} />}
+                        
+                        {!deco.content.startsWith('data:') && <div className="text-4xl filter drop-shadow-sm">{deco.content}</div>}
                         
                         {isEditing && activeDecoId === deco.id && (
                             <button onClick={e => { e.stopPropagation(); updatePage(page.id, { decorations: page.decorations.filter(d => d.id !== deco.id) }) }} 
-                                className="absolute -top-3 -right-3 bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-[10px] shadow">×</button>
+                                className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-4 h-4 flex items-center justify-center text-[10px] shadow">×</button>
                         )}
                     </div>
                 ))}
 
                 {!editingPageId && (
-                    <div className="absolute inset-0 flex items-center justify-center bg-black/0 hover:bg-black/10 transition group z-50 pointer-events-none">
-                        <button onClick={() => setEditingPageId(page.id)} className="pointer-events-auto opacity-0 group-hover:opacity-100 bg-white text-gray-800 px-4 py-2 rounded-full font-bold shadow-lg transform scale-90 hover:scale-100 transition">✏️ 编辑</button>
+                    <div className="absolute inset-0 flex items-center justify-center z-50 pointer-events-none">
+                        <button onClick={(e) => { e.stopPropagation(); setEditingPageId(page.id); }} className="pointer-events-auto opacity-0 group-hover:opacity-100 bg-white/90 text-gray-800 px-4 py-2 rounded-full font-bold shadow-lg transform scale-90 hover:scale-100 transition backdrop-blur-sm border border-gray-100">✎ 编辑此页</button>
                     </div>
                 )}
-                <div className="absolute bottom-2 left-1/2 -translate-x-1/2 text-[8px] text-gray-300 font-mono">- {pageNum} -</div>
+                <div className="absolute bottom-2 left-1/2 -translate-x-1/2 text-[8px] text-gray-400 font-serif opacity-50">- {pageNum} -</div>
             </div>
         );
     };
@@ -2358,111 +2379,138 @@ const AlbumBookModal: React.FC<{
     const rightPageIdx = leftPageIdx + 1;
 
     return (
-        <div className="fixed inset-0 z-[200] bg-black flex items-center justify-center overflow-hidden" 
+        // 背景层：黑色半透明，点击关闭
+        <div className="fixed inset-0 z-[200] bg-black/90 backdrop-blur-sm flex items-center justify-center overflow-hidden animate-fadeIn" 
+             onClick={onClose} 
              onMouseMove={handleDragMove} onMouseUp={handleDragEnd} onTouchMove={handleDragMove} onTouchEnd={handleDragEnd}>
             
-            {/* ★★★ 核心容器：旋转90度 ★★★ */}
-            <div className="relative bg-gray-900 shadow-2xl transition-all duration-500 origin-center flex flex-col"
-                 style={{ width: '100vh', height: '100vw', transform: 'rotate(90deg)' }}>
-                 
-                {/* 顶部栏 */}
-                <div className="h-12 bg-gray-800 flex justify-between items-center px-6 text-white shrink-0 z-[100]">
-                    <span className="font-bold text-sm">📖 {album.title}</span>
-                    <div className="flex gap-4">
-                        {editingPageId ? <button onClick={() => { setEditingPageId(null); setActiveDecoId(null); }} className="bg-green-500 px-4 py-1 rounded-full text-xs font-bold shadow-lg animate-pulse">✅ 完成</button> : 
-                        <button onClick={onClose} className="text-gray-400 hover:text-white">✕ 关闭</button>}
-                    </div>
-                </div>
+            {/* ★★★ 旋转容器 (大屏核心) ★★★ */}
+            <div className="relative transition-all duration-500 origin-center flex flex-col items-center justify-center"
+                 style={{ width: '100vh', height: '100vw', transform: 'rotate(90deg)' }}
+                 onClick={e => e.stopPropagation()} // 防止点到书本也关闭
+            > 
+                {/* 悬浮关闭按钮 (为了美观，放到了旋转容器内部的角落) */}
+                <button onClick={onClose} className="absolute top-4 right-6 z-[150] text-white/50 hover:text-white text-3xl font-light transition">×</button>
 
-                {/* 书本区域 */}
-                <div className="flex-1 bg-gray-200 relative overflow-hidden flex items-center justify-center p-4">
-                    <div className="relative w-[90%] max-w-4xl aspect-[1.6/1] bg-[#3e2723] rounded-lg shadow-2xl flex p-1">
-                        
-                        {/* 封面 */}
-                        {pageIndex === 0 ? (
-                            <div className="w-full h-full flex relative rounded-r-xl rounded-l-md shadow-2xl bg-cover bg-center"
-                                style={{ background: album.coverStyle.includes('data:') ? `url(${album.coverStyle})` : album.coverStyle, backgroundSize: 'cover' }}>
-                                <div className="absolute inset-0 bg-black/20"></div>
-                                <div className="absolute left-0 w-12 h-full bg-gradient-to-r from-black/50 to-transparent z-10"></div>
+                {/* 书本主体 */}
+                <div className="relative w-[92%] max-w-5xl aspect-[1.6/1] bg-[#2d1b15] rounded-lg shadow-[0_20px_50px_rgba(0,0,0,0.5)] flex p-1.5 transition-all">
+                    
+                    {/* 封面模式 */}
+                    {pageIndex === 0 ? (
+                        <div className="w-full h-full flex relative rounded-r-xl rounded-l-md shadow-2xl bg-cover bg-center overflow-hidden"
+                            style={{ 
+                                // 优先显示图片封面，如果没有则显示颜色材质
+                                background: album.coverStyle.includes('data:') ? `url(${album.coverStyle})` : album.coverStyle, 
+                                backgroundSize: 'cover' 
+                            }}>
+                            
+                            {/* 封面质感遮罩 */}
+                            <div className="absolute inset-0 bg-gradient-to-r from-black/40 via-transparent to-black/10 pointer-events-none"></div>
+                            <div className="absolute left-0 w-12 h-full bg-gradient-to-r from-black/60 to-transparent z-10 pointer-events-none"></div> {/* 书脊立体感 */}
+                            
+                            <div className="z-20 m-auto text-center p-8 border-[3px] border-white/20 bg-black/20 backdrop-blur-sm rounded-lg max-w-lg shadow-2xl">
+                                <h1 className="text-5xl font-black text-white drop-shadow-[0_4px_4px_rgba(0,0,0,0.5)] font-serif mb-4 tracking-wider">{album.title}</h1>
                                 
-                                <div className="z-20 m-auto text-center p-10 border-4 border-white/30 bg-white/10 backdrop-blur-sm rounded-xl max-w-md">
-                                    <h1 className="text-5xl font-black text-white drop-shadow-lg font-serif mb-4">{album.title}</h1>
-                                    <button onClick={() => setIsEditingCover(!isEditingCover)} className="bg-white/20 hover:bg-white/30 text-white text-xs px-4 py-2 rounded-full backdrop-blur transition">🎨 编辑封面</button>
+                                <div className="flex gap-2 justify-center mt-6">
+                                    <button onClick={() => setIsEditingCover(!isEditingCover)} className="bg-white/10 hover:bg-white/20 text-white border border-white/30 text-xs px-4 py-2 rounded-full backdrop-blur transition flex items-center gap-1">
+                                        <span>🎨</span> 编辑封面
+                                    </button>
                                 </div>
+                            </div>
 
-                                {/* ★★★ 封面编辑面板 (材质 + 图片 + 标题) ★★★ */}
-                                {isEditingCover && (
-                                    <div className="absolute bottom-10 left-1/2 -translate-x-1/2 bg-white p-4 rounded-xl shadow-2xl w-80 z-50 animate-slideUp">
-                                        <h4 className="text-xs font-bold text-gray-500 mb-2">材质与颜色</h4>
-                                        <div className="flex gap-2 overflow-x-auto pb-2 custom-scrollbar mb-2">
-                                            {COVERS.map(c => (
-                                                <div key={c.name} onClick={() => onUpdate({ ...album, coverStyle: c.style })}
-                                                    className={`w-8 h-8 rounded-full shrink-0 border-2 cursor-pointer ${album.coverStyle === c.style ? 'border-blue-500' : 'border-transparent'}`}
-                                                    style={{ background: c.style, backgroundImage: c.texture }} />
-                                            ))}
-                                        </div>
-                                        <label className="block bg-gray-100 hover:bg-gray-200 text-center text-xs py-2 rounded-lg cursor-pointer mb-2 font-bold text-gray-600">
-                                            📷 上传封面照片
+                            {/* 封面编辑面板 */}
+                            {isEditingCover && (
+                                <div className="absolute bottom-10 left-1/2 -translate-x-1/2 bg-white/95 backdrop-blur-xl p-4 rounded-2xl shadow-2xl w-80 z-50 animate-slideUp border border-white/50" onClick={e => e.stopPropagation()}>
+                                    <h4 className="text-xs font-bold text-gray-500 mb-3">封面材质</h4>
+                                    <div className="flex gap-2 overflow-x-auto pb-2 custom-scrollbar mb-3">
+                                        {COVERS.map(c => (
+                                            <div key={c.name} onClick={() => updateCover({ coverStyle: c.style })}
+                                                className={`w-10 h-10 rounded-full shrink-0 border-2 cursor-pointer shadow-sm ${album.coverStyle === c.style ? 'border-blue-500 scale-110' : 'border-gray-100'}`}
+                                                style={{ background: c.style, backgroundImage: c.texture }} />
+                                        ))}
+                                    </div>
+                                    <div className="border-t border-gray-100 pt-3">
+                                        <label className="flex items-center justify-center gap-2 bg-gray-100 hover:bg-gray-200 text-gray-600 text-xs py-3 rounded-xl cursor-pointer font-bold transition">
+                                            <span>📷</span> 上传照片做封面
                                             <input type="file" className="hidden" accept="image/*" onChange={e => {
                                                 if(e.target.files?.[0]) {
                                                     const reader = new FileReader();
-                                                    reader.onload = ev => onUpdate({ ...album, coverStyle: ev.target?.result as string });
+                                                    reader.onload = ev => updateCover({ coverStyle: ev.target?.result as string }); // 立即同步
                                                     reader.readAsDataURL(e.target.files[0]);
                                                 }
                                             }} />
                                         </label>
-                                        <input className="bg-gray-50 border p-2 rounded text-sm w-full font-bold" value={album.title} onChange={e => onUpdate({ ...album, title: e.target.value })} placeholder="输入相册标题" />
-                                        <button onClick={() => setIsEditingCover(false)} className="w-full mt-2 bg-blue-500 text-white py-1 rounded text-xs font-bold">完成</button>
                                     </div>
-                                )}
-                                <button onClick={() => setPageIndex(1)} className="absolute right-6 top-1/2 text-6xl text-white/50 hover:text-white animate-pulse">›</button>
-                            </div>
-                        ) : (
-                            /* 内页 */
-                            <div className="w-full h-full flex gap-0.5">
-                                <div className="flex-1 bg-[#fdfbf7] rounded-l-md overflow-hidden relative shadow-inner">
-                                    {renderPage(pages[leftPageIdx], leftPageIdx + 1, false)}
+                                    <input className="mt-3 bg-gray-50 border border-gray-200 p-2 rounded-xl text-sm w-full font-bold text-center" 
+                                        value={album.title} onChange={e => updateCover({ title: e.target.value })} placeholder="输入标题..." />
+                                    <button onClick={() => setIsEditingCover(false)} className="w-full mt-3 bg-black text-white py-2 rounded-xl text-xs font-bold shadow-md">完成</button>
                                 </div>
-                                <div className="flex-1 bg-[#fdfbf7] rounded-r-md overflow-hidden relative shadow-inner">
-                                    {renderPage(pages[rightPageIdx], rightPageIdx + 1, true)}
-                                </div>
-                                <button onClick={() => setPageIndex(p => Math.max(0, p - 1))} className="absolute -left-12 top-1/2 text-4xl text-gray-500">‹</button>
-                                <button onClick={() => setPageIndex(p => p + 1)} className="absolute -right-12 top-1/2 text-4xl text-gray-500">›</button>
+                            )}
+                            <button onClick={() => setPageIndex(1)} className="absolute right-6 top-1/2 -translate-y-1/2 text-6xl text-white/40 hover:text-white transition animate-pulse">›</button>
+                        </div>
+                    ) : (
+                        /* 内页模式 */
+                        <div className="w-full h-full flex">
+                            {/* 左页 */}
+                            <div className="flex-1 bg-[#fdfbf7] rounded-l-md overflow-hidden relative shadow-[inset_-5px_0_15px_rgba(0,0,0,0.1)] z-10">
+                                {renderPage(pages[leftPageIdx], leftPageIdx + 1, false)}
                             </div>
-                        )}
-                    </div>
+                            {/* 中缝阴影 */}
+                            <div className="absolute left-1/2 top-0 bottom-0 w-8 -ml-4 bg-gradient-to-r from-black/20 via-black/5 to-black/20 pointer-events-none z-30 opacity-30 mix-blend-multiply"></div>
+                            {/* 右页 */}
+                            <div className="flex-1 bg-[#fdfbf7] rounded-r-md overflow-hidden relative shadow-[inset_5px_0_15px_rgba(0,0,0,0.1)] z-10">
+                                {renderPage(pages[rightPageIdx], rightPageIdx + 1, true)}
+                            </div>
+                            
+                            {/* 翻页按钮 */}
+                            <button onClick={() => setPageIndex(p => Math.max(0, p - 1))} className="absolute -left-16 top-1/2 -translate-y-1/2 text-5xl text-white/20 hover:text-white transition p-4">‹</button>
+                            <button onClick={() => setPageIndex(p => p + 1)} className="absolute -right-16 top-1/2 -translate-y-1/2 text-5xl text-white/20 hover:text-white transition p-4">›</button>
+                        </div>
+                    )}
                 </div>
 
-                {/* ★★★ 工具栏区域 (仅编辑模式) ★★★ */}
+                {/* ★★★ 底部工具栏 (仅编辑模式) ★★★ */}
                 {editingPageId && (
-                    <div className="bg-white border-t border-gray-200 shrink-0 flex flex-col z-[100] pb-safe">
-                        
-                        {/* 1. 选中组件控制条 (旋转/缩放回归！) */}
+                    <div className="absolute bottom-6 bg-white/95 backdrop-blur-xl border border-white/50 rounded-2xl shadow-2xl px-6 py-3 flex flex-col gap-3 z-[150] max-w-3xl animate-slideUp">
+                        <div className="flex justify-between items-center border-b border-gray-100 pb-2 mb-1">
+                             <span className="text-xs font-bold text-gray-500">✨ 装饰工具箱</span>
+                             <button onClick={() => { setEditingPageId(null); setActiveDecoId(null); }} className="bg-black text-white px-4 py-1 rounded-full text-xs font-bold shadow-md">完成编辑</button>
+                        </div>
+
+                        {/* 第一行：调整工具 (只有选中元素时显示) */}
                         {activeDecoId && (
-                            <div className="h-10 bg-blue-50 flex items-center px-4 gap-4 border-b border-blue-100 overflow-x-auto">
-                                <span className="text-[10px] font-bold text-blue-500 shrink-0">✨ 调整:</span>
+                            <div className="flex items-center gap-4 bg-blue-50 px-3 py-1.5 rounded-lg border border-blue-100 animate-fadeIn">
+                                <span className="text-[10px] font-bold text-blue-500">选中项调整:</span>
                                 <div className="flex items-center gap-2">
-                                    <span className="text-[9px]">🔄</span>
-                                    <input type="range" min="-180" max="180" defaultValue="0" className="w-20"
-                                        onChange={e => updateActiveDeco({ rotate: parseInt(e.target.value) })} />
+                                    <span className="text-[10px]">🔄 旋转</span>
+                                    <input type="range" min="-180" max="180" defaultValue="0" className="w-24 h-1 bg-blue-200 rounded-lg appearance-none cursor-pointer"
+                                        onChange={e => {
+                                            const currentPage = pages.find(p => p.id === editingPageId);
+                                            const currentDeco = currentPage?.decorations.find(d => d.id === activeDecoId);
+                                            if(currentDeco) updateActiveDeco({ rotate: parseInt(e.target.value) });
+                                        }} />
                                 </div>
                                 <div className="flex items-center gap-2">
-                                    <span className="text-[9px]">🔍</span>
-                                    <input type="range" min="0.5" max="3" step="0.1" defaultValue="1" className="w-20"
-                                        onChange={e => updateActiveDeco({ scale: parseFloat(e.target.value) })} />
+                                    <span className="text-[10px]">🔍 大小</span>
+                                    <input type="range" min="0.5" max="3" step="0.1" defaultValue="1" className="w-24 h-1 bg-blue-200 rounded-lg appearance-none cursor-pointer"
+                                        onChange={e => {
+                                            const currentPage = pages.find(p => p.id === editingPageId);
+                                            const currentDeco = currentPage?.decorations.find(d => d.id === activeDecoId);
+                                            if(currentDeco) updateActiveDeco({ scale: parseFloat(e.target.value) });
+                                        }} />
                                 </div>
                             </div>
                         )}
 
-                        {/* 2. 素材选择栏 */}
-                        <div className="h-20 flex items-center px-4 gap-4 overflow-x-auto">
-                            {/* 加字 */}
-                            <button onClick={() => setShowTextModal(true)} className="flex flex-col items-center justify-center w-12 h-12 bg-gray-800 text-white rounded-xl shadow-lg hover:scale-105 transition shrink-0">
-                                <span className="text-lg font-serif">T</span><span className="text-[8px]">加字</span>
+                        {/* 第二行：素材选择 */}
+                        <div className="flex items-center gap-4 overflow-x-auto custom-scrollbar h-16">
+                            <button onClick={() => setShowTextModal(true)} className="flex flex-col items-center justify-center w-12 h-12 bg-white border-2 border-gray-100 rounded-xl shadow-sm hover:border-black transition shrink-0 group">
+                                <span className="text-lg font-serif group-hover:scale-110 transition">T</span>
+                                <span className="text-[8px] text-gray-400">加字</span>
                             </button>
                             <div className="w-px h-8 bg-gray-200 shrink-0"></div>
 
-                            {/* 系统贴纸包 */}
+                            {/* 系统贴纸 */}
                             {MEGA_STICKER_PACKS.map((pack, i) => (
                                 <div key={i} className="flex flex-col gap-1 bg-gray-50 p-1.5 rounded-xl border border-gray-100 shrink-0">
                                     <span className="text-[8px] text-center text-gray-400">{pack.name}</span>
@@ -2471,17 +2519,17 @@ const AlbumBookModal: React.FC<{
                                             <button key={emoji} onClick={() => {
                                                 const newDeco: AlbumDecoration = { id: Date.now().toString(), type: 'sticker', content: emoji, x: 50, y: 50, rotate: (Math.random()*20)-10, scale: 1 };
                                                 updatePage(editingPageId, { decorations: [...(pages.find(p=>p.id===editingPageId)?.decorations||[]), newDeco] });
-                                            }} className="text-xl hover:scale-125 transition">{emoji}</button>
+                                            }} className="text-xl hover:scale-125 transition active:scale-95">{emoji}</button>
                                         ))}
                                     </div>
                                 </div>
                             ))}
 
-                            {/* ★★★ 自制贴纸库 (核心功能) ★★★ */}
-                            <div className="flex flex-col gap-1 bg-pink-50 p-1.5 rounded-xl border border-pink-100 shrink-0 min-w-[60px]">
-                                <span className="text-[8px] text-center text-pink-400">自制贴纸</span>
+                            {/* 自制贴纸 */}
+                            <div className="flex flex-col gap-1 bg-rose-50 p-1.5 rounded-xl border border-rose-100 shrink-0 min-w-[70px]">
+                                <span className="text-[8px] text-center text-rose-400">我的素材</span>
                                 <div className="flex gap-1 items-center">
-                                    <label className="w-6 h-6 rounded bg-white border border-pink-200 flex items-center justify-center cursor-pointer text-pink-500 font-bold hover:bg-pink-100">
+                                    <label className="w-6 h-6 rounded bg-white border border-rose-200 flex items-center justify-center cursor-pointer text-rose-500 font-bold hover:bg-rose-100 shadow-sm">
                                         + <input type="file" multiple className="hidden" accept="image/*" onChange={handleUploadStickers} />
                                     </label>
                                     {customStickers.map((src, i) => (
@@ -2496,13 +2544,29 @@ const AlbumBookModal: React.FC<{
                     </div>
                 )}
 
-                {/* ★★★ 3. 文字编辑器 (它现在被包含在旋转容器里了！所以它是横着的！) ★★★ */}
+                {/* 非编辑模式下的底部栏：加页 */}
+                {!editingPageId && pageIndex > 0 && (
+                    <div className="absolute bottom-6 flex gap-4 z-[100]">
+                        <button onClick={() => {
+                            const type = confirm("添加【手帐页】吗？\n(取消则添加照片页)") ? 'free_journal' : 'photo_frame';
+                            const newPage: AlbumPage = { 
+                                id: Date.now().toString(), type, layout: '1-photo', 
+                                photos: [], decorations: [], background: '#fdfbf7' 
+                            };
+                            const newAlbum = { ...album, pages: [...pages, newPage] };
+                            onUpdate(newAlbum); // 立即保存
+                            setTimeout(() => setPageIndex(Math.ceil((pages.length + 1) / 2)), 100);
+                        }} className="bg-white text-gray-800 px-6 py-2 rounded-full font-bold shadow-lg hover:scale-105 transition flex items-center gap-2 border border-gray-200">
+                            <span>📄</span> 添加新一页
+                        </button>
+                    </div>
+                )}
+
+                {/* 文字编辑弹窗 (必须在旋转容器内) */}
                 {showTextModal && (
                     <div className="absolute inset-0 z-[500] bg-black/60 flex items-center justify-center p-8 animate-fadeIn" onClick={() => setShowTextModal(false)}>
-                        <div className="bg-white w-[500px] h-[300px] rounded-2xl shadow-2xl p-6 flex flex-col gap-4 animate-scaleIn relative" onClick={e => e.stopPropagation()}>
+                        <div className="bg-white w-[500px] rounded-2xl shadow-2xl p-6 flex flex-col gap-4 animate-scaleIn relative" onClick={e => e.stopPropagation()}>
                             <h3 className="text-center font-bold text-gray-700">添加文字</h3>
-                            
-                            {/* 独立的文字编辑组件逻辑，直接内嵌在这里，保证不出错 */}
                             <TextEditorModalContent 
                                 onSave={(text, style) => {
                                     if(editingPageId) {
@@ -2518,35 +2582,6 @@ const AlbumBookModal: React.FC<{
                 )}
             </div>
         </div>
-    );
-};
-
-// --- 辅助组件：文字编辑器内容 (为了代码整洁提出来的) ---
-const TextEditorModalContent: React.FC<{ onSave: (t:string, s:any)=>void, onClose: ()=>void }> = ({ onSave, onClose }) => {
-    const [content, setContent] = useState("");
-    const [font, setFont] = useState("sans-serif");
-    const [color, setColor] = useState("#000000");
-    const [isBold, setIsBold] = useState(false);
-
-    return (
-        <>
-            <textarea className="flex-1 bg-gray-50 border border-gray-200 rounded-xl p-4 text-lg outline-none resize-none"
-                style={{ fontFamily: font, color: color, fontWeight: isBold ? 'bold' : 'normal' }}
-                placeholder="写下你的心情..." value={content} onChange={e => setContent(e.target.value)} autoFocus />
-            <div className="space-y-2">
-                <div className="flex gap-2 overflow-x-auto pb-1 custom-scrollbar">
-                    {EXTENDED_FONTS.map(f => <button key={f.value} onClick={() => setFont(f.value)} className={`px-2 py-1 rounded text-xs border ${font===f.value?'bg-blue-500 text-white':'bg-white'}`}>{f.name}</button>)}
-                </div>
-                <div className="flex gap-2 items-center">
-                    <button onClick={() => setIsBold(!isBold)} className={`w-8 h-8 rounded border ${isBold?'bg-black text-white':'bg-white'}`}>B</button>
-                    <div className="flex gap-1 overflow-x-auto">{EXTENDED_COLORS.map(c => <div key={c} onClick={()=>setColor(c)} className={`w-6 h-6 rounded-full border-2 cursor-pointer ${color===c?'border-gray-500':'border-transparent'}`} style={{backgroundColor:c}}/>)}</div>
-                </div>
-            </div>
-            <div className="flex gap-3 mt-2">
-                <button onClick={onClose} className="flex-1 py-2 bg-gray-100 text-gray-500 rounded-lg font-bold">取消</button>
-                <button onClick={() => onSave(content, { fontFamily: font, color, fontWeight: isBold ? 'bold' : 'normal' })} className="flex-1 py-2 bg-blue-600 text-white rounded-lg font-bold">完成</button>
-            </div>
-        </>
     );
 };
 
