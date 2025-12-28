@@ -11,6 +11,7 @@ import localforage from 'localforage';
 import { Contact, GlobalSettings, WorldBookCategory, Message, EmotionalNeed, TodoItem } from './types';
 import { generateResponse } from './services/apiService';
 import { readTavernPng, fileToBase64 } from './utils/fileUtils';
+// 这是一组什么代码：这是为了让 ChatApp 能够使用“图书管理员”功能的导入语句。
 
 // ==================== 1. 辅助函数 & 初始数据 (必须放在组件外面！) ====================
 
@@ -498,6 +499,8 @@ if (savedSettings) {
     setContacts([]);
   } else {
     // 这里加强修复：强制加 proactiveConfig 默认值 + 清残留 pending
+// 这是一组什么代码：这是修复后的数据加载逻辑，为新功能添加了安全的默认值。
+
     const repaired = savedContacts.map(c => {
       const sanitized = sanitizeContact(c);
       return {
@@ -510,22 +513,19 @@ if (savedSettings) {
         },
         // 清掉任何残留的 pendingProactive 标记
         pendingProactive: false,
-        // 这是一组代码：新增：如果 impressionThreshold 未定义，则初始化为默认值
-impressionThreshold: sanitized.impressionThreshold || (Math.floor(Math.random() * (150 - 90 + 1)) + 90), // Default to 'normal' mode (90-150)
-// 确保 chatCountForPoint 和 impressionCount 也有默认值 (防止旧存档缺失)
-chatCountForPoint: sanitized.chatCountForPoint || 0,
-impressionCount: sanitized.impressionCount || 0,
-        
+        // 新增：如果 impressionThreshold 未定义，则初始化为默认值
+        impressionThreshold: sanitized.impressionThreshold || (Math.floor(Math.random() * (150 - 90 + 1)) + 90), // Default to 'normal' mode (90-150)
+        // 确保 chatCountForPoint 和 impressionCount 也有默认值 (防止旧存档缺失)
+        chatCountForPoint: sanitized.chatCountForPoint || 0,
+        impressionCount: sanitized.impressionCount || 0,
       };
-      
     });
     const contactsWithPoints = repaired.map(c => ({
-...c,
-// 如果这个角色没有点数，就给他999点
-interventionPoints: c.interventionPoints || 999
-}));
-setContacts(contactsWithPoints); // ★★★ 使用加了点数的新数组
-    setContacts(repaired);
+        ...c,
+        // 如果这个角色没有点数，就给他3点
+        interventionPoints: typeof c.interventionPoints === 'number' ? c.interventionPoints : 3
+    }));
+    setContacts(contactsWithPoints);
             console.log(`成功载入 ${repaired.length} 个角色`);
           }
         } else { // 情况3: savedContacts 存在但不是数组（数据损坏），进行恢复

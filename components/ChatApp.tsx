@@ -7,8 +7,8 @@ import { generateMinimaxAudio, fetchMinimaxVoices, getBuiltInMinimaxVoices, Mini
 import SafeAreaHeader from './SafeAreaHeader';  // ← 确保路径正确（如果在 components 同级）
 import WorldBookApp from './WorldBookApp'; // <--- 确保加了这行导入！
 import html2canvas from 'html2canvas';
-
-
+import { searchDocuments, Document } from '../services/memoryService';
+import { readTavernPng, fileToBase64 } from './utils/fileUtils';
 
 
 
@@ -858,6 +858,8 @@ const PersonaPanel = ({
 }: any) => {
   // ==================== [状态修复] 把多选相关的状态放回这里！ ====================
   const [isMultiSelect, setIsMultiSelect] = useState(false);
+  // 这是一组什么代码：这是控制“高级警告”弹窗的两个开关。
+
   const [selectedMemIds, setSelectedMemIds] = useState<string[]>([]);
   const [viewingTag, setViewingTag] = useState<any>(null);
  const [impressionFilter, setImpressionFilter] = useState<'all' | 'favorites'>('all');
@@ -2461,6 +2463,10 @@ const getEnergyInstruction = (mood: CharacterMood | undefined): string => {
 
 
 
+
+
+
+
 // ==================== 🧬 [V11.0 拟真态] 动态人格搅拌机 ====================
 // 这是一个“灵魂编译器”，将冷冰冰的数字翻译成有血有肉的说话习惯
 const getDynamicStyleInstruction = (contact: Contact): string => {
@@ -2534,6 +2540,10 @@ const getDynamicStyleInstruction = (contact: Contact): string => {
 说话风格: ${speechStyle.join(" ")}
   `.trim();
 };
+
+
+
+
 
 
 // ==================== 🔇 [新增] 暴力对话模式控制器 ====================
@@ -2743,7 +2753,51 @@ const PointRuleModal: React.FC<{
 
 
 
+// 这是一组什么代码：这是一个全新的、用来替换掉系统默认丑弹窗的“高级警告”组件。
 
+const WarningModal: React.FC<{
+  isOpen: boolean;
+  onClose: () => void;
+  loverName: string;
+}> = ({ isOpen, onClose, loverName }) => {
+  if (!isOpen) return null;
+
+  return (
+    // 半透明黑色背景，带模糊效果
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm animate-fadeIn" onClick={onClose}>
+      
+      {/* 白色卡片主体 */}
+      <div 
+        className="bg-white w-[85%] max-w-xs rounded-3xl shadow-2xl p-6 animate-scaleIn flex flex-col items-center text-center" 
+        onClick={e => e.stopPropagation()}
+      >
+        
+        {/* 顶部的锁链图标，增加戏剧感 */}
+        <div className="text-5xl mb-4 text-gray-400">⛓️</div>
+
+        {/* 标题 */}
+        <h3 className="text-lg font-black text-gray-800 mb-2">羁绊已锁定</h3>
+
+        {/* 核心提示文字 (更温柔的说法) */}
+        <p className="text-sm text-gray-500 leading-relaxed">
+          你的心已经属于 <b className="font-bold text-rose-500">{loverName}</b> 啦，<br/>无法再接受新的羁绊哦。
+        </p>
+
+        {/* 分割线 */}
+        <div className="w-full h-px bg-gray-100 my-6"></div>
+
+        {/* 关闭按钮 */}
+        <button 
+          onClick={onClose}
+          className="w-full py-3 rounded-xl bg-gray-800 text-white font-bold shadow-lg shadow-gray-200 active:scale-95 transition-transform"
+        >
+          我明白了
+        </button>
+
+      </div>
+    </div>
+  );
+};
 
 
 
@@ -3215,7 +3269,8 @@ const ChatApp: React.FC<ChatAppProps> = ({
   // ==================== 状态定义 ====================
 
 // 在 ChatApp 组件的状态定义区域
-
+const [showWarningModal, setShowWarningModal] = useState(false);
+  const [warningLoverName, setWarningLoverName] = useState("");
   const [editingMsgId, setEditingMsgId] = useState<string | null>(null); // 当前正在编辑的消息ID
    const [historyLimit, setHistoryLimit] = useState(30); 
   // 用来记录加载前的滚动高度，防止加载时画面乱跳
@@ -4147,7 +4202,9 @@ const handleDeleteContact = (contactIdToDelete: string) => {
         // 1. 检查有没有重婚 (防渣男/渣女逻辑)
         const existingLover = contacts.find(c => c.RelationShipUnlocked && c.id !== activeContact.id);
         if (existingLover) {
-            alert(`你已经和 ${existingLover.name} 是情侣了！不能脚踏两只船哦。`);
+           // 这是一组什么代码：这是用来打开我们新做的“高级警告”弹窗的指令。
+setWarningLoverName(existingLover.name); // 告诉弹窗要显示谁的名字
+setShowWarningModal(true); // 打开弹窗！
             return;
         }
 
@@ -4746,46 +4803,6 @@ ${chatLog}
 
 
 
-// 【绝对完整版】TKV解析器（补全缺失的函数）
-function parseTKV(text: string) {
-  const result = {
-    userProfile: { personality_traits: [] as any[] },
-    new_tags: [] as any[],
-  };
-  const entries = text.split('%%');
-  for (const entryText of entries) {
-    const lines = entryText.trim().split('\n');
-    const entryData: { [key: string]: string } = {};
-    let type = '';
-    for (const line of lines) {
-      const separatorIndex = line.indexOf(':');
-      if (separatorIndex > -1) {
-        const key = line.substring(0, separatorIndex).trim();
-        const value = line.substring(separatorIndex + 1).trim();
-        if (key === '类型') type = value;
-        else if (key === '内容') entryData.content = value;
-        else if (key === '证据') entryData.quote = value;
-        else if (key === '理由') entryData.reason = value;
-      }
-    }
-    if (type === '人格特征' && entryData.content && entryData.quote) {
-      result.userProfile.personality_traits.push({
-        value: entryData.content,
-        quote: entryData.quote,
-        timestamp: Date.now()
-      });
-    } else if (type === '印象标签' && entryData.content && entryData.reason) {
-      result.new_tags.push({
-        content: entryData.content,
-        ai_reason: entryData.reason
-      });
-    }
-  }
-  return result;
-}
-
-
-
 
 
 
@@ -5295,7 +5312,90 @@ const personalityDescription = getPersonalityDescription(activeContact.hef?.INDI
       ? historyOverride 
       : (activeContact.history || []); // 确保是数组
 
-    // 准备 Lore 和 Persona
+
+
+
+
+
+
+
+
+
+
+ // ★★★ 新增：调用“图书馆管理员” ★★★
+      // ====================================================================
+     let retrievedMemoriesText = "";
+      const lastUserMessage = currentHistory.slice().reverse().find(m => m.role === 'user');
+
+// 这是一组什么代码：这是修复后的“记忆图书馆”数据准备区，为所有可能不存在的数据添加了安全保障。
+
+      // 1. 把所有类型的记忆，都整理成统一的“图书”格式 (Document)
+      const allDocuments: Document[] = [
+        // A. 聊天记录档案馆
+        ...(activeContact.history || []).map(msg => ({
+            id: msg.id,
+            content: `${msg.role === 'user' ? activeContact.userName : activeContact.name}: ${msg.content}`,
+            type: '聊天记录',
+            timestamp: msg.timestamp
+        })),
+        // B. 长期记忆便签室
+        ...(activeContact.longTermMemories || []).map(mem => ({
+            id: mem.id,
+            content: mem.content,
+            type: '核心记忆',
+            timestamp: mem.timestamp
+        })),
+        // C. 信件收发室
+        ...(activeContact.letters || []).map(letter => ({
+            id: letter.id,
+            content: `关于《${letter.title}》这封信的内容摘要：${(letter.content || "").slice(0, 100)}...`,
+            type: '信件',
+            timestamp: letter.timestamp
+        })),
+        // D. 愿望清单储藏室
+        ...(activeContact.bucketList || []).map(item => ({
+            id: item.id,
+            content: `关于愿望清单《${item.title}》, 我们的想法是：我的: "${item.userContent}", 你的: "${item.aiContent}"`,
+            type: '愿望清单',
+            timestamp: Date.now() // 愿望没有时间戳，用当前时间代替
+        })),
+        // E. 问答记录中心
+        ...(activeContact.questions || []).map(qa => ({
+            id: qa.id,
+            content: `关于问题《${qa.question}》, 我们的回答是：我的: "${qa.userAnswer}", 你的: "${qa.aiAnswer}"`,
+            type: '问答',
+            timestamp: qa.timestamp
+        }))
+      ];
+      
+      // 2. 只有当用户说了话，并且图书馆里有书时，才去检索
+      if (lastUserMessage && allDocuments.length > 0) {
+          // 调用升级后的图书管理员
+          const relevantDocs = await searchDocuments(lastUserMessage.content, allDocuments, 5);
+          
+          if (relevantDocs.length > 0) {
+              // 把检索到的结果格式化成一段文字，并告诉AI这些情报的来源！
+              retrievedMemoriesText = `
+# 🧠 [智能记忆检索结果]
+根据当前对话，我从你的完整记忆库中检索到以下最相关的信息，你必须参考它们来回复：
+${relevantDocs.map(doc => `- (来源: ${doc.type}) ${doc.content}`).join('\n')}
+`;
+          }
+      }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
     // ... 原有的 Lore 代码 ...
 
 
@@ -5317,56 +5417,56 @@ const personalityDescription = getPersonalityDescription(activeContact.hef?.INDI
 // =============================================================
     // ★★★ 核心修复：寻找最近的“时间断崖”并定责 (智能免责版) ★★★
     // =============================================================
+// 1. 新增一个净化函数，专门处理特殊字符
+      const sanitizeForPrompt = (str: string | null | undefined): string => {
+        if (!str) return "";
+        // 替换掉所有可能破坏Prompt结构或JSON的字符
+        return str
+          .replace(/\\/g, '\\\\') // 反斜杠
+          .replace(/"/g, '\\"')  // 双引号
+          .replace(/`/g, '\\`')   // 反引号 (破坏模板字符串)
+          .replace(/\n/g, ' ');   // 换行符
+      };
 
- // 1. 获取最近 3 条消息的文本，用于检测话题
-    const recentContextText = currentHistory.slice(-3).map(m => m.content).join(' ').toLowerCase();
-    
-    let dynamicSpaceData = ""; // 这里存放“临时加载”的数据
+      // 2. 获取最近消息文本
+      const recentContextText = currentHistory.slice(-3).map(m => m.content || "").join(' ').toLowerCase();
+      
+      let dynamicSpaceData = "";
 
-    // 🕵️‍♂️ 嗅探 1: 恋爱清单/愿望
-    // 关键词：清单, 愿望, 想做的事, bucket, 一起做
-    if (/清单|愿望|想做的事|bucket|一起做/.test(recentContextText)) {
-        const list = activeContact.bucketList || [];
-        if (list.length > 0) {
-            // 只提取未完成的，或者最近刚完成的
-            const activeItems = list.filter(i => !i.isDone).map(i => 
-                `- 《${i.title}》 [状态: ${i.isUnlocked ? (i.aiContent ? '双方已填' : '等待我回应') : '待解锁'}]`
-            ).join('\n');
-            
-            if (activeItems) {
-                dynamicSpaceData += `\n【📂 恋爱清单数据 (已触发)】:\n${activeItems}\n(提示: 用户提到了愿望，请参考以上清单进行互动。如果想新增，请使用 ADD_BUCKET_ITEM 指令)\n`;
-            } else {
-                dynamicSpaceData += `\n【📂 恋爱清单数据】: 目前所有愿望都已完成！也许可以一起许个新的？\n`;
-            }
-        }
-    }
+      // 🕵️‍♂️ 嗅探 1: 恋爱清单 (所有内容都经过净化)
+      if (/清单|愿望|想做的事|bucket|一起做/.test(recentContextText)) {
+          const list = activeContact.bucketList || [];
+          if (list.length > 0) {
+              const activeItems = list.map(i => 
+                  `- 《${sanitizeForPrompt(i.title)}》[状态: ${i.isDone ? '已完成' : (i.isUnlocked ? '进行中' : '待解锁')}] ${i.isUnlocked ? `(我的想法: ${sanitizeForPrompt(i.userContent) || '未填'}, 你的想法: ${sanitizeForPrompt(i.aiContent) || '未填'})` : ''}`
+              ).join('\\n'); // 在Prompt内部用\\n换行
+              if (activeItems) {
+                  dynamicSpaceData += `\\n【📂 恋爱清单数据】:\\n${activeItems}\\n`;
+              }
+          }
+      }
 
-    // 🕵️‍♂️ 嗅探 2: 信件/书信
-    // 关键词：信, letter, 写给, 收到
-    if (/信|letter|写给|收到/.test(recentContextText)) {
-        const letters = activeContact.letters || [];
-        if (letters.length > 0) {
-            // 只提取最近的 3 封信的标题
-            const recentLetters = letters.slice(-3).map(l => 
-                `- ${l.from === 'user' ? '用户寄来' : '我写'}的《${l.title}》 (${new Date(l.timestamp).toLocaleDateString()})`
-            ).join('\n');
-            dynamicSpaceData += `\n【📂 最近往来信件 (已触发)】:\n${recentLetters}\n(提示: 如需写信，请使用 WRITE_LETTER 指令)\n`;
-        }
-    }
+      // 🕵️‍♂️ 嗅探 2: 信件 (所有内容都经过净化)
+      if (/信|letter|写给|收到/.test(recentContextText)) {
+          const letters = activeContact.letters || [];
+          if (letters.length > 0) {
+              const recentLetters = letters.slice(-3).map(l => 
+                  `- ${l.from === 'user' ? '用户寄来' : '我写'}的《${sanitizeForPrompt(l.title)}》(内容摘要: ${sanitizeForPrompt((l.content||"").slice(0,20))}...)`
+              ).join('\\n');
+              dynamicSpaceData += `\\n【📂 最近信件】:\\n${recentLetters}\\n`;
+          }
+      }
 
-    // 🕵️‍♂️ 嗅探 3: 提问/问答
-    // 关键词：提问, 问我, 问答, question, 了解
-    if (/提问|问我|问答|question|了解/.test(recentContextText)) {
-        const qas = activeContact.questions || [];
-        if (qas.length > 0) {
-            // 提取最近 2 个未读或者刚回答的问题
-            const recentQAs = qas.slice(-2).map(q => 
-                `- 问题: "${q.question}" (我的回答: ${q.aiAnswer || '暂无'}, 用户的回答: ${q.userAnswer || '暂无'})`
-            ).join('\n');
-            dynamicSpaceData += `\n【📂 最近灵魂拷问 (已触发)】:\n${recentQAs}\n(提示: 如需发起新提问，请使用 CREATE_QA 指令)\n`;
-        }
-    }
-
+      // 🕵️‍♂️ 嗅探 3: 问答 (所有内容都经过净化)
+      if (/提问|问我|问答|question|了解/.test(recentContextText)) {
+          const qas = activeContact.questions || [];
+          if (qas.length > 0) {
+              const recentQAs = qas.slice(-2).map(q => 
+                  `- 问题: "${sanitizeForPrompt(q.question)}" (我的回答: ${sanitizeForPrompt(q.aiAnswer) || '暂无'}, 用户的回答: ${sanitizeForPrompt(q.userAnswer) || '暂无'})`
+              ).join('\\n');
+              dynamicSpaceData += `\\n【📂 最近问答】:\\n${recentQAs}\\n`;
+          }
+      }
 
 
 
@@ -5440,17 +5540,14 @@ const personalityDescription = getPersonalityDescription(activeContact.hef?.INDI
                 const d2 = new Date(prevMsg.timestamp);
                 if (d1.getDate() !== d2.getDate()) isDifferentDay = true;
 
-                // ★★★ 判责 ★★★
-                if (prevMsg.role === 'user') {
-                    // 断层前是用户 -> 断层 -> AI 至今未回 -> AI 全责
-                    isAiIgnoredUser = true;
-                } else if (prevMsg.role === 'assistant') {
-                    // 断层前是AI -> 断层 -> 用户才回 -> 用户迟到
-                    isUserLateReply = true;
-                }
-                
-                bigGapFound = true; 
-                break; 
+               if (prevMsg.role === 'user') {
+                      isAiIgnoredUser = true; // 断层前是用户 -> AI 全责
+                  } else if (prevMsg.role === 'assistant' || prevMsg.role === 'system') {
+                      isUserLateReply = true; // 断层前是AI或系统 -> 用户迟到
+                  }
+                  
+                  bigGapFound = true; 
+                  break; 
             }
         }
     }
@@ -5483,6 +5580,14 @@ const personalityDescription = getPersonalityDescription(activeContact.hef?.INDI
         }
     }
 
+
+
+
+
+
+
+
+    
     // 生成时间描述
     let gapDescription = "刚刚";
     if (maxGapMinutes > 10) gapDescription = `${maxGapMinutes}分钟`;
@@ -5520,26 +5625,13 @@ const personalityDescription = getPersonalityDescription(activeContact.hef?.INDI
             blameInstruction = `【新的一天/新的开始】距离上次对话已过 ${gapDescription}，但这很正常（因为上次话题已结束或已互道晚安）。请自然地开启新话题，或者回应用户的新内容，不要纠结时间。`;
         } else {
             blameInstruction = "时间连贯，正常对话。";
+            
         }
     }
 
 
 const today = new Date().toISOString().slice(0, 10); // 定义今天日期
 
-const generateSystemPrompt = (contact: Contact, gapDesc: string, aiTime: string) => {
- 
-
-
-
-
-
-  // 2. 检查是否处于“勿扰模式”的边缘（比如刚醒或正要睡）
-  let dndContext = "";
-  if (contact.aiDND.enabled) {
-    dndContext = `你当前处于【${contact.aiDND.reason || "忙碌"}】状态。用户强行找你说话，你的反应应该是简短、略带被打扰的惊讶，或者匆忙结束对话。`;
-  }
-}
-    
 
 
 
@@ -5698,6 +5790,7 @@ HEF: ${JSON.stringify(activeContact.hef, null, 2)}
 Persona: ${activeContact.persona}
 Lore: ${loreText || "无"}
 承诺：${promiseInjection}  
+图书馆管理员：${retrievedMemoriesText}
 
 
 # 📂 [动态加载：情侣/密友空间数据]
@@ -5834,18 +5927,12 @@ ${(() => {
     } 
     // --- 情况三：你们只是普通朋友 ---
     else {
-        return 
+
 
 
 # 【特殊规则：当前为普通朋友关系】
 你和用户当前只是普通朋友，没有开通任何专属空间。请专注于日常聊天，你无法使用任何特殊指令（如写信、提问等）。
         ;
-
-
-
-
-
-
 
 
 
@@ -6449,7 +6536,6 @@ if (extractedThought.new_agreement && Object.keys(extractedThought.new_agreement
                     }
                 }
                 
-
 
 
 
@@ -7223,21 +7309,21 @@ const readTavernPng = async (file: File): Promise<any | null> => {
 
 
 
-// ==================== ★★★ 【新代码】上拉加载更多逻辑 ★★★ ====================
-  const handleScrollEvents = (e: React.UIEvent<HTMLDivElement>) => {
-      const { scrollTop, scrollHeight } = e.currentTarget;
-      
-      // 如果滚到了最顶部 (scrollTop === 0) 并且还有更多历史没显示
-      if (scrollTop === 0 && activeContact && activeContact.history.length > historyLimit) {
-          console.log("👆 触顶！加载更多历史记录...");
-          
-          // 1. 记录当前内容有多高
-          prevScrollHeightRef.current = scrollHeight;
-          
-          // 2. 增加显示的条数 (每次多加载 30 条)
-          setHistoryLimit(prev => prev + 30);
-      }
-  };
+// ==================== ★★★ 【优化版】上拉加载逻辑 (更灵敏 + 防抖) ★★★ ====================
+const handleScrollEvents = (e: React.UIEvent<HTMLDivElement>) => {
+    const { scrollTop, scrollHeight } = e.currentTarget;
+    
+    // 改动1：只要距离顶部小于 20px 就触发，不需要严格等于 0 (防止手机端滑太快触发不了)
+    if (scrollTop < 20 && activeContact && activeContact.history.length > historyLimit) {
+        console.log("👆 触顶！加载更多历史记录...");
+        
+        // 记录加载前的高度
+        prevScrollHeightRef.current = scrollHeight;
+        
+        // 增加显示的条数
+        setHistoryLimit(prev => prev + 30);
+    }
+};
 
   // 监听 historyLimit 变化，加载完后修正滚动条位置，防止乱跳
   useLayoutEffect(() => {
@@ -9808,10 +9894,14 @@ return (
 
 {/* ==================== ★★★ 【修改代码】绑定 Ref 和 Scroll 事件 ★★★ ==================== */}
 <div 
-  ref={chatContainerRef} // 1. 绑定 Ref
-  onScroll={handleScrollEvents} // 2. 绑定滚动事件
+  ref={chatContainerRef} 
+  onScroll={handleScrollEvents} 
+  // ★★★ 核心修复：加上 overflowAnchor: 'none'，禁止浏览器自动瞎跳 ★★★
+  style={{ 
+      overflowAnchor: 'none',
+      ...(activeContact.chatBackground ? { backgroundImage: `url(${activeContact.chatBackground})`, backgroundSize: 'cover', backgroundPosition: 'center' } : {}) 
+  }}
   className={`flex-1 overflow-y-auto p-4 space-y-0.5 z-0 ${musicPlayerOpen && !isPlayerMinimized ? 'pt-4' : 'pt-2'}`}
-  style={activeContact.chatBackground ? { backgroundImage: `url(${activeContact.chatBackground})`, backgroundSize: 'cover', backgroundPosition: 'center' } : {}}
 >
 {/* ==================== ★★★ 【修改结束】 ★★★ ==================== */}
   {activeContact.customCSS && <style dangerouslySetInnerHTML={{ __html: activeContact.customCSS }} />}
@@ -9831,16 +9921,29 @@ return (
 
   {/* ==================== ★★★ 【修改代码】只渲染最后 N 条 ★★★ ==================== */}
   {/* 原来是 activeContact.history.map，现在改成 slice 切片后再 map */}
-  {activeContact.history
-      .slice(-historyLimit) // 重点：只取最后 historyLimit 条
-      .map((msg, index, arr) => { // 注意：这里的 index 是切片后的索引
+  {/* ==================== ★★★ 【修复】时间间隔计算逻辑 ★★★ ==================== */}
+          {activeContact.history
+              .slice(-historyLimit) // 切片
+              .map((msg, index, arr) => { // 注意这里的 arr 就是切片后的数组
+                
                 // 1. 计算时间间隔
                 let showInterval = false;
                 let intervalMinutes = 0;
+                
                 if (index > 0) {
-                  const prevMsg = activeContact.history[index - 1];
+                  // ❌ 错误写法 (你原来的): const prevMsg = activeContact.history[index - 1]; 
+                  // 解释：这会去取"全部历史"里的第几条，而不是"当前屏幕"里的上一条。
+                  
+                  // ✅ 正确写法：从 arr (当前切片) 里取
+                  const prevMsg = arr[index - 1]; 
+                  
+                  // 计算时间差
                   intervalMinutes = Math.floor((msg.timestamp - prevMsg.timestamp) / 60000);
-                  if (intervalMinutes > 20) { showInterval = true; }
+                  
+                  // 只有间隔大于 20 分钟才显示
+                  if (intervalMinutes > 20) { 
+                      showInterval = true; 
+                  }
                 }
 // 这是一组代码：【ChatApp.tsx】渲染循环中的邀请函 (已修复跳转传参)
                 // 搜索关键词：[LoverInvitation]
@@ -10079,7 +10182,10 @@ const isLoverInvitation = msg.content.includes('[LoverInvitation]') || msg.conte
     // =========================================================================
     
     // 2. 连续发言判断
-    const isConsecutive = index > 0 && activeContact.history[index - 1].role === msg.role && !showInterval;
+   // 2. 连续发言判断
+                // ❌ 错误写法: activeContact.history[index - 1] 
+                // ✅ 正确写法: arr[index - 1] (arr 就是当前屏幕上显示的这个切片)
+                const isConsecutive = index > 0 && arr[index - 1].role === msg.role && !showInterval;
     const isSelected = selectedIds.includes(msg.id);
     const duration = msg.voiceDuration || 10;
     const timeStr = new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
@@ -10138,7 +10244,8 @@ const isLoverInvitation = msg.content.includes('[LoverInvitation]') || msg.conte
 <div 
          // ★★★ 必须确保这一行存在！msg_加上时间戳，和上面的代码对应 ★★★
          id={`msg_${msg.timestamp}`} 
-         className={`message-wrapper ${msg.role === 'user' ? 'user' : 'ai'} flex gap-3 ${msg.role === 'user' ? 'justify-end' : 'justify-start'} animate-slideUp mb-1`}
+        // ★★★ 核心修复：只有最新的一条消息才加动画 (index === arr.length - 1)，旧消息不加！防止加载历史时乱跳 ★★★
+className={`message-wrapper ${msg.role === 'user' ? 'user' : 'ai'} flex gap-3 ${msg.role === 'user' ? 'justify-end' : 'justify-start'} ${index === arr.length - 1 ? 'animate-slideUp' : ''} mb-1`}
          style={{ minHeight: `${currentAvatarSize}px` }} 
        >
 
@@ -10532,6 +10639,14 @@ onNavigateToSettings={onOpenSettings}
 
 
 
+{/* ▼▼▼ 把你的新代码粘贴在这里！▼▼▼ */}
+{/* ==================== 漂亮的警告弹窗 ==================== */}
+<WarningModal 
+  isOpen={showWarningModal}
+  onClose={() => setShowWarningModal(false)}
+  loverName={warningLoverName}
+/>
+{/* ▲▲▲ 粘贴到这里结束 ▲▲▲ */}
 
 
 
