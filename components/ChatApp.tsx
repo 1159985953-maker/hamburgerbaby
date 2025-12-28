@@ -3217,6 +3217,10 @@ const ChatApp: React.FC<ChatAppProps> = ({
 // 在 ChatApp 组件的状态定义区域
 
   const [editingMsgId, setEditingMsgId] = useState<string | null>(null); // 当前正在编辑的消息ID
+  const [historyLimit, setHistoryLimit] = useState(30); 
+  // 用来记录加载前的滚动高度，防止加载时画面乱跳
+  const prevScrollHeightRef = useRef(0);
+  const chatContainerRef = useRef<HTMLDivElement>(null);
   const [editContent, setEditContent] = useState(""); // 正在编辑的内容缓存
   const [showPersonaMenu, setShowPersonaMenu] = useState(false);
   const [panelTab, setPanelTab] = useState('persona'); // 记住你在看哪个标签页
@@ -7219,6 +7223,37 @@ const readTavernPng = async (file: File): Promise<any | null> => {
 
 
 
+// ==================== ★★★ 【新代码】上拉加载更多逻辑 ★★★ ====================
+  const handleScrollEvents = (e: React.UIEvent<HTMLDivElement>) => {
+      const { scrollTop, scrollHeight } = e.currentTarget;
+      
+      // 如果滚到了最顶部 (scrollTop === 0) 并且还有更多历史没显示
+      if (scrollTop === 0 && activeContact && activeContact.history.length > historyLimit) {
+          console.log("👆 触顶！加载更多历史记录...");
+          
+          // 1. 记录当前内容有多高
+          prevScrollHeightRef.current = scrollHeight;
+          
+          // 2. 增加显示的条数 (每次多加载 30 条)
+          setHistoryLimit(prev => prev + 30);
+      }
+  };
+
+  // 监听 historyLimit 变化，加载完后修正滚动条位置，防止乱跳
+  useLayoutEffect(() => {
+      if (chatContainerRef.current && prevScrollHeightRef.current > 0) {
+          const newScrollHeight = chatContainerRef.current.scrollHeight;
+          const diff = newScrollHeight - prevScrollHeightRef.current;
+          
+          // 修正滚动条：往下挪 diff 的距离，这样视觉上就像是“停在原地”
+          chatContainerRef.current.scrollTop = diff;
+          
+          // 重置
+          prevScrollHeightRef.current = 0;
+      }
+  }, [historyLimit, activeContact?.id]); // 依赖项：条数变了，或者换人了
+  // ==================== ★★★ 【新代码结束】 ★★★ ====================
+
 
 
 
@@ -7526,7 +7561,13 @@ useEffect(() => {
 useEffect(() => { viewRef.current = view; }, [view]);
 
   useEffect(() => { activeContactIdRef.current = activeContactId; }, [activeContactId]);
-
+// ==================== ★★★ 【修改代码】切换角色时重置分页 ★★★ ====================
+  useEffect(() => { 
+      activeContactIdRef.current = activeContactId;
+      // 切换人时，重置回只看最后 30 条
+      setHistoryLimit(30);
+  }, [activeContactId]);
+  // ==================== ★★★ 【修改结束】 ★★★ ====================
 
 
 
@@ -9766,17 +9807,26 @@ return (
 
 
 {/* 核心消息列表 */}
-<div className={`flex-1 overflow-y-auto p-4 space-y-0.5 z-0 ${musicPlayerOpen && !isPlayerMinimized ? 'pt-4' : 'pt-2'}`}
+<div 
+  ref={chatContainerRef} // 1. 绑定 Ref
+  onScroll={handleScrollEvents} // 2. 绑定滚动事件
+  className={`flex-1 overflow-y-auto p-4 space-y-0.5 z-0 ${musicPlayerOpen && !isPlayerMinimized ? 'pt-4' : 'pt-2'}`}
   style={activeContact.chatBackground ? { backgroundImage: `url(${activeContact.chatBackground})`, backgroundSize: 'cover', backgroundPosition: 'center' } : {}}
 >
-  {activeContact.customCSS && <style dangerouslySetInnerHTML={{ __html: activeContact.customCSS }} />}
+ {activeContact.customCSS && <style dangerouslySetInnerHTML={{ __html: activeContact.customCSS }} />}
   
   
-  
+    {activeContact.history.length > historyLimit && (
+      <div className="w-full py-4 text-center text-xs text-gray-400 animate-pulse">
+         ⏳ 下拉查看更多历史...
+      </div>
+  )}
 
 
 {/* 这是一组代码：消息渲染循环核心 (修复了重复渲染邀请卡片的问题) */}
-            {activeContact.history.map((msg, index) => {
+  {activeContact.history
+      .slice(-historyLimit) // 重点：只取最后 historyLimit 条
+      .map((msg, index, arr) => { // 注意：这里的 index 是切片后的索引
                 // 1. 计算时间间隔
                 let showInterval = false;
                 let intervalMinutes = 0;
@@ -10535,8 +10585,8 @@ const compressImage = (file: File): Promise<string> => {
         canvas.height = height;
         ctx.drawImage(img, 0, 0, width, height);
 
-        // 使用 0.6 的质量压缩 JPEG，体积更小
-        resolve(canvas.toDataURL('image/jpeg', 0.6));
+        // 使用 0.3 的质量压缩 JPEG，体积更小
+        resolve(canvas.toDataURL('image/jpeg', 0.3));
       };
     };
     reader.onerror = (error) => reject(error);
