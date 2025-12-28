@@ -1,34 +1,40 @@
-// src/services/memoryService.ts (新建文件)
+// src/services/memoryService.ts
+// ==================== [防崩溃版] 智能图书管理员 V3.0 ====================
+// 这是一组什么代码：这是核心搜索服务。它增加了“安全网”，如果 AI 模型因网络问题加载失败，它会自动切换到“关键词匹配模式”，保证程序不报错。
 
 import { pipeline, Pipeline } from '@xenova/transformers';
-import { Contact } from '../types'; // 确保你的 types 文件路径正确
 
-// ==================== 1. 魔法工具箱（嵌入模型）的单例模式 ====================
-// 这是一个“单例模式”，保证我们的魔法工具箱（模型）在整个应用中只被加载一次。
-// 如果不这么做，每次搜索都会重新加载一次模型，会卡到天荒地老。
+// 1. 定义文档格式
+export interface Document {
+    id: string;        // 唯一ID
+    content: string;   // 内容
+    type: string;      // 类型 (如: '聊天记录', '核心记忆')
+    timestamp: number; // 时间
+}
+
+// 2. 嵌入模型单例 (魔法工具箱)
 class EmbeddingPipeline {
     static instance: Pipeline | null = null;
     static task = 'feature-extraction';
-    static model = 'Xenova/bge-small-zh-v1.5'; // 一个小巧但强大的中文模型
+    static model = 'Xenova/bge-small-zh-v1.5';
 
     static async getInstance(progress_callback?: Function) {
         if (this.instance === null) {
+            // ⚠️ 注意：这里最容易因为网络问题报错
             this.instance = await pipeline(this.task, this.model, { progress_callback });
         }
         return this.instance;
     }
 }
 
-// ==================== 2. 核心函数：把文字变成“魔法数字”（向量） ====================
+// 3. 向量化函数 (把字变成数字)
 export const embed = async (text: string): Promise<number[]> => {
     const extractor = await EmbeddingPipeline.getInstance();
     const result = await extractor(text, { pooling: 'mean', normalize: true });
     return Array.from(result.data);
 };
 
-// ==================== 3. 核心函数：计算两段文字的“相似度” ====================
-// 这是“余弦相似度”的计算，你不需要理解数学，只需要知道它返回一个 -1 到 1 的数字。
-// 数字越接近 1，说明两段话意思越像。
+// 4. 余弦相似度计算
 const calculateSimilarity = (vecA: number[], vecB: number[]): number => {
     let dotProduct = 0;
     let normA = 0;
@@ -41,73 +47,72 @@ const calculateSimilarity = (vecA: number[], vecB: number[]): number => {
     return dotProduct / (Math.sqrt(normA) * Math.sqrt(normB));
 };
 
-// ==================== 4. 终极功能：智能搜索“图书馆” ====================
-/**
- * 从一堆记忆便签里，找出和当前问题最相关的几条。
- * @param query - 你的最新一句话
- * @param memories - 角色所有的长期记忆（整个图书馆）
- * @param topK - 你想找出最相关的几条？（比如 3 条）
- * @returns 返回最相关的记忆内容数组
- */
-// src/services/memoryService.ts
-
-// ==================== ★★★ 升级版 V2.0：全能图书管理员 ★★★ ====================
-
-// 1. 定义一个通用的“文档”格式，就像给所有书贴上统一的借书卡
-export interface Document {
-    id: string;        // 唯一ID
-    content: string;     // 书的内容
-    type: string;        // 书的类型 (如: '聊天记录', '信件')
-    timestamp: number;   // 发生时间
-}
-
-// 2. 核心功能：智能搜索“整个图书馆”
-/**
- * 从所有类型的文档中，找出和当前问题最相关的几条。
- * @param query - 你的最新一句话
- * @param documents - 包含所有记忆的文档数组 (整个图书馆)
- * @param topK - 你想找出最相关的几条？
- * @returns 返回最相关的文档对象数组
- */
+// 5. ★★★ 核心修复：带兜底机制的搜索函数 ★★★
 export const searchDocuments = async (
     query: string,
     documents: Document[],
-    topK: number = 5 // 默认多找几条，信息更全
+    topK: number = 5
 ): Promise<Document[]> => {
     if (!query || !documents || documents.length === 0) {
         return [];
     }
 
-    console.log(`[📚 图书馆 V2.0] 开始为查询: "${query.slice(0, 20)}..." 搜索 ${documents.length} 份档案...`);
+    console.log(`[📚 图书馆] 正在搜索... (档案数: ${documents.length})`);
 
     try {
-        // 1. 把你的问题向量化
+        // --- 尝试 A 计划：高级 AI 向量搜索 ---
+        // 1. 把问题向量化
         const queryVector = await embed(query);
 
-        // 2. 把所有文档都向量化
+        // 2. 把文档向量化 (并行处理)
         const docVectors = await Promise.all(
             documents.map(doc => embed(doc.content))
         );
 
-        // 3. 计算相似度分数
+        // 3. 算分
         const similarities = docVectors.map((docVec, i) => ({
             index: i,
             score: calculateSimilarity(queryVector, docVec)
         }));
 
-        // 4. 按分数排序
+        // 4. 排序
         similarities.sort((a, b) => b.score - a.score);
 
-        // 5. 挑出分数最高的 topK 份“原始档案”
-        const topResults = similarities.slice(0, topK).map(item => documents[item.index]);
-
-        console.log(`[📚 图书馆 V2.0] 找到最相关的 ${topResults.length} 份档案！`);
-        return topResults;
+        // 5. 返回前 K 个
+        const results = similarities.slice(0, topK).map(item => documents[item.index]);
+        console.log(`[📚 图书馆] AI 检索成功！找到 ${results.length} 条相关记录。`);
+        return results;
 
     } catch (error) {
-        console.error("[📚 图书馆 V2.0] 检索失败:", error);
-        return []; 
+        // --- 触发 B 计划：关键词匹配兜底 ---
+        console.warn("============================================================");
+        console.warn("⚠️ [图书馆警报] AI 模型加载失败 (通常是网络原因)。");
+        console.warn("⚠️ 错误详情:", error);
+        console.warn("🔄 已自动切换为【关键词匹配模式】，确保 App 不崩溃。");
+        console.warn("============================================================");
+
+        // 简单的关键词匹配逻辑
+        const keywords = query.split(/[\s,，。？！]+/).filter(k => k.length > 1); // 提取查询中的词
+        
+        const scoredDocs = documents.map(doc => {
+            let score = 0;
+            // 如果文档包含查询中的词，就加分
+            keywords.forEach(keyword => {
+                if (doc.content.includes(keyword)) score += 1;
+            });
+            // 最近发生的加一点分 (时间权重)
+            const timeWeight = (doc.timestamp / Date.now()) * 0.5; 
+            return { doc, score: score + timeWeight };
+        });
+
+        // 过滤掉 0 分的，按分数排序
+        const fallbackResults = scoredDocs
+            .filter(item => item.score > 0.5) // 至少要有点相关性
+            .sort((a, b) => b.score - a.score)
+            .slice(0, topK)
+            .map(item => item.doc);
+
+        console.log(`[📚 兜底搜索] 找到 ${fallbackResults.length} 条含有关键词的记录。`);
+        return fallbackResults;
     }
 };
-
-// (你原来的 embed 和 calculateSimilarity 函数保持不变，不用动)
