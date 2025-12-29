@@ -21,292 +21,291 @@ import { readTavernPng, fileToBase64 } from './utils/fileUtils';
 
 
 
-
-// ==================== [插入代码 1] (豪华卡片版) 欢迎引导页 + 账号系统 ====================
-
-// 1. 账号密码在这里改
+// ==================== [插入代码 1] 账号名单与高颜值登录组件 ====================
+// 1. 在这里改账号密码和【身份牌 role】
 const ALLOWED_USERS = [
+  // 这是一个普通用户，role 是 'user'
   { id: "1", user: "friend", pass: "123456", name: "好朋友", role: "user" },
-  { id: "2", user: "admin",  pass: "admin888", name: "管理员", role: "admin" },
+
+  // 这是一个管理员，role 是 'admin'，拥有所有权限
+  { id: "0", user: "admin",  pass: "Lzh@hhsh0923", name: "hannie", role: "admin" },
+  
+  // 你可以再加一个 VIP 用户
+  { id: "3", user: "vip_user", pass: "vip666", name: "moon", role: "moon" },
 ];
 
-// 2. 你的豹纹汉堡壁纸URL (登录成功后的背景)
+// 2. 这是你提供的豹纹汉堡图片URL链接
 const LOGIN_WALLPAPER = "https://files.catbox.moe/tffb8b.png";
 
-// 3. 全新的多页面欢迎引导组件 (左右滑动卡片风格)
-const WelcomeSequence = ({ onLogin }: { onLogin: (u:any)=>void }) => {
-  const [step, setStep] = React.useState(0); 
-  const [loggedInUser, setLoggedInUser] = React.useState<any>(null);
-  const [username, setUsername] = React.useState("");
-  const [password, setPassword] = React.useState("");
-  const [error, setError] = React.useState("");
+// ==================== [升级版] 汉堡包欢迎系统 (Intro + Login) ====================
+const WelcomeSystem = ({ onLogin }: { onLogin: (u: any) => void }) => {
+  const [step, setStep] = useState(0); // 0:欢迎, 1:介绍, 2:功能, 3:留言, 4:登录
+  const [u, setU] = useState("");
+  const [p, setP] = useState("");
+  const [err, setErr] = useState("");
+  const [time, setTime] = useState(new Date());
+  
+  // 背景图 (你的豹纹汉堡)
+  const BG_URL = "https://files.catbox.moe/tffb8b.png";
 
-  const handleLogin = () => {
-    const validUser = ALLOWED_USERS.find(u => u.user === username && u.pass === password);
-    if (validUser) {
-      setError("");
-      setLoggedInUser(validUser);
+  // 时间更新
+  useEffect(() => {
+    const timer = setInterval(() => setTime(new Date()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  // 登录检查
+  const handleCheck = () => {
+    const valid = ALLOWED_USERS.find(x => x.user === u && x.pass === p);
+    if (valid) {
+      onLogin(valid);
     } else {
-      setError("账号或密码不对哦！🚫");
-      if(navigator.vibrate) navigator.vibrate([100, 50, 100]);
+      setErr("密码不对哦 🚫");
+      if (navigator.vibrate) navigator.vibrate(200);
     }
   };
-  
-  // 登录成功后的欢迎画面
-  if (loggedInUser) {
-    return (
-      <div 
-        className="h-screen w-screen bg-cover bg-center flex items-center justify-center text-center text-white p-6 cursor-pointer animate-fadeIn"
-        style={{ backgroundImage: `url(${LOGIN_WALLPAPER})` }}
-        onClick={() => onLogin(loggedInUser)}
-      >
-        <div className="relative z-10 bg-black/40 backdrop-blur-md p-8 rounded-3xl border border-white/20 shadow-2xl animate-scaleIn">
-            <h1 className="text-4xl font-black drop-shadow-lg relative animate-bounce">
-              Welcome Back! <br/> {loggedInUser.name}
-            </h1>
-            <p className="text-sm mt-4 opacity-90 font-bold bg-white/20 px-4 py-2 rounded-full inline-block">
-              👆 点击任意处进入系统
-            </p>
-        </div>
-      </div>
-    );
-  }
 
-  // 总页数 (0:封面, 1:核心玩法, 2:生活功能, 3:作者留言, 4:登录)
-  const totalSteps = 5;
+  // 页面内容数据
+  const slides = [
+    {
+      id: 'welcome',
+      content: (
+        <div className="flex flex-col items-center justify-center h-full animate-slideUp">
+          <div className="text-6xl mb-4 animate-bounce">🍔</div>
+          <h1 className="text-4xl font-black text-gray-800 drop-shadow-sm text-center mb-2">
+            Welcome to <br/>
+            <span className="text-transparent bg-clip-text bg-gradient-to-r from-orange-400 to-red-500">HamburgerPhone!</span>
+          </h1>
+          <div className="text-4xl mt-2 animate-pulse">🎆</div>
+          <p className="mt-8 text-gray-500 text-sm font-bold bg-white/60 px-4 py-2 rounded-full">
+            点击下方按钮开始旅程 ➜
+          </p>
+        </div>
+      )
+    },
+    {
+      id: 'intro',
+      content: (
+        <div className="flex flex-col h-full animate-fadeIn">
+          <div className="text-center mb-6">
+            <span className="text-sm font-bold text-blue-500 bg-blue-50 px-3 py-1 rounded-full uppercase tracking-wider">About</span>
+            <h2 className="text-2xl font-black text-gray-800 mt-2">这是什么？</h2>
+          </div>
+          <div className="bg-white/50 p-6 rounded-2xl border border-white/60 shadow-inner flex-1 flex flex-col justify-center gap-4">
+            <p className="text-gray-700 leading-relaxed font-medium">
+              这是一个由 <b className="text-pink-500 text-lg">hannie</b> 制作的<br/>
+              <span className="bg-yellow-100 px-1 rounded">仿手机生态 AI 聊天网页</span> 📱
+            </p>
+            <p className="text-gray-600 text-sm leading-relaxed">
+              在这里，你可以打破次元壁，和 AI 角色自由聊天、一起学习，甚至...
+              <br/>记录那些 <span className="italic text-blue-500">细碎又可爱的生活琐事</span>。
+            </p>
+          </div>
+        </div>
+      )
+    },
+    {
+      id: 'features',
+      content: (
+        <div className="flex flex-col h-full animate-fadeIn">
+          <h2 className="text-2xl font-black text-gray-800 text-center mb-6">✨ 玩转汉堡包</h2>
+          <div className="grid grid-cols-1 gap-3 overflow-y-auto custom-scrollbar pr-1 pb-2">
+            
+            {/* 核心功能卡片 */}
+            <div className="bg-white/70 p-4 rounded-2xl shadow-sm border border-white flex items-center gap-4 hover:scale-105 transition-transform">
+              <div className="w-12 h-12 rounded-full bg-purple-100 flex items-center justify-center text-2xl">🤖</div>
+              <div>
+                <h3 className="font-bold text-gray-800">AI 深度聊天</h3>
+                <p className="text-xs text-gray-500">不仅是对话，更是灵魂共鸣</p>
+              </div>
+            </div>
+
+            <div className="bg-white/70 p-4 rounded-2xl shadow-sm border border-white flex items-center gap-4 hover:scale-105 transition-transform">
+              <div className="w-12 h-12 rounded-full bg-pink-100 flex items-center justify-center text-2xl">💞</div>
+              <div>
+                <h3 className="font-bold text-gray-800">关系空间</h3>
+                <p className="text-xs text-gray-500">好感度达标解锁<span className="text-pink-500 font-bold">恋爱/密友</span>模式</p>
+              </div>
+            </div>
+
+            <div className="bg-white/70 p-4 rounded-2xl shadow-sm border border-white flex items-center gap-4 hover:scale-105 transition-transform">
+              <div className="w-12 h-12 rounded-full bg-green-100 flex items-center justify-center text-2xl">📒</div>
+              <div>
+                <h3 className="font-bold text-gray-800">生活手账</h3>
+                <p className="text-xs text-gray-500">
+                  <span className="bg-yellow-200 px-1 rounded mr-1">日记</span>
+                  <span className="bg-blue-200 px-1 rounded">记账</span> 全都要！
+                </p>
+              </div>
+            </div>
+
+            {/* 装饰性小卡片 */}
+            <div className="text-center text-xs text-gray-400 mt-2 italic">
+              ...还有超多隐藏彩蛋等你发现！👀
+            </div>
+          </div>
+        </div>
+      )
+    },
+    {
+      id: 'message',
+      content: (
+        <div className="flex flex-col h-full animate-fadeIn relative">
+          {/* 装饰图钉 */}
+          <div className="absolute -top-2 left-1/2 -translate-x-1/2 text-3xl z-10 text-red-500 drop-shadow-md">📌</div>
+          
+          <div className="bg-[#fff9c4] text-gray-800 p-6 pt-8 rounded-tr-[40px] rounded-bl-[40px] rounded-tl-sm rounded-br-sm shadow-xl rotate-1 border border-yellow-200/50 flex-1 flex flex-col relative overflow-hidden">
+            {/* 纸张纹理 */}
+            <div className="absolute inset-0 opacity-10" style={{backgroundImage: 'radial-gradient(#000 1px, transparent 1px)', backgroundSize: '10px 10px'}}></div>
+            
+            <h3 className="font-black text-xl mb-4 text-orange-600 border-b-2 border-orange-200 pb-2 inline-block">
+              Hannie 的碎碎念
+            </h3>
+            <div className="space-y-3 text-sm leading-relaxed font-medium overflow-y-auto custom-scrollbar">
+              <p>一时兴起做了这个项目，花费<b className="text-red-500 text-lg">两个礼拜</b>和代码决斗做了大概框架！⚔️</p>
+              <p>现在还是 <span className="bg-black text-white px-2 py-0.5 rounded text-xs">1.0 版本</span>，还有很多没有扩充的部分，以后<span className="text-purple-600 font-bold">也许(!)</span>会慢慢更新...</p>
+              <p>如果有什么 <span className="bg-red-100 text-red-500 px-1 rounded">Bug</span> 或者建议，请在第二页的<b className="text-blue-600">“反馈APP”</b>留下你的宝贵留言～</p>
+              <p className="text-xs text-gray-500 mt-2">
+                (虽然本 hannie 不一定有时间更新嘻嘻嘻 😁💚)
+              </p>
+            </div>
+            <div className="mt-auto pt-4 text-center">
+               <span className="font-handwriting text-lg text-gray-600 transform -rotate-6 inline-block">Enjoy the Game! 🎮</span>
+            </div>
+          </div>
+          
+          <div className="mt-6 text-center">
+             <p className="text-sm font-bold text-white drop-shadow-md">在 AI 时代好好利用 AI 这个工具<br/>一起前进吧～～～ 🚀</p>
+          </div>
+        </div>
+      )
+    },
+    {
+      id: 'login',
+      content: (
+        <div className="flex flex-col h-full animate-slideUp">
+          <div className="text-center mb-8">
+            <h2 className="text-3xl font-black text-gray-800">身份验证</h2>
+            <p className="text-sm text-gray-500 mt-1">请输入通行证密码</p>
+          </div>
+
+          <div className="bg-white/60 backdrop-blur-md p-1 rounded-2xl border border-white/50 shadow-inner mb-6">
+             <div className="bg-white/80 rounded-xl p-3 flex items-center mb-1 transition-all focus-within:scale-105 focus-within:shadow-md focus-within:bg-white focus-within:ring-2 focus-within:ring-blue-100">
+                <span className="text-xl mr-3 opacity-50">👤</span>
+                <input 
+                  type="text" value={u} onChange={e=>{setU(e.target.value);setErr("")}}
+                  className="w-full bg-transparent outline-none font-bold text-gray-700 placeholder-gray-400"
+                  placeholder="账号"
+                />
+             </div>
+             <div className="bg-white/80 rounded-xl p-3 flex items-center transition-all focus-within:scale-105 focus-within:shadow-md focus-within:bg-white focus-within:ring-2 focus-within:ring-blue-100">
+                <span className="text-xl mr-3 opacity-50">🔑</span>
+                <input 
+                  type="password" value={p} onChange={e=>{setP(e.target.value);setErr("")}}
+                  onKeyDown={(e) => e.key === 'Enter' && handleCheck()}
+                  className="w-full bg-transparent outline-none font-bold text-gray-700 placeholder-gray-400"
+                  placeholder="密码"
+                />
+             </div>
+          </div>
+
+          <div className="h-6 text-center mb-2">
+            {err && <span className="bg-red-500 text-white text-xs px-3 py-1 rounded-full font-bold animate-bounce shadow-md">{err}</span>}
+          </div>
+
+          <button 
+            onClick={handleCheck}
+            className="w-full bg-gray-900 text-white py-4 rounded-2xl font-bold text-lg shadow-xl shadow-gray-400/30 active:scale-95 transition-all flex items-center justify-center gap-2 group"
+          >
+            <span>解锁手机</span> 
+            <span className="group-hover:translate-x-1 transition-transform">➜</span>
+          </button>
+          
+          <p className="text-center text-xs text-gray-400 mt-6">
+             欢迎回来, <b>{u || 'User'}</b>!
+          </p>
+        </div>
+      )
+    }
+  ];
 
   return (
-    <div className="h-screen w-screen flex items-center justify-center p-0 sm:p-4 overflow-hidden relative">
+    <div className="h-screen w-screen relative flex flex-col items-center justify-center overflow-hidden bg-cover bg-center"
+         style={{ backgroundImage: `url('${BG_URL}')` }}>
       
-      {/* 1. 全局背景层 (带纹理) */}
-      <div className="absolute inset-0 bg-[#f8f9fa] z-0">
-         {/* 使用你提供的图片作为平铺纹理，叠加一层淡白色让文字更清晰 */}
-         <div className="absolute inset-0 opacity-10" style={{ backgroundImage: `url(https://files.catbox.moe/tffb8b.png)`, backgroundSize: '100px' }}></div>
-         <div className="absolute inset-0 bg-gradient-to-br from-blue-50/80 via-white/50 to-pink-50/80 backdrop-blur-[1px]"></div>
-         
-         {/* 漂浮的装饰物 */}
-         <div className="absolute top-10 left-10 text-4xl animate-bounce" style={{ animationDuration: '3s' }}>🍔</div>
-         <div className="absolute bottom-20 right-10 text-4xl animate-pulse">✨</div>
-         <div className="absolute top-1/2 left-5 text-2xl animate-spin-slow opacity-50">🌸</div>
+      {/* 深色遮罩，让文字更清晰 */}
+      <div className="absolute inset-0 bg-black/10 backdrop-blur-sm"></div>
+
+      {/* 顶部时间 (一直显示) */}
+      <div className="absolute top-12 left-0 right-0 text-center z-20 text-white drop-shadow-md animate-fadeIn">
+        <div className="text-5xl font-thin tracking-wider opacity-90">
+          {time.getHours().toString().padStart(2,'0')}:{time.getMinutes().toString().padStart(2,'0')}
+        </div>
+        <div className="text-sm font-bold mt-1 opacity-80 tracking-widest uppercase">
+          {time.toLocaleDateString('zh-CN', { weekday: 'long', month: 'short', day: 'numeric' })}
+        </div>
       </div>
 
-      {/* 2. 主卡片容器 */}
-      <div className="w-full h-full sm:h-[80vh] sm:max-w-md bg-white/80 backdrop-blur-xl sm:rounded-[2.5rem] shadow-[0_20px_60px_-15px_rgba(0,0,0,0.1)] border border-white/60 relative z-10 flex flex-col overflow-hidden">
-        
-        {/* === 滑动视窗 === */}
-        <div className="flex-1 relative w-full overflow-hidden">
-            <div 
-                className="absolute inset-0 flex transition-transform duration-500 ease-[cubic-bezier(0.25,1,0.5,1)]"
-                style={{ transform: `translateX(-${step * 100}%)` }}
-            >
-                
-                {/* --- 第1页：封面 (Intro) --- */}
-                <div className="w-full h-full flex-shrink-0 flex flex-col items-center justify-center p-8 text-center">
-                    <div className="w-32 h-32 bg-gradient-to-tr from-yellow-300 to-orange-400 rounded-full flex items-center justify-center shadow-lg mb-6 animate-float-y">
-                        <span className="text-6xl filter drop-shadow-md">🍔</span>
-                    </div>
-                    <h1 className="text-3xl font-black text-gray-800 tracking-tight">
-                        Hamburger<span className="text-orange-500">Phone</span>
-                    </h1>
-                    <p className="text-gray-500 mt-4 leading-relaxed font-medium">
-                        一个由 <b className="text-pink-500 bg-pink-50 px-1 rounded">Hannie</b> 制作的<br/>
-                        仿手机生态 AI 聊天终端
-                    </p>
-                    <div className="mt-8 flex gap-2">
-                        <span className="px-3 py-1 bg-blue-100 text-blue-600 rounded-full text-xs font-bold">AI 聊天</span>
-                        <span className="px-3 py-1 bg-purple-100 text-purple-600 rounded-full text-xs font-bold">生活助手</span>
-                        <span className="px-3 py-1 bg-green-100 text-green-600 rounded-full text-xs font-bold">情感记忆</span>
-                    </div>
-                </div>
+      {/* === 主卡片容器 === */}
+      <div className="relative z-10 w-full max-w-sm px-6">
+        <div className="bg-white/80 backdrop-blur-xl border border-white/60 rounded-[40px] shadow-2xl overflow-hidden h-[500px] flex flex-col relative transition-all duration-500">
+          
+          {/* 进度条指示器 */}
+          <div className="absolute top-4 left-0 right-0 flex justify-center gap-1.5 z-20">
+             {slides.map((_, idx) => (
+               <div 
+                 key={idx} 
+                 className={`h-1 rounded-full transition-all duration-300 ${idx === step ? 'w-6 bg-gray-800' : 'w-2 bg-gray-300'}`}
+               ></div>
+             ))}
+          </div>
 
-                {/* --- 第2页：潜意识深潜 (核心玩法) --- */}
-                <div className="w-full h-full flex-shrink-0 flex flex-col p-8 overflow-y-auto custom-scrollbar">
-                    <div className="text-center mb-6">
-                        <div className="text-4xl mb-2">🪐</div>
-                        <h2 className="text-2xl font-black text-gray-800">潜意识深潜</h2>
-                        <p className="text-xs text-gray-400 font-bold tracking-widest uppercase">DEEP DIVE</p>
-                    </div>
-                    
-                    <div className="space-y-4">
-                        {/* 卡片 1 */}
-                        <div className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100 flex items-start gap-4">
-                            <div className="bg-gray-100 p-3 rounded-xl text-xl">🔒</div>
-                            <div>
-                                <h3 className="font-bold text-gray-800 text-sm">全隐藏模式</h3>
-                                <p className="text-xs text-gray-500 mt-1 leading-relaxed">
-                                    AI 的真实想法默认是 <b className="text-red-500">不可见</b> 的，只有 TA 自己知道怎么看你。
-                                </p>
-                            </div>
-                        </div>
-                        {/* 卡片 2 */}
-                        <div className="bg-rose-50 p-4 rounded-2xl shadow-sm border border-rose-100 flex items-start gap-4">
-                            <div className="bg-white p-3 rounded-xl text-xl shadow-sm">💖</div>
-                            <div>
-                                <h3 className="font-bold text-rose-600 text-sm">好感度解锁</h3>
-                                <p className="text-xs text-rose-800/70 mt-1 leading-relaxed">
-                                    只有当 <b className="text-rose-600">好感度够高</b> 时，AI 才会忍不住对你敞开心扉（自动解锁）。
-                                </p>
-                            </div>
-                        </div>
-                        {/* 卡片 3 */}
-                        <div className="bg-blue-50 p-4 rounded-2xl shadow-sm border border-blue-100 flex items-start gap-4">
-                            <div className="bg-white p-3 rounded-xl text-xl shadow-sm">🎲</div>
-                            <div>
-                                <h3 className="font-bold text-blue-600 text-sm">随机刷新机制</h3>
-                                <p className="text-xs text-blue-800/70 mt-1 leading-relaxed">
-                                    AI 会在聊天中 <b className="text-blue-600">自动在后台</b> 更新对你的看法。
-                                </p>
-                            </div>
-                        </div>
-                    </div>
-                </div>
+          {/* 内容区 */}
+          <div className="flex-1 p-8 pt-10 relative">
+             {slides[step].content}
+          </div>
 
-                {/* --- 第3页：生活功能 (Life) --- */}
-                <div className="w-full h-full flex-shrink-0 flex flex-col p-8">
-                    <div className="text-center mb-8">
-                        <div className="text-4xl mb-2">📱</div>
-                        <h2 className="text-2xl font-black text-gray-800">不仅仅是聊天</h2>
-                        <p className="text-xs text-gray-400">你的赛博生活伴侣</p>
-                    </div>
-
-                    <div className="grid grid-cols-1 gap-4">
-                        <div className="bg-gradient-to-r from-purple-500 to-indigo-500 text-white p-5 rounded-2xl shadow-lg transform rotate-1">
-                            <div className="flex justify-between items-center mb-2">
-                                <span className="text-2xl">📝</span>
-                                <span className="text-[10px] bg-white/20 px-2 py-1 rounded-full">New</span>
-                            </div>
-                            <h3 className="font-bold text-lg">心情日记本</h3>
-                            <p className="text-xs opacity-80 mt-1">记录每天的小确幸，AI 也会偷偷写日记哦。</p>
-                        </div>
-
-                        <div className="bg-gradient-to-r from-yellow-400 to-orange-500 text-white p-5 rounded-2xl shadow-lg transform -rotate-1">
-                            <div className="flex justify-between items-center mb-2">
-                                <span className="text-2xl">💰</span>
-                                <span className="text-[10px] bg-white/20 px-2 py-1 rounded-full">Pro</span>
-                            </div>
-                            <h3 className="font-bold text-lg">我的钱包</h3>
-                            <p className="text-xs opacity-80 mt-1">简单的记账功能，看看钱都去哪儿了？</p>
-                        </div>
-
-                        <div className="bg-white border-2 border-dashed border-gray-200 p-4 rounded-2xl text-gray-400 text-center flex flex-col items-center justify-center gap-2">
-                            <span className="text-2xl">📅</span>
-                            <span className="text-xs font-bold">还有待办清单、关系空间...</span>
-                        </div>
-                    </div>
-                </div>
-
-                {/* --- 第4页：作者留言 (Hannie) --- */}
-                <div className="w-full h-full flex-shrink-0 flex flex-col p-8 justify-center">
-                    <div className="relative bg-[#fffbeb] p-6 rounded-2xl border-2 border-[#fcd34d] shadow-[4px_4px_0px_#fcd34d] transform rotate-1">
-                        {/* 装饰图钉 */}
-                        <div className="absolute -top-3 left-1/2 -translate-x-1/2 text-2xl text-red-500 filter drop-shadow-sm">📌</div>
-                        
-                        <h3 className="text-lg font-black text-gray-800 mb-4 text-center">Hannie 留言说</h3>
-                        <div className="text-sm text-gray-700 leading-relaxed font-medium font-serif space-y-4">
-                            <p>
-                                嗨！一时兴起做了这个项目，花费两个礼拜和代码决斗做了大概框架... 🤯
-                            </p>
-                            <p>
-                                现在还是 <b className="bg-yellow-200 px-1">1.0版本</b>，还有很多没有扩充的部分，以后也许(!)会慢慢更新...
-                            </p>
-                            <p className="text-xs text-gray-500">
-                                如果有什么bug或者建议，请在第二页的反馈app留下你的宝贵留言～虽然本hannie不一定有时间更新嘻嘻嘻😁💚
-                            </p>
-                        </div>
-                        <div className="mt-4 text-right text-xs font-bold text-gray-400">
-                            —— By 秃头的 Hannie
-                        </div>
-                    </div>
-                </div>
-
-                {/* --- 第5页：登录 (Login) --- */}
-                <div className="w-full h-full flex-shrink-0 flex flex-col p-8 justify-center">
-                    <div className="text-center mb-8">
-                        <h2 className="text-3xl font-black text-gray-800">准备好了吗？</h2>
-                        <p className="text-gray-400 mt-2 text-sm">输入通行证进入你的世界</p>
-                    </div>
-
-                    <div className="space-y-4">
-                        <div className="group bg-gray-50 border border-gray-200 rounded-2xl p-2 flex items-center focus-within:border-blue-500 focus-within:ring-4 focus-within:ring-blue-100 transition-all">
-                            <span className="pl-3 text-xl grayscale opacity-50 group-focus-within:grayscale-0 group-focus-within:opacity-100">👤</span>
-                            <input 
-                                type="text" 
-                                value={username} 
-                                onChange={e=>setUsername(e.target.value)} 
-                                className="w-full bg-transparent p-3 outline-none text-gray-800 font-bold placeholder-gray-300" 
-                                placeholder="账号 (friend)"
-                            />
-                        </div>
-                        <div className="group bg-gray-50 border border-gray-200 rounded-2xl p-2 flex items-center focus-within:border-blue-500 focus-within:ring-4 focus-within:ring-blue-100 transition-all">
-                            <span className="pl-3 text-xl grayscale opacity-50 group-focus-within:grayscale-0 group-focus-within:opacity-100">🔑</span>
-                            <input 
-                                type="password" 
-                                value={password} 
-                                onChange={e=>setPassword(e.target.value)} 
-                                onKeyDown={e => e.key === 'Enter' && handleLogin()}
-                                className="w-full bg-transparent p-3 outline-none text-gray-800 font-bold placeholder-gray-300" 
-                                placeholder="密码 (123456)"
-                            />
-                        </div>
-                    </div>
-
-                    {error && (
-                        <div className="mt-4 bg-red-50 text-red-500 text-xs font-bold px-4 py-3 rounded-xl flex items-center gap-2 animate-bounce">
-                            <span>🚫</span> {error}
-                        </div>
-                    )}
-
-                    <button 
-                        onClick={handleLogin} 
-                        className="w-full mt-8 bg-black text-white font-bold py-4 rounded-2xl shadow-xl active:scale-95 transition-all hover:shadow-2xl flex items-center justify-center gap-2"
-                    >
-                        <span>🚀</span> 进入系统
-                    </button>
-                </div>
-
+          {/* 底部导航按钮 (登录页不显示) */}
+          {step < slides.length - 1 && (
+            <div className="p-6 pt-0 flex justify-between items-center animate-fadeIn">
+               <button 
+                 onClick={() => setStep(s => Math.max(0, s - 1))}
+                 className={`text-gray-400 font-bold text-sm px-4 py-2 hover:bg-gray-100 rounded-full transition ${step === 0 ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}
+               >
+                 PREV
+               </button>
+               
+               {step === slides.length - 2 ? (
+                 <button 
+                   onClick={() => setStep(s => s + 1)}
+                   className="bg-black text-white px-6 py-2 rounded-full font-bold text-sm shadow-lg hover:scale-105 active:scale-95 transition flex items-center gap-2"
+                 >
+                   我看完了! <span className="animate-bounce">👋</span>
+                 </button>
+               ) : (
+                 <button 
+                   onClick={() => setStep(s => Math.min(slides.length - 1, s + 1))}
+                   className="bg-white text-gray-800 border border-gray-200 px-6 py-2 rounded-full font-bold text-sm shadow-sm hover:bg-gray-50 active:scale-95 transition flex items-center gap-1"
+                 >
+                   NEXT <span>➜</span>
+                 </button>
+               )}
             </div>
+          )}
         </div>
-
-        {/* 3. 底部导航栏 (指示器 + 按钮) */}
-        <div className="absolute bottom-0 left-0 right-0 p-6 bg-white/0 z-20 flex flex-col gap-4">
-            
-            {/* 页面指示点 */}
-            <div className="flex justify-center gap-2">
-                {[...Array(totalSteps)].map((_, i) => (
-                    <div 
-                        key={i} 
-                        onClick={() => setStep(i)}
-                        className={`h-2 rounded-full transition-all duration-300 cursor-pointer ${step === i ? 'w-8 bg-black' : 'w-2 bg-gray-300 hover:bg-gray-400'}`}
-                    ></div>
-                ))}
-            </div>
-
-            {/* 左右切换按钮 (仅在前几页显示，登录页隐藏) */}
-            {step < totalSteps - 1 ? (
-                <div className="flex justify-between items-center">
-                    <button 
-                        onClick={() => setStep(s => Math.max(0, s - 1))} 
-                        className={`text-gray-400 font-bold text-sm px-4 py-2 hover:text-gray-600 transition ${step === 0 ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}
-                    >
-                        上一页
-                    </button>
-                    <button 
-                        onClick={() => setStep(s => Math.min(totalSteps - 1, s + 1))} 
-                        className="bg-black text-white px-6 py-3 rounded-full font-bold text-sm shadow-lg active:scale-95 transition hover:bg-gray-800"
-                    >
-                        下一页 ➜
-                    </button>
-                </div>
-            ) : (
-                <div className="h-12"></div> // 占位
-            )}
-        </div>
-
+      </div>
+      
+      {/* 底部版权 */}
+      <div className="absolute bottom-6 text-white/50 text-[10px] font-mono tracking-widest z-10">
+         DESIGNED BY HANNIE © 2025
       </div>
     </div>
   );
 };
+// ==================== [代码结束] ====================
 // ==================== [插入结束] ====================
+
+
 
 
 
