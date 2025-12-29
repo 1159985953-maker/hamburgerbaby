@@ -44,7 +44,7 @@ export interface TodoItem {
   categoryId?: string;
 }
 
-// 这是一组代码：【types.ts】请用这段代码覆盖掉旧的 Message 接口
+// 这是一组代码：【types.ts】升级 Message 接口，增加 senderId 以支持群聊
 export interface Message {
   id: string;
   role: 'user' | 'assistant' | 'system';
@@ -54,8 +54,9 @@ export interface Message {
   translation?: string;
   voiceDuration?: number;
   song?: Song;
-  // ★★★ 核心新增：记忆归档邮戳！ ★★★
   isArchived?: boolean; 
+  // ★★★ 新增：群聊专用，标记具体是哪个 AI 发的 ★★★
+  senderId?: string; 
 }
 
 export interface CharacterMood {
@@ -140,8 +141,17 @@ export interface DiaryEntry {
   id: string; author: 'user' | 'ai'; date: string; content: string; mood?: string; weather?: string; moodEmoji?: string; images?: string[]; comments?: { id: string; author: 'user' | 'ai'; content: string; timestamp: number; }[];
 }
 
+// ==================== [types.ts] 第一步：修改 QAEntry 定义 ====================
 export interface QAEntry {
-  id: string; question: string; aiAnswer: string; userAnswer?: string; date: string; timestamp: number; isReadByPlayer?: boolean;
+  id: string; 
+  question: string; 
+  aiAnswer: string; 
+  userAnswer?: string; 
+  date: string; 
+  timestamp: number; 
+  isReadByPlayer?: boolean;
+  // ★★★ 新增：标记是谁提问的 ('user' 是我问AI，'ai' 是AI问我) ★★★
+  asker?: 'user' | 'ai'; 
 }
 
 export interface LoveLetter {
@@ -204,7 +214,6 @@ export interface EmotionalNeed {
 
 
 
-
 // 这是一组代码：【types.ts】修正后的恋爱清单定义
 export interface BucketItem {
     id: string;
@@ -215,18 +224,20 @@ export interface BucketItem {
     isUnlocked: boolean; // ★★★ 核心：是否解锁（只有双方都填了，或者你填了以后才为true）
 }
 
+// 这是一组代码：【types.ts】更新 FriendGroup 定义，加入群聊历史
 export interface FriendGroup {
-    id: string;
-    name: string;
-    members: string[]; // 成员ID列表
-    letters: LoveLetter[]; // 群组信箱
-    questions: QAEntry[];  // 群组问答
-    garden: { seed: string; level: number; exp: number; lastWaterDate?: string; flowerHistory?: any[] }; // 群组花园
-    created: number;
+  id: string;
+  name: string;
+  members: string[]; // 成员ID列表
+  letters: LoveLetter[]; // 群组信箱
+  questions: QAEntry[];  // 群组问答
+  // ★★★ 新增：群聊历史记录 ★★★
+  history: Message[]; 
+  garden: { seed: string; level: number; exp: number; lastWaterDate?: string; flowerHistory?: any[] }; 
+  created: number;
 }
 
 
-// ==================== [types.ts] 升级后的相册定义 (只增不改) ====================
 
 // ==================== [types.ts] 升级后的相册定义 (支持排版、字体、背景) ====================
 

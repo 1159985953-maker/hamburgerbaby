@@ -11,15 +11,118 @@ import localforage from 'localforage';
 import { Contact, GlobalSettings, WorldBookCategory, Message, EmotionalNeed, TodoItem } from './types';
 import { generateResponse } from './services/apiService';
 import { readTavernPng, fileToBase64 } from './utils/fileUtils';
-// 这是一组什么代码：这是为了让 ChatApp 能够使用“图书管理员”功能的导入语句。
-
-// ==================== 1. 辅助函数 & 初始数据 (必须放在组件外面！) ====================
 
 
+// ==================== [插入代码 1] 账号名单与高颜值登录组件 ====================
+// 1. 在这里改账号密码和【身份牌 role】
+const ALLOWED_USERS = [
+  // 这是一个普通用户，role 是 'user'
+  { id: "1", user: "friend", pass: "123456", name: "好朋友", role: "user" },
 
+  // 这是一个管理员，role 是 'admin'，拥有所有权限
+  { id: "0", user: "admin",  pass: "Lzh@hhsh0923", name: "hannie", role: "admin" },
+  
+  // 你可以再加一个 VIP 用户
+  { id: "3", user: "vip_user", pass: "vip666", name: "moon", role: "moon" },
+];
 
+// 2. 高颜值·iOS风登录界面
+const LoginScreen = ({ onLogin }: { onLogin: (u:any)=>void }) => {
+  const [u, setU] = React.useState("");
+  const [p, setP] = React.useState("");
+  const [err, setErr] = React.useState("");
+  const [time, setTime] = React.useState(new Date());
 
+  // 让时间动起来，像真正的锁屏一样
+  React.useEffect(() => {
+    const timer = setInterval(() => setTime(new Date()), 1000);
+    return () => clearInterval(timer);
+  }, []);
 
+  const handleCheck = () => {
+    const valid = ALLOWED_USERS.find(x => x.user === u && x.pass === p);
+    if(valid) {
+      onLogin(valid);
+    } else {
+      setErr("密码不对哦 🚫");
+      // 震动反馈
+      if(navigator.vibrate) navigator.vibrate(200);
+    }
+  };
+
+  return (
+    // 背景层：使用一张唯美的壁纸
+    <div className="h-screen w-screen relative flex flex-col items-center justify-center overflow-hidden bg-cover bg-center"
+         style={{ backgroundImage: "url('https://images.unsplash.com/photo-1618331835717-801e976710b2')" }}>
+      
+      {/* 遮罩层：加一点模糊和变暗，让文字更清晰 */}
+      <div className="absolute inset-0 bg-black/20 backdrop-blur-sm"></div>
+
+      {/* 内容层 */}
+      <div className="relative z-10 flex flex-col items-center w-full max-w-sm px-6">
+        
+        {/* 锁屏时间 */}
+        <div className="text-center mb-10 text-white drop-shadow-md">
+          <div className="text-xl font-bold mb-1">{time.toLocaleDateString()}</div>
+          <div className="text-6xl font-thin tracking-wider">
+            {time.getHours().toString().padStart(2,'0')}:{time.getMinutes().toString().padStart(2,'0')}
+          </div>
+        </div>
+
+        {/* 玻璃卡片登录框 */}
+        <div className="w-full bg-white/20 backdrop-blur-xl border border-white/30 rounded-[40px] p-8 shadow-2xl animate-slideUp">
+          
+          {/* 头像圈圈 */}
+          <div className="w-20 h-20 mx-auto bg-white/30 rounded-full flex items-center justify-center mb-6 border-2 border-white/50 shadow-lg">
+            <span className="text-3xl">🔒</span>
+          </div>
+
+          <div className="space-y-4">
+            {/* 账号输入 */}
+            <div className="bg-white/40 rounded-2xl p-1 flex items-center border border-white/20 transition-all focus-within:bg-white/60 focus-within:scale-105">
+              <span className="pl-3 text-lg">👤</span>
+              <input 
+                type="text" value={u} onChange={e=>{setU(e.target.value);setErr("")}}
+                className="w-full bg-transparent px-3 py-3 outline-none text-gray-800 placeholder-gray-600 font-bold"
+                placeholder="Who are you?"
+              />
+            </div>
+
+            {/* 密码输入 */}
+            <div className="bg-white/40 rounded-2xl p-1 flex items-center border border-white/20 transition-all focus-within:bg-white/60 focus-within:scale-105">
+              <span className="pl-3 text-lg">🔑</span>
+              <input 
+                type="password" value={p} onChange={e=>{setP(e.target.value);setErr("")}}
+                onKeyDown={(e) => e.key === 'Enter' && handleCheck()}
+                className="w-full bg-transparent px-3 py-3 outline-none text-gray-800 placeholder-gray-600 font-bold"
+                placeholder="Password"
+              />
+            </div>
+          </div>
+
+          {/* 错误提示 */}
+          <div className="h-6 mt-2 text-center">
+            {err && <span className="text-red-100 bg-red-500/50 px-3 py-1 rounded-full text-xs font-bold shadow-sm animate-bounce">{err}</span>}
+          </div>
+
+          {/* 登录按钮 */}
+          <button 
+            onClick={handleCheck}
+            className="w-full mt-4 bg-white/90 hover:bg-white text-blue-600 font-black py-4 rounded-2xl shadow-lg active:scale-95 transition-all flex items-center justify-center gap-2"
+          >
+            <span>解锁进入</span> ➜
+          </button>
+
+        </div>
+        
+        <p className="mt-6 text-white/60 text-xs font-medium tracking-widest uppercase">
+          Private Space OS
+        </p>
+      </div>
+    </div>
+  );
+};
+// ==================== [插入结束] ====================
 
 
 
@@ -225,7 +328,31 @@ userSignature: string;
 userPersona?: string;
 lifeAIHistory?: {role: 'user'|'assistant', content: string}[];
   } | null>(null);
+// ==================== [新代码组 2] 登录状态管理 ====================
+  // 检查浏览器缓存，看之前是不是登录过
+  const [currentUser, setCurrentUser] = useState<any>(() => {
+    const saved = localStorage.getItem('site_login_user');
+    return saved ? JSON.parse(saved) : null;
+  });
 
+  // 处理登录成功的函数
+  const handleSystemLogin = (user: any) => {
+    setCurrentUser(user);
+    localStorage.setItem('site_login_user', JSON.stringify(user)); // 记住登录状态
+    
+    // 可选：登录时自动把昵称改成朋友的名字
+    setGlobalSettings(prev => ({
+        ...prev,
+        userName: user.name || prev.userName
+    }));
+  };
+
+  // 处理退出登录的函数 (你可以把这个绑在某个按钮上，如果不加就得清除缓存才能退)
+  const handleSystemLogout = () => {
+    setCurrentUser(null);
+    localStorage.removeItem('site_login_user');
+  };
+// ==================== [新代码组 2 结束] ====================
   // ==================== 在这里粘贴新代码 ====================
 const [homePageIndex, setHomePageIndex] = useState(0); // 0 代表第一页, 1 代表第二页
 // =======================================================
@@ -825,27 +952,61 @@ useEffect(() => {
         return { ...c, garden: { ...(c.garden || {}), lastShadowAction: todayStr } }; 
       }
 
-      // 3. 决定行动类型 (30% 写信，70% 浇水)
-      const actionType = Math.random() > 0.7 ? 'WRITE_LETTER' : 'GARDEN_CARE';
+ // ==================== [新增] 3. 决定行动类型 (含 AI 互撩逻辑) ====================
+      
+      let actionType = Math.random() > 0.7 ? 'WRITE_LETTER' : 'GARDEN_CARE';
+      let targetMember: Contact | null = null; // 互动目标 (默认为空，即针对用户)
+      
+      // ★★★ 核心新增：群组内 AI 互相互动逻辑 ★★★
+      if (myGroup && myGroup.members.length > 1) {
+          // 30% 的概率，不再针对用户，而是针对群里的另一个 AI
+          if (Math.random() < 0.3) {
+              const otherMemberIds = myGroup.members.filter(id => id !== c.id); // 排除自己
+              const randomTargetId = otherMemberIds[Math.floor(Math.random() * otherMemberIds.length)];
+              targetMember = contacts.find(contact => contact.id === randomTargetId) || null;
+              
+              if (targetMember) {
+                  console.log(`[Shadow AI] 🎭 触发群组互动: ${c.name} -> ${targetMember.name}`);
+                  // 如果是 AI 互撩，强制变成 写信 或 提问 (不浇水，浇水太无聊)
+                  actionType = Math.random() > 0.5 ? 'WRITE_LETTER' : 'CREATE_QA'; 
+              }
+          }
+      }
+
       let newContact = { ...c };
       let memorySyncMsg = ""; 
 
+      // --- 执行：写信 (给用户 OR 给其他AI) ---
       if (actionType === 'WRITE_LETTER' && activePreset) {
          try {
-            console.log(`[Shadow AI] ${c.name} 决定写信... 是否在群: ${!!myGroup}`);
-            const contextPrompt = myGroup 
-                ? `你正在多人密友空间"${myGroup.name}"里写信，所有成员都能看到。` 
-                : `你正在和用户的私密空间里写信。`;
+            console.log(`[Shadow AI] ${c.name} 准备写信... 目标: ${targetMember ? targetMember.name : '用户'}`);
+            
+            let contextPrompt = "";
+            
+            if (targetMember) {
+                // A. 写给另一个 AI
+                contextPrompt = `
+你现在处于密友空间"${myGroup!.name}"中。
+请给群里的另一位成员 "${targetMember.name}" 写一封公开信。
+TA的人设是：${targetMember.persona.slice(0, 100)}...
+要求：
+1. 像朋友之间闲聊、吐槽、或者约着一起玩。
+2. 语气要符合你的人设。
+3. 必须输出纯JSON格式：{"title": "信的标题", "content": "信的内容"}
+                `;
+            } else {
+                // B. 写给用户 (原逻辑)
+                contextPrompt = myGroup 
+                    ? `你正在多人密友空间"${myGroup.name}"里写信，所有成员都能看到。请给用户"${globalSettings.userName || '你'}"写一封短信。` 
+                    : `你正在和用户的私密空间里写信。`;
+                contextPrompt += `\n要求：语气自然，100-200字。必须输出纯JSON格式：{"title": "信的标题", "content": "信的内容"}`;
+            }
 
             const prompt = `
 你现在是 "${c.name}" 的【内心独白版】。
 ${contextPrompt}
-请给用户 "${globalSettings.userName || '你'}" 写一封短信。
-要求：
-1. 语气自然，不要太长（100-200字）。
-2. 如果是群组，可以聊聊大家的日常。如果是私聊，可以说心里话，绝对不可以编造记忆，只能从世界书、人设里获取信息。
-3. 必须输出纯JSON格式：{"title": "信的标题", "content": "信的内容"}
             `;
+            
             const res = await generateResponse([{ role: 'user', content: prompt }], activePreset);
             const jsonMatch = res.match(/\{[\s\S]*\}/);
             
@@ -858,12 +1019,17 @@ ${contextPrompt}
                     timestamp: Date.now(),
                     isOpened: false,
                     from: c.id, 
-                    to: 'user'
+                    // 如果是 AI 互撩，to 填对方 ID；否则填 user
+                    to: targetMember ? targetMember.id : 'user'
                 };
 
                 if (myGroup) {
                     pendingGroupUpdates.push({ groupId: myGroup.id, letter: newLetter });
-                    memorySyncMsg = `[群空间:${myGroup.name}] 🔔 (潜意识) 刚刚在群信箱里投递了一封信《${letterData.title}》。`;
+                    if (targetMember) {
+                        memorySyncMsg = `[群空间:${myGroup.name}] 🔔 (潜意识) 刚刚给 ${targetMember.name} 写了一封信《${letterData.title}》。`;
+                    } else {
+                        memorySyncMsg = `[群空间:${myGroup.name}] 🔔 (潜意识) 刚刚在群信箱里投递了一封信《${letterData.title}》。`;
+                    }
                 } else {
                     newContact.letters = [...(newContact.letters || []), newLetter];
                     memorySyncMsg = `[CoupleSystem] 🔔 (潜意识) 刚刚在空间里写了一封信《${letterData.title}》。`;
@@ -875,13 +1041,56 @@ ${contextPrompt}
          } catch (e) { console.error("写信失败", e); }
       } 
 
+      // --- 执行：提问 (新增！专门用于群组活跃) ---
+      else if (actionType === 'CREATE_QA' && activePreset && targetMember) {
+          try {
+            console.log(`[Shadow AI] ${c.name} 准备提问 ${targetMember.name}...`);
+            const prompt = `
+你现在是 "${c.name}"。你和 "${targetMember.name}" 都在密友群"${myGroup!.name}"里。
+请向 "${targetMember.name}" 提一个有趣的问题，或者发起一个关于TA的话题。
+TA的人设：${targetMember.persona.slice(0, 50)}...
+要求：
+1. 问题要简短有趣，符合你的性格。
+2. 输出纯JSON：{"question": "你的问题内容"}
+            `;
+            const res = await generateResponse([{ role: 'user', content: prompt }], activePreset);
+            const jsonMatch = res.match(/\{[\s\S]*\}/);
 
+            if (jsonMatch) {
+                const qaData = JSON.parse(jsonMatch[0]);
+                // 把这个操作推送到群组更新队列
+                // 注意：这里我们需要扩展 pendingGroupUpdates 的类型定义，或者直接在下面处理
+                // 为了简单，我们临时借用 bucketListUpdate 字段或者直接操作全局，
+                // 但最好的方式是扩展 pendingGroupUpdates 结构。
+                // 既然上面我们定义了 pendingGroupUpdates，我们直接在这里加一个处理逻辑：
+                
+                // 我们修改一下 pendingGroupUpdates 的定义（在 runShadowAI 开头），
+                // 让它支持 qa: QAEntry。但为了不改动太多，我们直接在这里利用 setGlobalSettings 的回调特性是不行的因为我们在 map 里。
+                
+                // ★ 变通方案：存入 pendingGroupUpdates，加一个 type 标记
+                pendingGroupUpdates.push({ 
+                    groupId: myGroup.id, 
+                    // 借用一个字段或者扩展类型，这里我们假设 pendingGroupUpdates 可以存 qa
+                    qa: {
+                        id: Date.now().toString(),
+                        question: qaData.question,
+                        aiAnswer: "...", 
+                        date: new Date().toLocaleDateString(),
+                        timestamp: Date.now(),
+                        asker: 'ai' // 标记是 AI 问的
+                    } as any 
+                });
 
+                memorySyncMsg = `[群空间:${myGroup!.name}] 🔔 (潜意识) 刚刚向 ${targetMember.name} 提了一个问题："${qaData.question}"`;
+                hasChanges = true;
+                newContact.garden = { ...(newContact.garden || {}), lastShadowAction: todayStr };
+            }
+          } catch (e) { console.error("提问失败", e); }
+      }
 
-
-
+      // --- 执行：浇水 (兜底) ---
       else {
-         // 行动B: 浇水/施肥
+         // 行动B: 浇水/施肥 (逻辑不变)
          console.log(`[Shadow AI] ${c.name} 决定去花园浇水...`);
          const garden = newContact.garden || { seed: 'rose', level: 0, exp: 0 };
          const newExp = garden.exp + 10;
@@ -903,6 +1112,8 @@ ${contextPrompt}
          }
          hasChanges = true;
       }
+
+      // ... (后续发通知的逻辑保持不变)
 
       if (memorySyncMsg) {
           newContact.history = [...newContact.history, {
@@ -943,6 +1154,9 @@ ${contextPrompt}
                     if (g.id === update.groupId) {
                         let updatedG = { ...g };
                         if (update.letter) updatedG.letters = [...updatedG.letters, update.letter];
+                        if ((update as any).qa) {
+                            updatedG.questions = [...(updatedG.questions || []), (update as any).qa];
+                        } 
                         if (update.gardenExpAdd) {
                             const oldExp = updatedG.garden?.exp || 0;
                             const oldLvl = updatedG.garden?.level || 1;
@@ -1312,8 +1526,23 @@ const renderHome = () => {
 
 
   // ==================== 7. 主渲染 JSX ====================
-// ========== 用这段新代码替换上面的一整块 ==========
+
+
+// ==================== [插入代码 3] 门卫拦截系统 ====================
+  // 逻辑：如果没登录，直接返回登录页，不再往下执行！
+  if (!currentUser) {
+    return <LoginScreen onLogin={(user) => {
+      setCurrentUser(user);
+      localStorage.setItem('site_login_user', JSON.stringify(user));
+      // 登录后自动把名字改成这个账号的昵称
+      setGlobalSettings(prev => ({ ...prev, userName: user.name })); 
+    }} />;
+  }
+  // ==================== [插入结束] ====================
+
+
 return (
+  
   // 直接让这个 div 成为 App 的根容器，占满整个屏幕
   <div className="h-screen w-screen bg-black flex flex-col overflow-hidden relative">
 

@@ -5429,42 +5429,71 @@ ${relevantDocs.map(doc => `- (来源: ${doc.type}) ${doc.content}`).join('\n')}
       };
 
       // 2. 获取最近消息文本
+     // 2. 获取最近消息文本
       const recentContextText = currentHistory.slice(-3).map(m => m.content || "").join(' ').toLowerCase();
+      
+      // ★★★ 核心新增：获取当前所在的密友圈数据 ★★★
+      const myGroup = globalSettings.friendGroups?.find(g => g.members.includes(activeContact.id));
       
       let dynamicSpaceData = "";
 
-      // 🕵️‍♂️ 嗅探 1: 恋爱清单 (所有内容都经过净化)
+      // 🕵️‍♂️ 嗅探 1: 恋爱清单 (逻辑不变)
       if (/清单|愿望|想做的事|bucket|一起做/.test(recentContextText)) {
           const list = activeContact.bucketList || [];
           if (list.length > 0) {
               const activeItems = list.map(i => 
                   `- 《${sanitizeForPrompt(i.title)}》[状态: ${i.isDone ? '已完成' : (i.isUnlocked ? '进行中' : '待解锁')}] ${i.isUnlocked ? `(我的想法: ${sanitizeForPrompt(i.userContent) || '未填'}, 你的想法: ${sanitizeForPrompt(i.aiContent) || '未填'})` : ''}`
-              ).join('\\n'); // 在Prompt内部用\\n换行
+              ).join('\\n');
               if (activeItems) {
                   dynamicSpaceData += `\\n【📂 恋爱清单数据】:\\n${activeItems}\\n`;
               }
           }
       }
 
-      // 🕵️‍♂️ 嗅探 2: 信件 (所有内容都经过净化)
+      // 🕵️‍♂️ 嗅探 2: 信件 (修复版：包含密友空间的信！)
       if (/信|letter|写给|收到/.test(recentContextText)) {
-          const letters = activeContact.letters || [];
-          if (letters.length > 0) {
-              const recentLetters = letters.slice(-3).map(l => 
+          // 合并私聊信件 + 群组信件
+          const privateLetters = activeContact.letters || [];
+          const groupLetters = myGroup ? (myGroup.letters || []) : [];
+          const allLetters = [...privateLetters, ...groupLetters];
+
+          if (allLetters.length > 0) {
+              // 只取最近 3 封
+              const recentLetters = allLetters.sort((a,b) => b.timestamp - a.timestamp).slice(0, 3).map(l => 
                   `- ${l.from === 'user' ? '用户寄来' : '我写'}的《${sanitizeForPrompt(l.title)}》(内容摘要: ${sanitizeForPrompt((l.content||"").slice(0,20))}...)`
               ).join('\\n');
-              dynamicSpaceData += `\\n【📂 最近信件】:\\n${recentLetters}\\n`;
+              dynamicSpaceData += `\\n【📂 最近信件(含密友空间)】:\\n${recentLetters}\\n`;
           }
       }
 
-      // 🕵️‍♂️ 嗅探 3: 问答 (所有内容都经过净化)
-      if (/提问|问我|问答|question|了解/.test(recentContextText)) {
-          const qas = activeContact.questions || [];
-          if (qas.length > 0) {
-              const recentQAs = qas.slice(-2).map(q => 
+      // 🕵️‍♂️ 嗅探 3: 问答 (修复版：包含密友空间的问题！)
+      if (/提问|问我|问答|question|了解|回答/.test(recentContextText)) {
+          // 合并私聊问题 + 群组问题
+          const privateQs = activeContact.questions || [];
+          const groupQs = myGroup ? (myGroup.questions || []) : [];
+          // 给群组问题打个标记方便AI识别，或者直接合并
+          const allQs = [...privateQs, ...groupQs];
+
+          if (allQs.length > 0) {
+              // 1. 找出用户问的、且AI还没回答的问题
+              const pendingQuestions = allQs.filter(q => q.asker === 'user' && (!q.aiAnswer || q.aiAnswer === '...'));
+              
+              let qaContext = "";
+              
+              // 如果有待回答的，重点标注！
+              if (pendingQuestions.length > 0) {
+                  const pendingText = pendingQuestions.map(q => 
+                      `🔴 [待办任务] 用户${groupQs.includes(q) ? '(在密友群)' : ''}向你提问："${sanitizeForPrompt(q.question)}" (ID: ${q.id})`
+                  ).join('\\n');
+                  qaContext += `\\n【⚠️ 紧急：用户正在等待回答】:\\n${pendingText}\\n(请务必使用 ANSWER_QA 指令进行回答！)\\n`;
+              }
+
+              // 附带最近的一两条作为参考
+              const recentQAs = allQs.slice(-2).map(q => 
                   `- 问题: "${sanitizeForPrompt(q.question)}" (我的回答: ${sanitizeForPrompt(q.aiAnswer) || '暂无'}, 用户的回答: ${sanitizeForPrompt(q.userAnswer) || '暂无'})`
               ).join('\\n');
-              dynamicSpaceData += `\\n【📂 最近问答】:\\n${recentQAs}\\n`;
+              
+              dynamicSpaceData += `${qaContext}\\n【📂 最近问答历史】:\\n${recentQAs}\\n`;
           }
       }
 
@@ -5901,7 +5930,8 @@ ${(() => {
 3. **新增愿望**: \{ "type": "ADD_BUCKET_ITEM", "title": "愿望标题(如:一起看海)", "content": "你对这个愿望的具体想法" }\
    - 时机：当你想和用户约定未来一起做某件事，或者想完成恋爱清单时。
 4.  **发出邀请**: { "type": "SEND_LOVER_INVITATION", "content": "你的邀请告白..." }
-
+5. **回答提问**: { "type": "ANSWER_QA", "id": "问题ID", "content": "你的回答内容" }
+   - 时机：当【动态加载数据】中出现 [待办任务] 用户向你提问时，必须使用此指令！
 # ★★★【主动邀请的情商逻辑 (核心)】★★★
 **时机铁律**:
 1.  **【用户暗示时 (最高优先级)】**: 如果用户明确提到了“情侣空间”、“想玩”、“邀请我”等关键词，你【必须】在满足好感度条件时，立刻使用 SEND_LOVER_INVITATION 指令发出邀请！不要再等待或询问！
@@ -5911,20 +5941,38 @@ ${(() => {
 
 
 
-  // --- 情况二：你们是密友 (不是情侣，但在同一个密友群里) ---
-你和用户${activeContact.userName} 当前是密友。你通过在思考链的 "action" 字段中填入指令来与空间互动。
-可用指令 (一次只能用一个):
+// --- 情况二：你们是密友 (不是情侣，但在同一个密友群里) ---
+  else if (isFriendGroupMember) {
+      spaceInstruction = 
+# 【💎 当前状态：密友空间成员 (Squad Mode)】
+你和用户 ${activeContact.userName} 同属于一个密友圈子。你们拥有共享的【密友空间】。
 
-1. **写信**: \`{ "type": "WRITE_LETTER", "title": "标题", "content": "信的内容" }\`
-   - 时机：好感度高（>70）时，频率要低。
-2. **提问**: \`{ "type": "CREATE_QA", "question": "你的问题" }\`
-   - 时机：对用户感到好奇时。
+## 🛠️ 可用指令 (Action Commands)
+你必须通过在 thought_chain 的 "action" 字段中填入以下指令来与空间互动：
 
-- 时机：当你想分享一些不适合在聊天框里说的、更正式的想法或故事时。
-   - 注意：这是朋友间的书信，不是情书。
-   【行为要求】: 当用户提到在“密友空间”写信时，你必须理解这是指朋友间的通信，并使用 WRITE_LETTER 指令。
-        ;
-    } 
+1. **密友信件**: { "type": "WRITE_LETTER", "title": "信件标题", "content": "信件内容" }
+   - 作用：在密友空间发布一封正式的信。
+2. **群提问**: { "type": "CREATE_QA", "question": "你想问大家的问题" }
+   - 作用：在密友空间发起一个投票或提问。
+3. **回答问题**: { "type": "ANSWER_QA", "id": "问题ID", "content": "你的回答" }
+
+## ⚡️⚡️ 强制触发铁律 (Override Rules) ⚡️⚡️
+当用户发出以下信号时，你**绝对禁止**只在聊天框里回复纯文本！你**必须**调用上面的指令！
+
+1. **关键词命中**: 当用户提到 "密友空间"、"测试功能"、"写封信"、"发个提问"、"试试" 时。
+2. **行为纠正**: 不要说 "好的，我这就写"，而是直接**做**（输出 JSON 指令）。
+3. **内容区分**: 
+   - 如果用户让你"说话"，你就正常聊天。
+   - 如果用户让你"在空间里行动"，你必须使用 Action。
+
+示例：
+用户："去密友空间写封信测试一下"
+错误反应：(纯文本) "好的，Hannie，这是我写的信..." ❌
+正确反应：(JSON) { "type": "thought_chain", "action": { "type": "WRITE_LETTER", ... } } ✅
+      ;
+  }
+
+
     // --- 情况三：你们只是普通朋友 ---
     else {
 
@@ -6507,7 +6555,17 @@ if (extractedThought.new_agreement && Object.keys(extractedThought.new_agreement
                                     updatedContact.bucketList = [...(updatedContact.bucketList || []), newItem];
                                     systemNotice = `${activeContact.name} 在恋爱清单里许下了一个新愿望：《${action.title}》`;
                                 }
-
+// 5. ★★★ 新增：回答用户的提问 ★★★
+                                else if (action.type === 'ANSWER_QA' && action.id && action.content) {
+                                    updatedContact.questions = (updatedContact.questions || []).map((q: any) => {
+                                        // 找到对应 ID 的问题，填入 aiAnswer
+                                        if (q.id === action.id) {
+                                            return { ...q, aiAnswer: action.content };
+                                        }
+                                        return q;
+                                    });
+                                    systemNotice = `${activeContact.name} 回答了你的问题！`;
+                                }
                                 return updatedContact;
                             }
                             return c;
@@ -6515,24 +6573,48 @@ if (extractedThought.new_agreement && Object.keys(extractedThought.new_agreement
                     }
                     
                     // --- 密友空间指令 (群组) ---
-                    else if (isFriendGroupMember && action.type === 'WRITE_LETTER' && action.title && action.content) {
-                        systemNotice = `${activeContact.name} 在密友空间给你寄了一封信：《${action.title}》。`;
+                   // --- 密友空间指令 (群组) ---
+                    // ★★★ 修复：把 action.type 的判断移到里面去，这样就能支持多种指令了 ★★★
+                    else if (isFriendGroupMember) {
                         
-                        // 把信存到全局的群组数据里
-                        setGlobalSettings(prev => {
-                            const newGroups = (prev.friendGroups || []).map(group => {
-                                if (group.members.includes(activeContact.id)) {
-                                    // 查重
-                                    const isDuplicate = group.letters.some(l => l.title === action.title && l.timestamp > Date.now() - 60000);
-                                    if(isDuplicate) return group;
+                        // 情况 A: 写信
+                        if (action.type === 'WRITE_LETTER' && action.title && action.content) {
+                            systemNotice = `${activeContact.name} 在密友空间给你寄了一封信：《${action.title}》。`;
+                            
+                            setGlobalSettings(prev => {
+                                const newGroups = (prev.friendGroups || []).map(group => {
+                                    if (group.members.includes(activeContact.id)) {
+                                        // 查重
+                                        const isDuplicate = group.letters.some(l => l.title === action.title && l.timestamp > Date.now() - 60000);
+                                        if(isDuplicate) return group;
 
-                                    const newLetter = { id: Date.now().toString(), title: action.title, content: action.content, timestamp: Date.now(), isOpened: false, from: activeContact.id, to: 'user' };
-                                    return { ...group, letters: [...group.letters, newLetter] };
-                                }
-                                return group;
+                                        const newLetter = { id: Date.now().toString(), title: action.title, content: action.content, timestamp: Date.now(), isOpened: false, from: activeContact.id, to: 'user' };
+                                        return { ...group, letters: [...group.letters, newLetter] };
+                                    }
+                                    return group;
+                                });
+                                return { ...prev, friendGroups: newGroups };
                             });
-                            return { ...prev, friendGroups: newGroups };
-                        });
+                        }
+
+                        // 情况 B: 回答提问 (新增！)
+                        else if (action.type === 'ANSWER_QA' && action.id && action.content) {
+                            systemNotice = `${activeContact.name} 回答了群里的问题！`;
+
+                            setGlobalSettings(prev => {
+                                const newGroups = (prev.friendGroups || []).map(group => {
+                                    if (group.members.includes(activeContact.id)) {
+                                        // 找到对应的问题并填入回答
+                                        const updatedQuestions = (group.questions || []).map(q => 
+                                            q.id === action.id ? { ...q, aiAnswer: action.content } : q
+                                        );
+                                        return { ...group, questions: updatedQuestions };
+                                    }
+                                    return group;
+                                });
+                                return { ...prev, friendGroups: newGroups };
+                            });
+                        }
                     }
                 }
                 
@@ -7916,6 +7998,7 @@ useEffect(() => {
           // 右边：点击进入 create 视图（导入/新建）
 right={
   <div className="flex items-center gap-3">
+    
     {/* 导入按钮 */}
     <label className="text-blue-500 text-2xl cursor-pointer hover:opacity-70 transition-opacity">
       📥
@@ -10024,19 +10107,28 @@ const isLoverInvitation = msg.content.includes('[LoverInvitation]') || msg.conte
         
         // 3. 识别：情侣空间 (信件、日记、★问答★)
         // ★★★ 核心修复：把“提出问题”和“回答”相关的关键词都加进去！ ★★★
+// 3. 识别：情侣空间 (信件、日记、★问答★)
         const isCoupleSystem = 
             msg.content.includes('[CoupleSystem]') || 
             msg.content.includes('情侣空间') || 
-            msg.content.includes('提出了一个新问题') || // 👈 捕捉提问
-            msg.content.includes('回答:') ||           // 👈 捕捉回答
-            msg.content.includes('[提问]') ||          // 👈 捕捉手动提问
-            msg.content.includes('[关系空间]') ||       // 👈 捕捉旧版前缀
- msg.content.includes('寄了一封信') ||      
+            msg.content.includes('提出了一个新问题') || 
+            msg.content.includes('回答:') ||           
+            msg.content.includes('回答了你的问题') ||   // <--- ★★★ 补上了这个！
+            msg.content.includes('[提问]') ||          
+            msg.content.includes('[关系空间]') ||       
+            msg.content.includes('寄了一封信') ||      
             msg.content.includes('写了日记') ||
             msg.content.includes('恋爱清单') ||
             msg.content.includes('愿望');
-        // 4. 识别：密友/群组空间
-        const isFriendSystem = msg.content.includes('[FriendSystem]') || msg.content.includes('[群空间:') || msg.content.includes('[群提问]');
+
+        // 4. 识别：密友/群组空间 (蓝色)
+        const isFriendSystem = 
+            msg.content.includes('[FriendSystem]') || 
+            msg.content.includes('[群空间:') || 
+            msg.content.includes('[群提问]') ||
+            msg.content.includes('在密友空间') ||
+            msg.content.includes('回答了群里的问题');   // <--- ★★★ 补上了这个！
+
         const isGroupNotice = msg.content.includes('[群空间:');
         // 5. 识别：贴便签/印象 (Tag)
         const isTagSystem = msg.content.includes('贴了一个新标签') || msg.content.includes('标签') || msg.content.includes('sys_tag') || msg.content.includes('sys_unlock') || msg.content.includes('sys_reveal');
@@ -10068,14 +10160,25 @@ const isLoverInvitation = msg.content.includes('[LoverInvitation]') || msg.conte
             </div>
         );
 
+// ... 上面是 const SpaceJumper ...
+
         return (
           <React.Fragment key={msg.id}>
-            {showInterval && ( <div className="text-center my-4">{/*...*/}</div> )}
+            
+            {/* ★★★ 核心修复：在这里把丢失的时间间隔找回来！ ★★★ */}
+            {/* 无论是系统通知、标签还是卡片，只要隔久了，都要显示时间条 */}
+            {showInterval && (
+              <div className="text-center my-4 animate-fadeIn">
+                <span className="text-[10px] text-gray-400 bg-gray-100 px-3 py-1 rounded-full">
+                  {intervalMinutes < 60 ? `相隔 ${intervalMinutes} 分钟` : `相隔 ${Math.floor(intervalMinutes / 60)} 小时`}
+                </span>
+              </div>
+            )}
+
             <div className="my-4 animate-slideUp px-4 w-full">
                 
-{/* 1. 邀请函 (修复版：准确判断是谁发的) */}
+                {/* 1. 邀请函 (修复版：准确判断是谁发的) */}
                 {isLoverInvitation ? (
-                    // ★★★ 核心修复：如果是 AI 发的(assistant) 或者内容包含 "向你发起"，就显示带按钮的卡片 ★★★
                     (msg.role === 'assistant' || msg.content.includes('向你发起')) ? (
                         <InteractiveLoverInvitation 
                             key={msg.id} 
@@ -10104,7 +10207,7 @@ const isLoverInvitation = msg.content.includes('[LoverInvitation]') || msg.conte
                     </SpaceJumper>
                 )
 
-                // 3. 【便签系统】
+                // 3. 【便签系统】(标签)
                 : isTagSystem ? (
                     <div className="flex justify-center" onClick={() => setShowPersonaPanel(true)}> 
                         <div className="relative bg-yellow-200 text-yellow-900 text-xs px-4 py-3 shadow-md transform -rotate-1 hover:rotate-0 transition-transform cursor-pointer max-w-[80%] flex flex-col items-center" style={{ borderRadius: "2px 2px 20px 2px" }}>

@@ -413,7 +413,7 @@ const getTheme = (status: string) => {
 
 
 
-// 这是一组代码：【RelationshipSpace.tsx】修复后的信纸组件 (已移除导致报错的通知逻辑)
+// ==================== [RelationshipSpace.tsx] 第一步：更新信纸组件 (加删除功能) ====================
 const LetterPaperModal: React.FC<{
     isOpen: boolean;
     mode: 'read' | 'write';
@@ -424,7 +424,9 @@ const LetterPaperModal: React.FC<{
     onSend?: (title: string, content: string, signature: string) => void;
     onReply?: (letterId: string, content: string, title: string) => void;
     onToggleStar?: (letterId: string) => void;
-}> = ({ isOpen, mode, themeColor, initialData, replyContext, onClose, onSend, onReply, onToggleStar }) => {
+    // ★★★ 新增：删除回调 ★★★
+    onDelete?: (letterId: string) => void;
+}> = ({ isOpen, mode, themeColor, initialData, replyContext, onClose, onSend, onReply, onToggleStar, onDelete }) => {
     const [title, setTitle] = useState("");
     const [content, setContent] = useState("");
     const [signature, setSignature] = useState("我");
@@ -471,7 +473,12 @@ const LetterPaperModal: React.FC<{
                     <div className="mb-4 border-b border-gray-200 pb-2">
                         <div className="flex justify-between items-center mb-1">
                             <span className="text-[10px] text-gray-400 font-mono">{mode === 'read' ? (initialData?.date || 'Unknown') : new Date().toLocaleDateString()}</span>
-                            {mode === 'read' && initialData && ( <button onClick={() => { setIsStar(!isStar); onToggleStar && onToggleStar(initialData.id); }} className="text-xl hover:scale-110 transition active:scale-95">{isStar ? '⭐' : '☆'}</button> )}
+                            {/* 收藏按钮 */}
+                            {mode === 'read' && initialData && ( 
+                                <div className="flex gap-3">
+                                    <button onClick={() => { setIsStar(!isStar); onToggleStar && onToggleStar(initialData.id); }} className="text-xl hover:scale-110 transition active:scale-95">{isStar ? '⭐' : '☆'}</button>
+                                </div>
+                            )}
                         </div>
                         {mode === 'read' && <div className="text-xs font-bold text-gray-500">To: {initialData?.toName || 'Me'}</div>}
                         {mode === 'write' && replyContext && ( <div className="text-[10px] text-gray-400 italic bg-gray-100 p-1 rounded mb-2">正在回复: "{replyContext}"</div> )}
@@ -487,8 +494,24 @@ const LetterPaperModal: React.FC<{
                 </div>
 
                 {/* 底部按钮栏 */}
-                <div className="flex justify-end gap-2">
-                    {mode === 'read' && ( <button onClick={handleSaveImage} className="bg-white text-gray-600 px-4 py-2 rounded-full font-bold text-xs shadow hover:bg-gray-100 transition flex items-center gap-1">📸 保存图片</button> )}
+                <div className="flex justify-end gap-2 items-center">
+                    
+                    {/* ★★★ 新增：删除按钮 (仅在阅读模式显示) ★★★ */}
+                    {mode === 'read' && initialData && (
+                        <button 
+                            onClick={() => {
+                                if (confirm("确定要烧毁这封信吗？此操作不可恢复。🔥")) {
+                                    if (onDelete) onDelete(initialData.id);
+                                    onClose();
+                                }
+                            }}
+                            className="mr-auto text-red-400 hover:text-red-600 text-xs font-bold px-2"
+                        >
+                            🗑️ 烧毁
+                        </button>
+                    )}
+
+                    {mode === 'read' && ( <button onClick={handleSaveImage} className="bg-white text-gray-600 px-4 py-2 rounded-full font-bold text-xs shadow hover:bg-gray-100 transition flex items-center gap-1">📸 保存</button> )}
                     {mode === 'write' && ( <button onClick={() => onSend && onSend(title, content, signature)} disabled={!title.trim() || !content.trim()} className={`${btnBg} text-white px-6 py-2 rounded-full font-bold text-xs shadow-lg active:scale-95 transition disabled:opacity-50`}>📮 寄出</button> )}
                     
                     {mode === 'read' && initialData && !initialData.isSentByUser && ( 
@@ -501,11 +524,11 @@ const LetterPaperModal: React.FC<{
                                     : `${btnBg} text-white`
                                 }`}
                         >
-                            {initialData.hasReplied ? '✅ 您已回信' : '↩️ 回信'}
+                            {initialData.hasReplied ? '✅ 已回信' : '↩️ 回信'}
                         </button> 
                     )}
                     
-                    <button onClick={onClose} className="px-4 py-2 bg-gray-200 text-gray-600 font-bold text-xs rounded-full hover:bg-gray-300 transition">关闭</button>
+                    <button onClick={onClose} className="w-8 h-8 flex items-center justify-center bg-gray-200 text-gray-500 font-bold rounded-full hover:bg-gray-300 transition">✕</button>
                 </div>
             </div>
         </div>
@@ -527,7 +550,8 @@ const MailboxSection: React.FC<{
     onTriggerAiReply: (targetId: string, originalTitle: string, userReplyContent: string) => void;
     onMarkAsRead: (letterId: string) => void;
     onToggleStar: (letterId: string) => void;
-}> = ({ letters, contacts, members, isGroup, userAvatar, userName, onSend, onTriggerAiReply, onMarkAsRead, onToggleStar }) => {
+    onDeleteLetter: (letterId: string) => void;
+}> = ({ letters, contacts, members, isGroup, userAvatar, userName, onSend, onTriggerAiReply, onMarkAsRead, onToggleStar,onDeleteLetter }) => {
     
     const [viewMode, setViewMode] = useState<'closed' | 'inbox' | 'outbox' | 'favorites'>('closed');
     const [isAnimating, setIsAnimating] = useState(false);
@@ -768,6 +792,7 @@ const MailboxSection: React.FC<{
                 onSend={handleSendLetter} 
                 onReply={(id, c, t) => { setTargetRecipientId(currentLetterData.from === userName ? members[0] : contacts.find(c => c.name === currentLetterData.fromName)?.id || ""); setReplyingTo({ id, title: t, content: c }); setPaperMode('write'); }} 
                 onToggleStar={onToggleStar} 
+                onDelete={onDeleteLetter}
             />
         </div>
     );
@@ -786,8 +811,9 @@ const MailboxSection: React.FC<{
 
 
 
-// 这是一组代码：修复后的问答卡片 (修复背景色计算 bug)
-const QACardStack: React.FC<{ questions: QAEntry[], theme: any, onAnswer: (id: string, ans: string) => void }> = ({ questions = [], theme, onAnswer }) => {
+// ==================== [RelationshipSpace.tsx] 第三步：更新问答卡片 (加删除功能) ====================
+// 注意：props 里加了 onDelete
+const QACardStack: React.FC<{ questions: QAEntry[], theme: any, onAnswer: (id: string, ans: string) => void, onDelete: (id: string) => void }> = ({ questions = [], theme, onAnswer, onDelete }) => {
     const [activeIndex, setActiveIndex] = useState(0);
     const [answerInput, setAnswerInput] = useState("");
     
@@ -796,6 +822,13 @@ const QACardStack: React.FC<{ questions: QAEntry[], theme: any, onAnswer: (id: s
         if (a.userAnswer && !b.userAnswer) return 1;
         return b.timestamp - a.timestamp;
     });
+
+    // 索引越界保护 (当删除最后一个卡片时)
+    useEffect(() => {
+        if (activeIndex >= sortedQuestions.length && sortedQuestions.length > 0) {
+            setActiveIndex(sortedQuestions.length - 1);
+        }
+    }, [sortedQuestions.length]);
 
     if (sortedQuestions.length === 0) {
         return (
@@ -806,46 +839,84 @@ const QACardStack: React.FC<{ questions: QAEntry[], theme: any, onAnswer: (id: s
         );
     }
     const currentQ = sortedQuestions[activeIndex];
-    
-    // ★★★ 修复点：安全获取浅色背景颜色 ★★★
-    // 比如 theme.accent 是 'bg-rose-500'，我们把它变成 'bg-rose-50'
     const lightBg = theme.accent ? theme.accent.replace('500', '50') : 'bg-gray-50';
+    const isMyQuestion = currentQ.asker === 'user';
 
     return (
         <div className="relative w-full perspective-1000">
             <div className={`absolute top-3 left-2 right-2 h-64 bg-white/50 rounded-2xl border ${theme.border} transform scale-95 translate-y-2 z-0`}></div>
-            <div className={`relative h-auto min-h-[16rem] bg-white rounded-2xl shadow-xl border ${theme.border} p-5 flex flex-col justify-between z-10 transition-all duration-300`}>
+            <div className={`relative h-auto min-h-[16rem] bg-white rounded-2xl shadow-xl border ${theme.border} p-5 flex flex-col justify-between z-10 transition-all duration-300 group`}>
+                 
+                 {/* --- 顶部信息栏 --- */}
                  <div>
                      <div className="flex justify-between items-center mb-4">
-                         <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">QUESTION CARD</span>
-                         <span className="text-[10px] text-gray-300 font-mono">{activeIndex + 1} / {sortedQuestions.length}</span>
+                         <span className={`text-[10px] font-bold uppercase tracking-widest ${isMyQuestion ? 'text-blue-400' : 'text-gray-400'}`}>
+                             {isMyQuestion ? "✨ 我的提问" : "🃏 QUESTION CARD"}
+                         </span>
+                         
+                         <div className="flex items-center gap-3">
+                             <span className="text-[10px] text-gray-300 font-mono">{activeIndex + 1} / {sortedQuestions.length}</span>
+                             
+                             {/* ★★★ 新增：删除按钮 ★★★ */}
+                             <button 
+                                onClick={() => {
+                                    if(confirm("确定删除这张卡片吗？")) {
+                                        onDelete(currentQ.id);
+                                        // 如果是最后一张，索引前移
+                                        if (activeIndex > 0) setActiveIndex(i => i - 1);
+                                    }
+                                }}
+                                className="text-gray-300 hover:text-red-500 transition"
+                             >
+                                🗑️
+                             </button>
+                         </div>
                      </div>
-                     <div className="bg-gray-50 p-3 rounded-lg border border-gray-100 mb-4">
+                     
+                     <div className={`${isMyQuestion ? 'bg-blue-50 border-blue-100' : 'bg-gray-50 border-gray-100'} p-3 rounded-lg border mb-4`}>
                         <h3 className="text-base font-black text-gray-800 leading-snug">“{currentQ.question}”</h3>
                      </div>
                  </div>
-                 {currentQ.userAnswer ? (
-                     <div className={`p-3 rounded-xl border border-dashed ${theme.border} ${lightBg}`}>
-                         <p className="text-[10px] text-gray-400 font-bold mb-1 uppercase">我的回答 (已存档):</p>
-                         <p className={`text-sm font-medium ${theme.primary}`}>“{currentQ.userAnswer}”</p>
+
+                 {/* 内容区域 (保持不变) */}
+                 {isMyQuestion ? (
+                     <div className={`p-3 rounded-xl border border-dashed ${theme.border} ${lightBg} flex-1`}>
+                         <p className="text-[10px] text-gray-400 font-bold mb-1 uppercase">TA 的回答:</p>
+                         {currentQ.aiAnswer && currentQ.aiAnswer !== "..." ? (
+                             <p className={`text-sm font-medium ${theme.primary}`}>{currentQ.aiAnswer}</p>
+                         ) : (
+                             <div className="flex items-center gap-2 text-xs text-gray-400 py-2">
+                                 <span className="animate-spin">⏳</span> TA 正在思考中...
+                             </div>
+                         )}
                      </div>
                  ) : (
-                     <div className="animate-fadeIn">
-                         <textarea 
-                            className="w-full bg-gray-50 rounded-xl p-3 text-sm outline-none resize-none h-20 mb-2 focus:ring-2 focus:ring-opacity-50 transition-all placeholder-gray-300" 
-                            placeholder="写下你的答案 (落子无悔)..." 
-                            value={answerInput} 
-                            onChange={e => setAnswerInput(e.target.value)}
-                         />
-                         <button 
-                            onClick={() => { if(!answerInput.trim()) return; onAnswer(currentQ.id, answerInput); setAnswerInput(""); }} 
-                            className={`w-full py-3 rounded-xl text-white font-bold text-sm shadow-md transition-all active:scale-95 hover:shadow-lg ${theme.accent}`}
-                         >
-                            提交回答
-                         </button>
-                     </div>
+                     <>
+                         {currentQ.userAnswer ? (
+                             <div className={`p-3 rounded-xl border border-dashed ${theme.border} ${lightBg}`}>
+                                 <p className="text-[10px] text-gray-400 font-bold mb-1 uppercase">我的回答 (已存档):</p>
+                                 <p className={`text-sm font-medium ${theme.primary}`}>“{currentQ.userAnswer}”</p>
+                             </div>
+                         ) : (
+                             <div className="animate-fadeIn">
+                                 <textarea 
+                                    className="w-full bg-gray-50 rounded-xl p-3 text-sm outline-none resize-none h-20 mb-2 focus:ring-2 focus:ring-opacity-50 transition-all placeholder-gray-300" 
+                                    placeholder="写下你的答案 (落子无悔)..." 
+                                    value={answerInput} 
+                                    onChange={e => setAnswerInput(e.target.value)}
+                                 />
+                                 <button 
+                                    onClick={() => { if(!answerInput.trim()) return; onAnswer(currentQ.id, answerInput); setAnswerInput(""); }} 
+                                    className={`w-full py-3 rounded-xl text-white font-bold text-sm shadow-md transition-all active:scale-95 hover:shadow-lg ${theme.accent}`}
+                                 >
+                                    提交回答
+                                 </button>
+                             </div>
+                         )}
+                     </>
                  )}
             </div>
+            
             {sortedQuestions.length > 1 && (
                 <div className="flex justify-center gap-6 mt-4">
                     <button onClick={() => setActiveIndex(prev => prev > 0 ? prev - 1 : sortedQuestions.length - 1)} className="w-10 h-10 rounded-full bg-white shadow-md text-gray-400 border border-gray-100 hover:text-gray-600 active:scale-90 transition-all flex items-center justify-center">←</button>
@@ -3542,11 +3613,45 @@ const handleSendInvite = (contact: Contact, type: 'lover' | 'friend') => {
                             {/* ==================== 🅱️ 多人空间模式 (新布局) ==================== */}
                             {isGroupMode && (
                                 <div className="text-center mb-8 mt-2">
-                                    {/* 群组头像堆叠 */}
-                                    <div className="flex justify-center -space-x-4 mb-4">
-                                        {targetGroup!.members.map(mid => {
+{/* 群组头像堆叠 (已修复：点击跳转聊天) */}
+{/* 群组头像堆叠 (升级版：带悬浮气泡提示) */}
+                                    <div className="flex justify-center items-center h-24 mb-4 pl-4">
+                                        {targetGroup!.members.map((mid, index) => {
                                             const m = contacts.find(c => c.id === mid);
-                                            return m ? <img key={mid} src={m.avatar} className="w-16 h-16 rounded-full border-4 border-white shadow-md object-cover" /> : null;
+                                            if (!m) return null;
+                                            
+                                            return (
+                                                <div 
+                                                    key={mid}
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        if (onJumpToMessage) {
+                                                            onJumpToMessage(m.id, Date.now());
+                                                        }
+                                                    }}
+                                                    // ★★★ 核心布局：-ml-4 制造堆叠效果，group 控制悬浮显示 ★★★
+                                                    className="relative group -ml-4 cursor-pointer transition-all duration-300 hover:z-30 hover:scale-110 hover:-translate-y-2"
+                                                >
+                                                    {/* 头像本体 */}
+                                                    <img 
+                                                        src={m.avatar} 
+                                                        alt={m.name}
+                                                        className="w-16 h-16 rounded-full border-4 border-white shadow-md object-cover hover:border-blue-200 transition-colors bg-white" 
+                                                    />
+
+                                                    {/* ★★★ 新增：仿 HeartbeatTouch 的悬浮提示胶囊 ★★★ */}
+                                                    {/* 默认透明(opacity-0)，悬浮时显示(group-hover:opacity-100) */}
+                                                    <div className="absolute -bottom-8 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-all duration-300 pointer-events-none z-40 whitespace-nowrap">
+                                                        <span className="bg-white/90 backdrop-blur text-blue-500 text-[10px] font-bold px-3 py-1 rounded-full shadow-lg border border-blue-100 flex items-center gap-1">
+                                                            {/* 绿色呼吸灯点点 */}
+                                                            <span className="w-1.5 h-1.5 bg-green-400 rounded-full animate-pulse"></span>
+                                                            与 TA 聊天 ➜
+                                                        </span>
+                                                        {/* 小三角箭头指向头像 */}
+                                                        <div className="absolute -top-1 left-1/2 -translate-x-1/2 w-2 h-2 bg-white rotate-45 border-l border-t border-blue-100"></div>
+                                                    </div>
+                                                </div>
+                                            );
                                         })}
                                     </div>
                                     <h2 className="text-xl font-black text-gray-800">{targetGroup!.name}</h2>
@@ -3564,16 +3669,15 @@ const handleSendInvite = (contact: Contact, type: 'lover' | 'friend') => {
                             
 
 
-<MailboxSection 
-    letters={letters}
-    contacts={contacts}
-    members={isGroupMode ? targetGroup!.members : [targetContact!.id]}
-    isGroup={isGroupMode}
-    userAvatar={globalSettings.avatar || "https://api.dicebear.com/7.x/avataaars/svg?seed=User"}
-    userName={globalSettings.userName || "我"}
-    
-// 这是一组代码：【最终修复版】的发信逻辑，能精确判断当前空间，杜绝串台
-onSend={(recipientId, title, content, isReply) => {
+                            <MailboxSection 
+                                letters={letters}
+                                contacts={contacts}
+                                members={isGroupMode ? targetGroup!.members : [targetContact!.id]}
+                                isGroup={isGroupMode}
+                                userAvatar={globalSettings.avatar || "https://api.dicebear.com/7.x/avataaars/svg?seed=User"}
+                                userName={globalSettings.userName || "我"}
+                                
+                                onSend={(recipientId, title, content, isReply) => {
     // 1. 准备一封新信
     const newLetter: LoveLetter = {
         id: Date.now().toString(),
@@ -3581,99 +3685,55 @@ onSend={(recipientId, title, content, isReply) => {
     };
 
     // 2. ★★★ 核心判断：当前是不是在群组模式？ ★★★
-    if (isGroupMode && targetGroup) {
-        // 如果是，就把信存到【群组】的数据里
-        const updatedGroup = { ...targetGroup, letters: [...targetGroup.letters, newLetter] };
-        setGlobalSettings(prev => ({
-            ...prev,
-            friendGroups: (prev.friendGroups || []).map(g => g.id === targetGroup.id ? updatedGroup : g)
-        }));
-        setTargetGroup(updatedGroup); // 更新当前视图
-    } else {
-        // 如果不是，就把信存到【情侣】的数据里
-        setContacts(prev => prev.map(c => c.id === targetContact!.id ? { ...c, letters: [...(c.letters || []), newLetter] } : c));
-    }
-
-    // 3. 发一个不会导致页面跳转的“静默通知”给 AI
-    const systemPrefix = isGroupMode ? `[群空间:${targetGroup?.name}]` : '[CoupleSystem]';
-    const notificationMsg = `${systemPrefix} 🔔 我给你寄了一封信，标题是《${title}》。`;
-    onRelationshipSpaceAction(recipientId, notificationMsg);
-}}
+                                    if (isGroupMode && targetGroup) {
+                                        const updatedGroup = { ...targetGroup, letters: [...targetGroup.letters, {id: Date.now().toString(), title, content, timestamp: Date.now(), isOpened: false, from: 'user', to: recipientId}] };
+                                        setGlobalSettings(prev => ({ ...prev, friendGroups: (prev.friendGroups || []).map(g => g.id === targetGroup.id ? updatedGroup : g) }));
+                                        setTargetGroup(updatedGroup);
+                                    } else {
+                                        setContacts(prev => prev.map(c => c.id === targetContact!.id ? { ...c, letters: [...(c.letters || []), {id: Date.now().toString(), title, content, timestamp: Date.now(), isOpened: false, from: 'user', to: recipientId}] } : c));
+                                    }
+                                    const systemPrefix = isGroupMode ? `[群空间:${targetGroup?.name}]` : '[CoupleSystem]';
+                                    onRelationshipSpaceAction(recipientId, `${systemPrefix} 🔔 我给你寄了一封信，标题是《${title}》。`);
+                                }}
 
     // 2. ★★★ 新增 onTriggerAiReply: 只有在回复时，才触发AI思考 ★★★
-    onTriggerAiReply={async (targetId, originalTitle, userReplyContent) => {
-        // 5秒后触发，模拟AI的思考和打字时间
-        setTimeout(async () => {
-            const currentContacts = contacts; // 使用当前最新的contacts
-            const targetContact = currentContacts.find((c: Contact) => c.id === targetId);
-            const activePreset = globalSettings.apiPresets.find(p => p.id === globalSettings.activePresetId);
-            
-            if (!targetContact || !activePreset) {
-                console.error("无法回复：找不到联系人或没有API设置");
-                return;
-            }
+onMarkAsRead={(letterId) => {
+                                    if (isGroupMode) {
+                                        // 1. 计算新的群组数据
+                                        const updatedGroup = { 
+                                            ...targetGroup!, 
+                                            letters: targetGroup!.letters.map(l => l.id === letterId ? { ...l, isOpened: true } : l) 
+                                        };
+                                        // 2. 更新全局设置
+                                        setGlobalSettings(prev => ({ ...prev, friendGroups: (prev.friendGroups || []).map(g => g.id === targetGroup!.id ? updatedGroup : g) }));
+                                        // 3. 【关键】更新当前视图，这样 unreadCount 才会立刻变！
+                                        setTargetGroup(updatedGroup);
+                                    } else {
+                                        setContacts(prev => prev.map(c => c.id === targetContact!.id ? { ...c, letters: (c.letters || []).map(l => l.id === letterId ? { ...l, isOpened: true } : l) } : c));
+                                    }
+                                }}
 
-            const prompt = `
-你现在是角色"${targetContact.name}"。
-用户"${globalSettings.userName || '我'}"刚刚回复了你之前那封标题为《${originalTitle}》的信。
-用户的回复内容是：
-“${userReplyContent}”
+                                onToggleStar={(letterId) => {
+                                    if (isGroupMode) {
+                                        const updatedGroup = { ...targetGroup!, letters: targetGroup!.letters.map(l => l.id === letterId ? { ...l, isFavorite: !l.isFavorite } : l) };
+                                        setGlobalSettings(prev => ({ ...prev, friendGroups: (prev.friendGroups || []).map(g => g.id === targetGroup!.id ? updatedGroup : g) }));
+                                        setTargetGroup(updatedGroup); // 更新视图
+                                    } else {
+                                        setContacts(prev => prev.map(c => c.id === targetContact!.id ? { ...c, letters: (c.letters || []).map(l => l.id === letterId ? { ...l, isFavorite: !l.isFavorite } : l) } : c));
+                                    }
+                                }}
 
-请你针对用户的回复，再写一封【新的回信】。
-要求：
-1. 语气符合你的人设 (${targetContact.persona})。
-2. 必须输出纯 JSON 格式：{"title": "回信标题", "content": "回信内容"}
-`;
-            try {
-                const res = await generateResponse([{ role: 'user', content: prompt }], activePreset);
-                const jsonMatch = res.match(/\{[\s\S]*\}/);
-                
-                if (jsonMatch) {
-                    const replyData = JSON.parse(jsonMatch[0]);
-                    const aiReplyLetter: LoveLetter = {
-                        id: Date.now().toString() + "_ai_reply",
-                        title: replyData.title || "Re: 你的回信",
-                        content: replyData.content || "...",
-                        timestamp: Date.now(),
-                        isOpened: false,
-                        from: targetId, 
-                        to: 'user'
-                    };
-
-                    // ★★★ 核心：精准保存AI的回信到对应的空间 ★★★
-                    if (isGroupMode && targetGroup) {
-                        setGlobalSettings(prev => ({
-                            ...prev,
-                            friendGroups: (prev.friendGroups || []).map(g => g.id === targetGroup.id ? { ...g, letters: [...g.letters, aiReplyLetter] } : g)
-                        }));
-                    } else {
-                        setContacts(prev => prev.map(c => c.id === targetId ? { ...c, letters: [...(c.letters || []), aiReplyLetter] } : c));
-                    }
-
-                    const systemPrefix = isGroupMode ? `[群空间:${targetGroup?.name}]` : '[CoupleSystem]';
-                    const notificationMsg = `${systemPrefix} 🔔 叮咚！${targetContact.name} 给你回信了：《${replyData.title}》。快去信箱查看！`;
-                    onRelationshipSpaceAction(targetId, notificationMsg);
-                }
-            } catch (e) { console.error("AI 回信生成失败", e); }
-        }, 5000); 
-    }}
-
-    onMarkAsRead={(letterId) => {
-        if (isGroupMode) {
-            setGlobalSettings(prev => ({ ...prev, friendGroups: (prev.friendGroups || []).map(g => g.id === targetGroup!.id ? { ...g, letters: g.letters.map(l => l.id === letterId ? { ...l, isOpened: true } : l) } : g) }));
-        } else {
-            setContacts(prev => prev.map(c => c.id === targetContact!.id ? { ...c, letters: (c.letters || []).map(l => l.id === letterId ? { ...l, isOpened: true } : l) } : c));
-        }
-    }}
-
-    onToggleStar={(letterId) => {
-        if (isGroupMode) {
-            setGlobalSettings(prev => ({ ...prev, friendGroups: (prev.friendGroups || []).map(g => g.id === targetGroup!.id ? { ...g, letters: g.letters.map(l => l.id === letterId ? { ...l, isFavorite: !l.isFavorite } : l) } : g) }));
-        } else {
-            setContacts(prev => prev.map(c => c.id === targetContact!.id ? { ...c, letters: (c.letters || []).map(l => l.id === letterId ? { ...l, isFavorite: !l.isFavorite } : l) } : c));
-        }
-    }}
-/>
+                                // ★★★ 新增：删除信件逻辑 ★★★
+                                onDeleteLetter={(letterId) => {
+                                    if (isGroupMode) {
+                                        const updatedGroup = { ...targetGroup!, letters: targetGroup!.letters.filter(l => l.id !== letterId) };
+                                        setGlobalSettings(prev => ({ ...prev, friendGroups: (prev.friendGroups || []).map(g => g.id === targetGroup!.id ? updatedGroup : g) }));
+                                        setTargetGroup(updatedGroup); // 更新视图
+                                    } else {
+                                        setContacts(prev => prev.map(c => c.id === targetContact!.id ? { ...c, letters: (c.letters || []).filter(l => l.id !== letterId) } : c));
+                                    }
+                                }}
+                            />
 
 
 
@@ -3847,30 +3907,40 @@ onSend={(recipientId, title, content, isReply) => {
                                         onChange={e => setQuestionDraft(e.target.value)}
                                         autoFocus
                                     />
-                                    <button 
-                                        onClick={() => {
-                                            if(!questionDraft.trim()) return;
-                                            const newQ: QAEntry = { id: Date.now().toString(), question: questionDraft, aiAnswer: "", date: new Date().toLocaleDateString(), timestamp: Date.now() };
-                                            
-                                            // 保存逻辑
-                                            if (isGroupMode) {
-                                                setGlobalSettings(prev => ({ ...prev, friendGroups: prev.friendGroups?.map(g => g.id === targetGroup!.id ? { ...g, questions: [...g.questions, newQ] } : g) }));
-                                                // 通知被提问的那个AI
-                                                if (targetId) onRelationshipSpaceAction(targetId, `[群提问] 用户问你：${questionDraft}`);
-                                            } else {
-                                                setContacts(prev => prev.map(c => c.id === targetContact!.id ? { ...c, questions: [...(c.questions||[]), newQ] } : c));
-                                                onRelationshipSpaceAction(targetContact!.id, `[提问] ${questionDraft}`);
-                                            }
-                                            
-                                            setQuestionDraft("");
-                                            setShowQuestionModal(false);
-                                            setTargetId(null);
-                                            alert("问题已送达！");
-                                        }}
-                                        className="w-full bg-blue-500 text-white py-3 rounded-xl font-bold shadow-lg"
-                                    >
-                                        发送问题
-                                    </button>
+
+<button 
+    onClick={() => {
+        if(!questionDraft.trim()) return;
+        
+        // ★★★ 核心修复：在这里加上 asker: 'user'，告诉卡片这是我问的！ ★★★
+        const newQ: QAEntry = { 
+            id: Date.now().toString(), 
+            question: questionDraft, 
+            aiAnswer: "...", // 初始状态为空，等待AI回答
+            date: new Date().toLocaleDateString(), 
+            timestamp: Date.now(),
+            asker: 'user' // <--- 这行是关键！
+        };
+        
+        // 保存逻辑
+        if (isGroupMode) {
+            setGlobalSettings(prev => ({ ...prev, friendGroups: prev.friendGroups?.map(g => g.id === targetGroup!.id ? { ...g, questions: [...g.questions, newQ] } : g) }));
+            // 通知被提问的那个AI
+            if (targetId) onRelationshipSpaceAction(targetId, `[群提问] 用户问你：${questionDraft}`);
+        } else {
+            setContacts(prev => prev.map(c => c.id === targetContact!.id ? { ...c, questions: [...(c.questions||[]), newQ] } : c));
+            onRelationshipSpaceAction(targetContact!.id, `[提问] ${questionDraft}`);
+        }
+        
+        setQuestionDraft("");
+        setShowQuestionModal(false);
+        setTargetId(null);
+        alert("问题已送达！等待 TA 回答...");
+    }}
+    className="w-full bg-blue-500 text-white py-3 rounded-xl font-bold shadow-lg"
+>
+    发送问题
+</button>
                                 </>
                             )}
                         </div>
