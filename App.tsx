@@ -22,17 +22,12 @@ import { readTavernPng, fileToBase64 } from './utils/fileUtils';
 
 
 
-// ==================== [插入代码 1] 账号名单与高颜值登录组件 ====================
-// 1. 在这里改账号密码和【身份牌 role】
-const ALLOWED_USERS = [
-  // 这是一个普通用户，role 是 'user'
-  { id: "1", user: "friend", pass: "123456", name: "好朋友", role: "user" },
+// ==================== [插入代码 1] (修复黑屏版) 欢迎引导页 + 账号系统 ====================
 
-  // 这是一个管理员，role 是 'admin'，拥有所有权限
-  { id: "0", user: "admin",  pass: "Lzh@hhsh0923", name: "hannie", role: "admin" },
-  
-  // 你可以再加一个 VIP 用户
-  { id: "3", user: "vip_user", pass: "vip666", name: "moon", role: "moon" },
+// 1. 账号密码在这里改 (功能不变)
+const ALLOWED_USERS = [
+  { id: "1", user: "friend", pass: "123456", name: "好朋友", role: "user" },
+  { id: "2", user: "admin",  pass: "admin888", name: "管理员", role: "admin" },
 ];
 
 // 2. 你的豹纹汉堡壁纸URL
@@ -40,26 +35,25 @@ const LOGIN_WALLPAPER = "https://files.catbox.moe/tffb8b.png";
 
 // 3. 全新的多页面欢迎引导组件
 const WelcomeSequence = ({ onLogin }: { onLogin: (u:any)=>void }) => {
-  const [step, setStep] = useState(0); // 控制当前是第几页
-  const [loggedInUser, setLoggedInUser] = useState<any>(null); // 登录成功后暂存用户信息
+  // ★★★ 修复：统一使用 React.useState 写法，防止黑屏
+  const [step, setStep] = React.useState(0); 
+  const [loggedInUser, setLoggedInUser] = React.useState<any>(null);
 
-  // --- 登录逻辑 ---
-  const [username, setUsername] = useState("");
-  const [password, setPassword] = useState("");
-  const [error, setError] = useState("");
+  const [username, setUsername] = React.useState("");
+  const [password, setPassword] = React.useState("");
+  const [error, setError] = React.useState("");
 
   const handleLogin = () => {
     const validUser = ALLOWED_USERS.find(u => u.user === username && u.pass === password);
     if (validUser) {
       setError("");
-      setLoggedInUser(validUser); // 登录成功，进入最后一页欢迎页
+      setLoggedInUser(validUser);
     } else {
       setError("账号或密码不对哦！");
-      if(navigator.vibrate) navigator.vibrate([100, 50, 100]); // 震动反馈
+      if(navigator.vibrate) navigator.vibrate([100, 50, 100]);
     }
   };
   
-  // --- 最终欢迎页，点击后才真正进入App ---
   if (loggedInUser) {
     return (
       <div 
@@ -78,14 +72,10 @@ const WelcomeSequence = ({ onLogin }: { onLogin: (u:any)=>void }) => {
     );
   }
 
-  // --- 引导页和登录页 ---
   return (
     <div className="h-screen w-screen bg-gradient-to-br from-blue-50 to-pink-50 flex items-center justify-center p-4">
-      
-      {/* 动态内容卡片 */}
       <div className="w-full max-w-sm bg-white/80 backdrop-blur-xl rounded-[2rem] shadow-xl shadow-blue-100 p-8 flex flex-col items-center text-center transition-all duration-500 min-h-[500px] justify-between">
         
-        {/* Page 0: 欢迎动画 */}
         {step === 0 && (
           <div className="animate-fadeIn w-full flex flex-col items-center justify-center flex-1">
             <h1 className="text-3xl font-black text-gray-800">欢迎来到</h1>
@@ -96,7 +86,6 @@ const WelcomeSequence = ({ onLogin }: { onLogin: (u:any)=>void }) => {
           </div>
         )}
 
-        {/* Page 1: App介绍 */}
         {step === 1 && (
           <div className="animate-fadeIn w-full">
             <div className="text-4xl mb-4">📱</div>
@@ -108,7 +97,6 @@ const WelcomeSequence = ({ onLogin }: { onLogin: (u:any)=>void }) => {
           </div>
         )}
 
-        {/* Page 2: 功能介绍 1 */}
         {step === 2 && (
           <div className="animate-fadeIn w-full">
             <h3 className="font-bold text-gray-500 text-sm mb-6">核心功能</h3>
@@ -119,7 +107,6 @@ const WelcomeSequence = ({ onLogin }: { onLogin: (u:any)=>void }) => {
           </div>
         )}
         
-        {/* Page 3: 功能介绍 2 */}
         {step === 3 && (
             <div className="animate-fadeIn w-full">
                 <h3 className="font-bold text-gray-500 text-sm mb-6">生活助手</h3>
@@ -131,7 +118,6 @@ const WelcomeSequence = ({ onLogin }: { onLogin: (u:any)=>void }) => {
             </div>
         )}
 
-        {/* Page 4: Hannie的留言 */}
         {step === 4 && (
           <div className="animate-fadeIn w-full">
             <h3 className="text-xl font-black text-gray-800 mb-4">Hannie 留言说</h3>
@@ -143,7 +129,6 @@ const WelcomeSequence = ({ onLogin }: { onLogin: (u:any)=>void }) => {
           </div>
         )}
 
-        {/* Page 5: 结束语 */}
         {step === 5 && (
             <div className="animate-fadeIn w-full flex-1 flex flex-col items-center justify-center">
                 <div className="text-5xl mb-6">🚀</div>
@@ -155,7 +140,6 @@ const WelcomeSequence = ({ onLogin }: { onLogin: (u:any)=>void }) => {
             </div>
         )}
 
-        {/* Page 6: 账号密码页 */}
         {step === 6 && (
           <div className="animate-fadeIn w-full">
             <h3 className="font-bold text-gray-500 text-sm mb-6">请登录</h3>
@@ -167,16 +151,13 @@ const WelcomeSequence = ({ onLogin }: { onLogin: (u:any)=>void }) => {
           </div>
         )}
 
-        {/* 底部导航 */}
         <div className="w-full mt-8">
-            {/* 进度点 */}
             <div className="flex justify-center gap-2 mb-4">
                 {[...Array(7)].map((_, i) => (
                     <div key={i} className={`w-2 h-2 rounded-full transition-all ${step === i ? 'bg-blue-500 scale-125' : 'bg-gray-200'}`}></div>
                 ))}
             </div>
 
-            {/* 按钮 */}
             {step < 4 ? (
                 <button onClick={() => setStep(s => s + 1)} className="w-full bg-blue-500 text-white font-bold py-3 rounded-xl shadow-lg shadow-blue-100 active:scale-95 transition">下一页</button>
             ) : step === 4 ? (
@@ -192,7 +173,6 @@ const WelcomeSequence = ({ onLogin }: { onLogin: (u:any)=>void }) => {
   );
 };
 // ==================== [插入结束] ====================
-
 
 
 
