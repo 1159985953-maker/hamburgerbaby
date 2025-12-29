@@ -38,7 +38,7 @@ const ALLOWED_USERS = [
 const LOGIN_WALLPAPER = "https://files.catbox.moe/tffb8b.png";
 
 // ==================== [升级版] 汉堡包欢迎系统 (Intro + Login) ====================
-const WelcomeSystem = ({ onLogin }: { onLogin: (u: any) => void }) => {
+const LoginScreen = ({ onLogin }: { onLogin: (u: any) => void }) => {
   const [step, setStep] = useState(0); // 0:欢迎, 1:介绍, 2:功能, 3:留言, 4:登录
   const [u, setU] = useState("");
   const [p, setP] = useState("");
