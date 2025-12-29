@@ -71,7 +71,7 @@ export const generateResponse = async (
     apiKey,
     model,
     temperature = 1.0,
-    maxTokens = 2048,
+    maxTokens = 10000,
     topP = 1
   } = config;
 

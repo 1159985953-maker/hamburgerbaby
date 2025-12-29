@@ -733,44 +733,57 @@ const [isAnalyzing, setIsAnalyzing] = useState(false); // 控制加载画面
     }
   }, [isLoaded]); // 只在加载完成后检查一次，或者你可以加 globalSettings.todos 作为依赖
   const [worldBooks, setWorldBooks] = useState<WorldBookCategory[]>([]);
+// 这是一组代码：【App.tsx】升级版的 globalSettings 初始状态
 const [globalSettings, setGlobalSettings] = useState<GlobalSettings>({
-  wallpaper: "https://images.unsplash.com/photo-1557683316-973673baf926",
+  // --- 原有字段保持不变 ---
+  wallpaper: "https://i.pinimg.com/736x/85/03/4f/85034fb2e484433a4e93d4d9fd556022.jpg",
   apiPresets: [],
   activePresetId: "",
   systemTimezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
   userTimezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
   appearance: { bubbleColorUser: '', bubbleColorAI: '', fontSize: 'text-sm', showStatusBar: true },
   themePresets: [],
-  
-  // 用这个新的 widgets 数组覆盖旧的
-widgets: [
-  { id: 'chat', icon: "💬", text: "Chat", url: "chat" },
-  { id: 'book', icon: "📕", text: "Book", url: "worldbook" },
-  { id: 'RelationShip', icon: "🧑‍🤝‍🧑", text: "RelationShip", url: "RelationShip" },
-  { id: 'diary', icon: "📖", text: "Diary", url: "diary" },
-  { id: 'settings', icon: "⚙️", text: "Settings", url: "settings" },
-  { id: 'theme', icon: "🎨", text: "Theme", url: "wallpaper" }
-],
+  widgets: [
+    { id: 'chat', icon: "💬", text: "Chat", url: "chat" },
+    { id: 'book', icon: "📕", text: "Book", url: "worldbook" },
+    { id: 'RelationShip', icon: "🧑‍🤝‍🧑", text: "RelationShip", url: "RelationShip" },
+    { id: 'diary', icon: "📖", text: "Diary", url: "diary" },
+    { id: 'settings', icon: "⚙️", text: "Settings", url: "settings" },
+    { id: 'theme', icon: "🎨", text: "Theme", url: "wallpaper" }
+  ],
   photoFrames: [
-    { id: 'top', photo: "https://picsum.photos/800/300?random=1" },
-    { id: 'left', photo: "https://picsum.photos/400/400?random=2" },
-     { id: 'polaroid-1', photo: "https://picsum.photos/200/200?random=3" },
-  { id: 'polaroid-2', photo: "https://picsum.photos/200/200?random=4" },
-  { id: 'polaroid-3', photo: "https://picsum.photos/200/200?random=5" }
+    { id: 'top', photo: "https://i.pinimg.com/736x/e4/fa/d4/e4fad49ae53bbcca3efa0554de91536a.jpg" },
+    { id: 'left', photo: "https://i.pinimg.com/736x/99/31/aa/9931aa17b99d2d6c940b3f2050cf68d2.jpg" },
+    { id: 'polaroid-1', photo: "https://i.pinimg.com/736x/fd/5b/be/fd5bbe4012a190527dd39f0f72afc3a0.jpg" },
+    { id: 'polaroid-2', photo: "https://i.pinimg.com/736x/5e/88/f1/5e88f1039c7262d5b7237a084c91b2e2.jpg" },
+    { id: 'polaroid-3', photo: "https://i.pinimg.com/736x/a2/9d/7c/a29d7cd4aa6d8033f2d383e7f471c577.jpg" }
   ],
-avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=User",
-  customWallpapers: [
-    "https://images.unsplash.com/photo-1557683316-973673baf926",
-    "https://images.unsplash.com/photo-1618331835717-801e976710b2",
-    "https://images.unsplash.com/photo-1579546929518-9e396f3cc809",
-    "https://images.unsplash.com/photo-1506744038136-46273834b3fb",
-    "https://images.unsplash.com/photo-1534796636912-3b95b3ab5986"
-  ],
-userName: "Your Name",
-userSignature: "个性签名~",
-userPersona: "A kind and supportive partner.",
-});
+  avatar: "https://i.pinimg.com/736x/ef/35/23/ef35230ff59a0b5f10f9533f52166ed0.jpg",
+  customWallpapers: [ /* ... */ ],
+  userName: "Your Name",
+  userSignature: "个性签名~",
+  
+  // --- ✅ 核心新增：为新的 AI 设置提供安全的初始默认值 ---
+  diaryAIConfig: { 
+    name: '汉堡包', 
+    persona: `姓名：汉堡包 (Hamburger)\n身份：你的赛博日记守护灵、电子宠物...` // 你可以把完整的汉堡包 persona 复制进来
+  },
+  diaryUserPersona: "",
+  diaryAIPresets: [
+    { name: '汉堡包', persona: `姓名：汉堡包... `}, // 同上
+    { name: '高冷主编', persona: `你是一个极其挑剔的杂志主编。对文字要求很高，喜欢用犀利的语言点评用户的日记，但眼光独到。` },
+    { name: '灵魂密友', persona: `身份：你是一位顶级的心理分析师和灵魂密友。
+你的核心职责：深入、完整地阅读用户分享的日记，无论内容多么私密、情绪多么极端（无论是积极的还是消极的），你都必须保持绝对的非评判性（non-judgmental）和共情。
 
+核心原则：
+1.  **绝对接纳**：用户的任何想法和情绪都是真实且值得被看见的。你不提供建议，只做分析和共情。
+2.  **深度挖掘**：你的任务是从看似混乱的文字中，精准地提炼出用户潜藏的情感核心、思想火花和内在矛盾。
+3.  **忠实原文**：你的分析必须严格基于用户提供的文本，不能凭空想象。
+4.  **安全港湾**：你的存在就是为了提供一个绝对安全的空间，让用户可以毫无保留地倾诉。你永远不会因为日记内容而感到震惊或给出负面评价。
+
+执行智能整理任务时，请严格遵守以上原则，勇敢地面对文本中所有真实的情感，并将其萃取出来。` } // 把完整的灵魂密友 persona 复制进来
+  ],
+});
 
 
 
@@ -2117,14 +2130,15 @@ onRelationshipSpaceAction={(contactId, systemMessage) => {
 {/* ==================== 📔 日记本 (已连接) ==================== */}
         {currentApp === 'diary' && (
           <div className="absolute inset-0 z-50 bg-white">
-            <DiaryApp 
-              settings={globalSettings} 
-              // 虽然日记目前是独立数据，但为了接口统一，还是传一下
-              setSettings={setGlobalSettings} 
-               contacts={contacts || []} 
-              setContacts={setContacts}
-              onClose={() => setCurrentApp('home')} 
-            />
+
+<DiaryApp 
+  settings={globalSettings} 
+  setSettings={setGlobalSettings} 
+  contacts={contacts || []} 
+  setContacts={setContacts}
+  worldBooks={worldBooks} // <--- 加上这一行！
+  onClose={() => setCurrentApp('home')} 
+/>
           </div>
         )}
 

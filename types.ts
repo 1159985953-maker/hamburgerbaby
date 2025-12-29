@@ -359,10 +359,11 @@ export interface PhotoFrame {
   id: string; photo: string;
 }
 
+// 这是一组代码：【types.ts】最终版的 GlobalSettings 定义
 export interface GlobalSettings {
+  // --- 原有字段保持不变 ---
   userName?: string;
   userSignature?: string;
-  userPersona?: string;
   wallpaper: string;
   customWallpapers: string[];
   apiPresets: ApiPreset[];
@@ -379,5 +380,13 @@ export interface GlobalSettings {
   minimax?: { groupId: string; apiKey: string; model: string; serviceArea?: 'domestic' | 'international'; };
   userPresets?: any[];
   lifeAIHistory?: { role: 'user' | 'assistant', content: string }[];
-  friendGroups?: FriendGroup[]; 
+  friendGroups?: FriendGroup[];
+  
+  // --- ✅ 核心新增：把日记 AI 的专属设置，正式纳入中央管理！ ---
+  diaryAIConfig?: {
+    name: string;
+    persona: string;
+  };
+  diaryUserPersona?: string;
+  diaryAIPresets?: { name: string; persona: string; }[];
 }
