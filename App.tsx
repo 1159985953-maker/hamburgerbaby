@@ -22,7 +22,7 @@ import { readTavernPng, fileToBase64 } from './utils/fileUtils';
 
 
 
-// ==================== [插入代码 1] 全新·卡片式动态引导流程 ====================
+// ==================== [插入代码 1] 全新·故事开机引导流程 (V3 小清新版) ====================
 
 // 1. 账号密码在这里改 (功能不变)
 const ALLOWED_USERS = [
@@ -30,194 +30,172 @@ const ALLOWED_USERS = [
   { id: "2", user: "admin",  pass: "admin888", name: "管理员", role: "admin" },
 ];
 
-// 2. 这是全新的开机引导组件
+// 2. 这是你提供的豹纹汉堡图片URL，用作背景纹理
+const LOGIN_TEXTURE = "https://files.catbox.moe/tffb8b.png";
+
+// 3. 全新的引导+登录组件
 const LoginScreen = ({ onLogin }: { onLogin: (u:any)=>void }) => {
-  // --- 状态管理 ---
-  const [step, setStep] = useState(0); // 控制主流程页面
-  const [featurePage, setFeaturePage] = useState(0); // 控制功能介绍的滑动页面
-  const [u, setU] = useState(""); // 登录账号
-  const [p, setP] = useState(""); // 登录密码
-  const [err, setErr] = useState(""); // 错误提示
-  const [welcomeName, setWelcomeName] = useState(""); // 登录成功后的名字
+  const [step, setStep] = useState(0);
+  const [welcomeName, setWelcomeName] = useState("");
+  const [u, setU] = useState("");
+  const [p, setP] = useState("");
+  const [err, setErr] = useState("");
+  const swiperRef = React.useRef<HTMLDivElement>(null);
 
-  // --- 滑动功能所需的状态和引用 ---
-  const swipeContainerRef = React.useRef<HTMLDivElement>(null);
-  const isDragging = React.useRef(false);
-  const startX = React.useRef(0);
-  const currentTranslateX = React.useRef(0);
-
-  // --- 功能介绍文案 ---
+  // 功能介绍数据
   const FEATURES = [
-    { icon: "💬", title: "AI 聊天", desc: "与你的专属AI伙伴进行深度对话，TA拥有独特的性格和记忆，会随着交流不断成长。" },
-    { icon: "💞", title: "关系空间", desc: "当好感度足够时，可以解锁的私密区域。包含了信箱、问答、花园、恋爱清单和相册等多种互动玩法。" },
-    { icon: "📝", title: "生活清单", desc: "一个全能生活助手，帮你管理每日待办事项（To-Do）和个人财务（记账），让生活井井-有条。" },
-    { icon: "📖", title: "日记本", desc: "随时记录你的心情和故事，一个完全属于你的私密角落。" },
-    { icon: "🎨", title: "主题外观", desc: "高度自定义你的“手机”界面，从壁纸、聊天气泡到字体大小，一切由你决定。" },
+    { 
+      icon: "💬",
+      title: "有灵魂的 AI 伙伴",
+      desc: "与你的专属AI进行<b class='text-blue-500'>深度对话</b>。TA拥有独特的性格和记忆，会随着与你的交流<i class='font-serif'>不断成长</i>，形成独一无二的羁绊。",
+      color: "blue"
+    },
+    { 
+      icon: "💞",
+      title: "沉浸式关系空间",
+      desc: "当好感度足够时，便可解锁的<b class='text-rose-500'>私密区域</b>。包含了<i class='font-serif'>互寄信件</i>、<i class='font-serif'>真心话问答</i>、<i class='font-serif'>共育花园</i>、<i class='font-serif'>恋爱清单</i>和<i class='font-serif'>手帐相册</i>等超多玩法！",
+      color: "rose"
+    },
+    { 
+      icon: "📝",
+      title: "全能生活助手",
+      desc: "一个内置的强大App，帮你轻松管理<b class='text-green-500'>每日待办(To-Do)</b>和<b class='text-amber-500'>个人财务(记账)</b>，让生活变得井井有条，还能和AI语音互动哦。",
+      color: "green"
+    },
+    {
+      icon: "🎨",
+      title: "高度个性化",
+      desc: "从主屏幕壁纸、App图标，到聊天气泡的<b class='text-purple-500'>颜色</b>、<b class='text-purple-500'>大小</b>，一切都可以自由定制，打造一台完全属于你的“汉堡包大手机”。",
+      color: "purple"
+    },
   ];
-
-  // --- 滑动逻辑 ---
-  const handleSwipeStart = (clientX: number) => {
-    isDragging.current = true;
-    startX.current = clientX;
-    if (swipeContainerRef.current) swipeContainerRef.current.style.transition = 'none';
-  };
-  const handleSwipeMove = (clientX: number) => {
-    if (!isDragging.current || !swipeContainerRef.current) return;
-    const dx = clientX - startX.current;
-    const containerWidth = swipeContainerRef.current.offsetWidth;
-    currentTranslateX.current = -featurePage * containerWidth + dx;
-    swipeContainerRef.current.style.transform = `translateX(${currentTranslateX.current}px)`;
-  };
-  const handleSwipeEnd = () => {
-    isDragging.current = false;
-    if (!swipeContainerRef.current) return;
-    swipeContainerRef.current.style.transition = 'transform 0.3s ease-out';
-    const containerWidth = swipeContainerRef.current.offsetWidth;
-    const movedBy = -featurePage * containerWidth - currentTranslateX.current;
-    
-    if (movedBy < -50 && featurePage > 0) { // Swipe right
-      setFeaturePage(featurePage - 1);
-    } else if (movedBy > 50 && featurePage < FEATURES.length - 1) { // Swipe left
-      setFeaturePage(featurePage + 1);
-    } else { // Snap back
-      swipeContainerRef.current.style.transform = `translateX(${-featurePage * containerWidth}px)`;
-    }
-  };
-
-  React.useEffect(() => {
-    if (swipeContainerRef.current) {
-      const containerWidth = swipeContainerRef.current.offsetWidth;
-      swipeContainerRef.current.style.transform = `translateX(${-featurePage * containerWidth}px)`;
-    }
-  }, [featurePage]);
-
-  // --- 登录逻辑 ---
+  
   const handleLoginCheck = () => {
     const validUser = ALLOWED_USERS.find(x => x.user === u && x.pass === p);
     if(validUser) {
       setWelcomeName(validUser.name);
-      setStep(step + 1);
+      scrollToPage(6);
     } else {
       setErr("账号或密码不对哦 🚫");
       if(navigator.vibrate) navigator.vibrate(200);
     }
   };
 
-  // --- 渲染不同页面的函数 ---
-  const renderContent = () => {
-    switch(step) {
-      case 0: return (
-        <div className="text-center p-8 animate-fadeIn h-full flex flex-col justify-between">
-          <div>
-            <h1 className="text-lg font-bold text-gray-400">WELCOME TO</h1>
-            <h2 className="text-4xl font-black text-transparent bg-clip-text bg-gradient-to-r from-orange-400 to-rose-500 mt-2 mb-4">HamburgerPhone!</h2>
-          </div>
-          <span className="text-8xl block my-6 animate-bounce">🍔</span>
-          <button onClick={() => setStep(1)} className="w-full bg-gray-800 text-white font-bold py-4 rounded-2xl shadow-lg active:scale-95 transition-transform">下一页</button>
-        </div>
-      );
-      case 1: return (
-        <div className="p-8 animate-fadeIn h-full flex flex-col justify-center text-center">
-          <p className="text-lg leading-relaxed font-medium text-gray-700">
-            这是一个由 <b className="text-blue-500">hannie</b> 制作的<br/>
-            <i>仿手机生态</i> 的 AI 聊天网页，<br/>
-            在这里你可以用 AI 聊天、学习、<br/>
-            甚至记录生活琐事。
-          </p>
-          <button onClick={() => setStep(2)} className="w-full bg-gray-800 text-white font-bold py-4 rounded-2xl shadow-lg active:scale-95 transition-transform mt-12">下一页</button>
-        </div>
-      );
-      case 2:
-        const currentFeature = FEATURES[featurePage];
-        return (
-          <div className="animate-fadeIn flex flex-col h-full overflow-hidden">
-            <div className="overflow-hidden flex-1">
-              <div 
-                ref={swipeContainerRef}
-                className="flex h-full"
-                style={{ width: `${FEATURES.length * 100}%` }}
-                onMouseDown={e => handleSwipeStart(e.clientX)}
-                onMouseMove={e => handleSwipeMove(e.clientX)}
-                onMouseUp={handleSwipeEnd}
-                onMouseLeave={handleSwipeEnd}
-                onTouchStart={e => handleSwipeStart(e.touches[0].clientX)}
-                onTouchMove={e => handleSwipeMove(e.touches[0].clientX)}
-                onTouchEnd={handleSwipeEnd}
-              >
-                {FEATURES.map(f => (
-                  <div key={f.title} className="w-full h-full flex flex-col justify-center text-center p-8" style={{ width: `${100 / FEATURES.length}%` }}>
-                    <div className="w-24 h-24 bg-gray-50 rounded-3xl flex items-center justify-center text-5xl mx-auto mb-6 shadow-inner border border-gray-100">{f.icon}</div>
-                    <h3 className="text-2xl font-bold text-gray-800 mb-2">{f.title}</h3>
-                    <p className="text-sm text-gray-500 leading-relaxed">{f.desc}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
-            <div className="p-8 pt-0">
-              <div className="flex justify-center gap-2 mb-6">
-                {FEATURES.map((_, i) => <div key={i} onClick={() => setFeaturePage(i)} className={`w-2 h-2 rounded-full transition-all cursor-pointer ${i === featurePage ? 'bg-gray-800 w-4' : 'bg-gray-300'}`}></div>)}
-              </div>
-              <button onClick={() => setStep(3)} className="w-full bg-blue-500 text-white font-bold py-4 rounded-2xl shadow-lg">我看完了！</button>
-            </div>
-          </div>
-        );
-      case 3: return (
-        <div className="p-8 animate-fadeIn text-center flex flex-col h-full justify-between">
-            <div>
-              <h2 className="text-2xl font-black text-gray-800 mb-4">Hannie 留言说 ✌️</h2>
-              <div className="bg-yellow-50 border-2 border-dashed border-yellow-300 p-6 rounded-2xl text-sm text-gray-700 leading-relaxed space-y-3 shadow-sm">
-                  <p><b>一时兴起</b>做了这个项目，花费两个礼拜和代码决斗做了大概框架，现在还是 <i className="text-red-500">1.0版本</i>，还有很多没有扩充的部分。</p>
-                  <p>以后<b className="text-green-500">也许(!)</b>会慢慢更新，如果有什么bug或者建议，请在第二页的反馈app留下你的宝贵留言～</p>
-                  <p>虽然本hannie不一定有时间更新嘻嘻嘻😁💚</p>
-              </div>
-            </div>
-            <button onClick={() => setStep(4)} className="w-full bg-gray-800 text-white font-bold py-4 rounded-2xl shadow-lg mt-6">下一页</button>
-        </div>
-      );
-      case 4: return (
-        <div className="p-8 animate-fadeIn text-center flex flex-col h-full justify-center">
-          <p className="text-lg font-medium text-gray-700">希望你游玩愉快！</p>
-          <p className="text-lg font-medium text-gray-700 mt-2">在 AI 时代好好利用 AI 这个工具<br/>一起前进吧～～～🚀</p>
-          <button onClick={() => setStep(5)} className="w-full bg-gray-800 text-white font-bold py-4 rounded-2xl shadow-lg mt-12">进入登录</button>
-        </div>
-      );
-      case 5: return (
-        <div className="p-8 animate-fadeIn h-full flex flex-col justify-center">
-          <div className="text-center mb-6">
-            <div className="w-20 h-20 bg-gray-100 rounded-3xl flex items-center justify-center text-4xl mx-auto mb-4 shadow-inner border"><span className="animate-bounce">🔑</span></div>
-            <h2 className="font-bold text-gray-800 text-2xl">身份验证</h2>
-            <p className="text-xs text-gray-400">请输入访问凭证</p>
-          </div>
-          <div className="space-y-4">
-            <input type="text" value={u} onChange={e=>{setU(e.target.value);setErr('')}} className="w-full bg-gray-100 border border-gray-200 rounded-xl px-4 py-3 text-sm font-semibold outline-none focus:border-blue-400 transition" placeholder="账号" />
-            <input type="password" value={p} onChange={e=>{setP(e.target.value);setErr('')}} onKeyDown={e => e.key === 'Enter' && handleLoginCheck()} className="w-full bg-gray-100 border border-gray-200 rounded-xl px-4 py-3 text-sm font-semibold outline-none focus:border-blue-400 transition" placeholder="密码" />
-          </div>
-          <div className="h-6 mt-3 text-center">{err && <span className="text-red-500 bg-red-100 px-3 py-1 rounded-full text-xs font-bold">{err}</span>}</div>
-          <button onClick={handleLoginCheck} className="w-full bg-blue-500 text-white font-bold py-4 rounded-2xl shadow-lg mt-4">解锁 →</button>
-        </div>
-      );
-      case 6: 
-        const validUser = ALLOWED_USERS.find(x => x.name === welcomeName);
-        return (
-            <div className="text-center p-8 animate-fadeIn h-full flex flex-col justify-center cursor-pointer" onClick={() => onLogin(validUser)}>
-                <h2 className="text-3xl font-black text-gray-800">欢迎</h2>
-                <h1 className="text-4xl font-black text-transparent bg-clip-text bg-gradient-to-r from-blue-500 to-purple-500 my-4">{welcomeName}</h1>
-                <p className="text-gray-500">进入汉堡包大手机!!!</p>
-                <div className="text-8xl mt-8 animate-bounce">📱</div>
-                <p className="text-xs text-gray-400 mt-8 animate-pulse">点击任意处进入</p>
-            </div>
-        );
-      default: return null;
-    }
+  const scrollToPage = (pageIndex: number) => {
+    setStep(pageIndex);
+    swiperRef.current?.scrollTo({
+      left: swiperRef.current.offsetWidth * pageIndex,
+      behavior: 'smooth'
+    });
   };
 
-  return (
-    <div className="h-screen w-screen bg-slate-50 flex items-center justify-center p-4">
-      <div className="w-full max-w-sm h-[85vh] max-h-[650px] bg-white rounded-[2rem] shadow-2xl border border-gray-200/50 flex flex-col relative overflow-hidden" key={step}>
-        <div className="absolute top-4 left-0 right-0 flex justify-center gap-1.5 z-10">
-          {[...Array(7)].map((_, i) => <div key={i} className={`h-1 rounded-full transition-all duration-500 ${step >= i ? 'bg-gray-800 w-6' : 'bg-gray-200 w-2'}`}></div>)}
+  const Page: React.FC<{children: React.ReactNode}> = ({ children }) => (
+    <div className="w-full h-full flex-shrink-0 flex flex-col justify-center items-center p-6 text-center snap-center">
+      {children}
+    </div>
+  );
+
+  const FeatureCard: React.FC<{feature: typeof FEATURES[0]}> = ({ feature }) => (
+     <div className="flex items-start gap-4 text-left mb-4">
+        <div className={`w-12 h-12 rounded-2xl flex-shrink-0 flex items-center justify-center text-2xl shadow-sm bg-${feature.color}-100 border border-${feature.color}-200`}>
+          {feature.icon}
         </div>
-        {renderContent()}
+        <div>
+          <h4 className={`font-bold text-gray-800 text-base`}>{feature.title}</h4>
+          <p className="text-xs text-gray-500 leading-relaxed mt-1" dangerouslySetInnerHTML={{ __html: feature.desc }}></p>
+        </div>
+     </div>
+  );
+
+  return (
+    <div className="h-screen w-screen bg-slate-50 flex items-center justify-center p-4 relative overflow-hidden">
+      {/* 背景纹理 */}
+      <div className="absolute inset-0 opacity-30" style={{ backgroundImage: `url(${LOGIN_TEXTURE})`, backgroundSize: '300px', backgroundRepeat: 'repeat' }}></div>
+
+      <div ref={swiperRef} className="w-full max-w-sm h-[90vh] max-h-[700px] bg-white rounded-[2.5rem] shadow-2xl border border-gray-100 flex overflow-x-scroll snap-x snap-mandatory no-scrollbar">
+        
+        <Page>
+          <div className="animate-fadeIn w-full">
+            <h1 className="text-2xl font-black text-gray-800">欢迎来到</h1>
+            <h2 className="text-4xl font-black text-transparent bg-clip-text bg-gradient-to-r from-orange-400 to-rose-500 mt-2 mb-4">HamburgerPhone!</h2>
+            <span className="text-5xl block my-8 animate-bounce">🎆</span>
+            <button onClick={() => scrollToPage(1)} className="w-full bg-gray-800 text-white font-bold py-3.5 rounded-xl shadow-lg active:scale-95 transition-transform text-sm">开始探索 →</button>
+          </div>
+        </Page>
+        
+        <Page>
+          <div className="animate-fadeIn w-full flex flex-col justify-between h-full">
+            <div></div>
+            <p className="text-base leading-relaxed font-medium text-gray-700">
+              这是一个由 <b className="text-blue-500">hannie</b> 制作的<br/>仿手机生态 AI 聊天网页，<br/>在这里你可以<i className="font-serif">聊天、学习、记录生活</i>。
+            </p>
+            <button onClick={() => scrollToPage(2)} className="w-full bg-gray-800 text-white font-bold py-3.5 rounded-xl shadow-lg active:scale-95 transition-transform text-sm">了解功能</button>
+          </div>
+        </Page>
+        
+        <Page>
+          <div className="animate-fadeIn w-full h-full flex flex-col">
+            <div className="text-center pt-8 pb-4">
+              <span className="text-3xl">📱</span>
+              <h3 className="text-xl font-bold text-gray-800 mt-2">这台“手机”有什么？</h3>
+              <div className="w-16 h-1 bg-gray-200 rounded-full mx-auto mt-3"></div>
+            </div>
+            <div className="flex-1 space-y-5 py-4 overflow-y-auto no-scrollbar">
+              {FEATURES.map(f => <FeatureCard key={f.title} feature={f}/>)}
+            </div>
+            <button onClick={() => scrollToPage(3)} className="w-full bg-blue-500 text-white font-bold py-3.5 rounded-xl shadow-lg mt-4 text-sm">我看完了！</button>
+          </div>
+        </Page>
+
+        <Page>
+            <div className="animate-fadeIn w-full">
+                <h2 className="text-xl font-black text-gray-800 mb-4">來自 Hannie 的留言 💌</h2>
+                <div className="bg-yellow-50 border-2 border-dashed border-yellow-200 p-6 rounded-2xl text-sm text-gray-700 leading-relaxed space-y-3 relative transform -rotate-1">
+                  <div className="absolute -top-3 left-1/2 -translate-x-1/2 w-4 h-4 bg-red-400 rounded-full shadow-sm border-2 border-white"></div>
+                  <p>一时兴起做了这个项目，花费<b className="text-orange-600">两个礼拜</b>和代码决斗做了大概框架，现在还是 <b className="text-orange-600">1.0 版本</b>，还有很多没有扩充的部分。</p>
+                  <p>以后<i className="font-serif">也许(!)</i>会慢慢更新，如果有什么bug或者建议，欢迎随时联系我～</p>
+                  <p>虽然本 hannie 不一定有时间更新嘻嘻嘻😁💚</p>
+                </div>
+                <button onClick={() => scrollToPage(4)} className="w-full bg-gray-800 text-white font-bold py-3.5 rounded-xl shadow-lg mt-6 text-sm">继续</button>
+            </div>
+        </Page>
+
+        <Page>
+          <div className="animate-fadeIn w-full flex flex-col justify-between h-full">
+            <div></div>
+            <div className="space-y-3">
+                <p className="text-lg font-medium text-gray-700">希望你游玩愉快！</p>
+                <p className="text-lg font-medium text-gray-700">在 AI 时代好好利用这个工具，<br/>一起前进吧～～～</p>
+            </div>
+            <button onClick={() => scrollToPage(5)} className="w-full bg-gray-800 text-white font-bold py-3.5 rounded-xl shadow-lg text-sm">进入登录</button>
+          </div>
+        </Page>
+
+        <Page>
+          <div className="animate-fadeIn w-full">
+            <div className="text-center mb-6">
+              <h2 className="font-bold text-gray-800 text-xl">身份验证</h2>
+              <p className="text-xs text-gray-400 mt-1">请输入访问凭证</p>
+            </div>
+            <div className="space-y-3">
+              <input type="text" value={u} onChange={e=>setU(e.target.value)} className="w-full bg-gray-100 border border-gray-200 rounded-xl px-4 py-3 text-sm font-semibold outline-none focus:border-blue-400 transition" placeholder="账号" />
+              <input type="password" value={p} onChange={e=>setP(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleLoginCheck()} className="w-full bg-gray-100 border border-gray-200 rounded-xl px-4 py-3 text-sm font-semibold outline-none focus:border-blue-400 transition" placeholder="密码" />
+            </div>
+            <div className="h-5 mt-3 text-center">{err && <span className="text-red-500 bg-red-100 px-3 py-1 rounded-full text-xs font-bold">{err}</span>}</div>
+            <button onClick={handleLoginCheck} className="w-full bg-blue-500 text-white font-bold py-3.5 rounded-xl shadow-lg mt-4 text-sm">解锁 →</button>
+          </div>
+        </Page>
+        
+        <Page>
+            <div className="animate-fadeIn w-full cursor-pointer" onClick={() => onLogin(ALLOWED_USERS.find(x => x.name === welcomeName))}>
+                <h2 className="text-2xl font-black text-gray-800">欢迎</h2>
+                <h1 className="text-3xl font-black text-transparent bg-clip-text bg-gradient-to-r from-blue-500 to-purple-500 my-3">{welcomeName}</h1>
+                <p className="text-gray-500 text-sm">进入汉堡包大手机!!!</p>
+                <div className="text-6xl mt-8 animate-bounce">🍔</div>
+                <p className="text-xs text-gray-400 mt-8 animate-pulse">点击任意处进入</p>
+            </div>
+        </Page>
+
       </div>
     </div>
   );
