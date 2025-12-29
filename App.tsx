@@ -11,7 +11,7 @@ import localforage from 'localforage';
 import { Contact, GlobalSettings, WorldBookCategory, Message, EmotionalNeed, TodoItem } from './types';
 import { generateResponse } from './services/apiService';
 import { readTavernPng, fileToBase64 } from './utils/fileUtils';
-
+import DiaryApp from './components/DiaryApp'; // <--- ➕ 加上这一行！
 
 
 
@@ -2117,13 +2117,17 @@ onRelationshipSpaceAction={(contactId, systemMessage) => {
     )}
 
 
-        {/* 这里为了防止你点击日历跳转报错，暂时加个日记本占位 */}
+{/* ==================== 📔 日记本 (已连接) ==================== */}
         {currentApp === 'diary' && (
-          <div className="absolute inset-0 z-50 bg-white flex flex-col">
-            <SafeAreaHeader title="我的日记" left={<button onClick={() => setCurrentApp('home')} className="text-blue-500">返回</button>} />
-            <div className="flex-1 flex items-center justify-center text-gray-400">
-              这里是日记本页面 (DairyApp)
-            </div>
+          <div className="absolute inset-0 z-50 bg-white">
+            <DiaryApp 
+              settings={globalSettings} 
+              // 虽然日记目前是独立数据，但为了接口统一，还是传一下
+              setSettings={setGlobalSettings} 
+               contacts={contacts || []} 
+              setContacts={setContacts}
+              onClose={() => setCurrentApp('home')} 
+            />
           </div>
         )}
 

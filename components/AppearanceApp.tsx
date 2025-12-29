@@ -15,11 +15,9 @@ const AppearanceApp: React.FC<AppearanceAppProps> = ({ settings, setSettings, on
  
   // 预设壁纸数据，保持不变
   const presets = [
-    "https://images.unsplash.com/photo-1557683316-973673baf926",
-    "https://images.unsplash.com/photo-1618331835717-801e976710b2",
-    "https://images.unsplash.com/photo-1579546929518-9e396f3cc809",
-    "https://images.unsplash.com/photo-1506744038136-46273834b3fb",
-    "https://images.unsplash.com/photo-1534796636912-3b95b3ab5986"
+    "85034fb2e484433a4e93d4d9fd556022.jpg",
+    "e0fedb104f448d3b07539a5fc17bbf92.jpg",
+    "c98df7bdce075b405be961aaeca22acd.jpg",
   ];
 
 
