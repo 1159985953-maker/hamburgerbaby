@@ -286,7 +286,7 @@ const FolderItem: React.FC<{
 
 // ==================== 📖 [终极版] Markdown 阅读器 (支持 H1-H6) ====================
 const PrettyRenderer: React.FC<{ content: string; onLinkClick: (t: string) => void }> = ({ content, onLinkClick }) => {
-    if (!content) return <div className="text-gray-300 italic font-serif mt-4">（正文内容为空）</div>;
+    if (!content) return <div className="text-gray-300 italic font-serif mt-4"></div>;
 
     // --- 内部小工具：解析行内样式 ---
     const parseInline = (text: string) => {
@@ -818,7 +818,7 @@ const DiaryApp: React.FC<DiaryAppProps> = ({ settings, setSettings, contacts, se
     const [sidebarOpen, setSidebarOpen] = useState(false);
     const [currentFileId, setCurrentFileId] = useState<string | null>(null);
     const [selectedFolderId, setSelectedFolderId] = useState<string>('root');
-    const [editMode, setEditMode] = useState(false);
+
     const [showMenu, setShowMenu] = useState(false);
     const [showShareModal, setShowShareModal] = useState(false);
     const [showAI, setShowAI] = useState(false); // 这是旧的浮窗AI，可以保留或移除
@@ -831,6 +831,7 @@ const DiaryApp: React.FC<DiaryAppProps> = ({ settings, setSettings, contacts, se
     const contentRef = useRef<HTMLDivElement>(null); 
     const textareaRef = useRef<HTMLTextAreaElement>(null);
     const activeNote = diaries.find(d => d.id === currentFileId);
+    const [editMode, setEditMode] = useState(false); 
 // --- 🗑️ 多选删除功能区 ---
     const [isSelectionMode, setIsSelectionMode] = useState(false);
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -910,6 +911,24 @@ const DiaryApp: React.FC<DiaryAppProps> = ({ settings, setSettings, contacts, se
         if (isLoaded && !currentFileId && diaries.length > 0) setCurrentFileId(diaries[0].id);
     }, [isLoaded, diaries]);
 
+
+useEffect(() => {
+    if (editMode && activeNote) {
+        // 延迟一小下，确保 textarea 已经显示出来了
+        setTimeout(() => {
+            textareaRef.current?.focus();
+            // 并且把光标移动到文字末尾
+            const len = textareaRef.current?.value.length || 0;
+            textareaRef.current?.setSelectionRange(len, len);
+        }, 50);
+    }
+}, [editMode, activeNote]);
+
+
+
+
+
+
     // --- 核心逻辑 ---
     const handleContentChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
         const val = e.target.value;
@@ -934,29 +953,41 @@ const DiaryApp: React.FC<DiaryAppProps> = ({ settings, setSettings, contacts, se
         }
     };
 
-    const handleCreateFile = () => {
-        const newNote: DiaryEntry = { id: Date.now().toString(), title: '', content: '', folderId: selectedFolderId, updatedAt: Date.now() };
-        setDiaries([...diaries, newNote]);
-        setCurrentFileId(newNote.id);
-        setEditMode(true);
-        setActiveTab('note'); // 强制切回笔记页
+// 这是一组什么代码：【修改】新建文件后，自动进入编辑模式
+const handleCreateFile = () => {
+    const newNote: DiaryEntry = { 
+        id: Date.now().toString(), 
+        title: '', 
+        content: '', 
+        folderId: selectedFolderId || 'root', 
+        updatedAt: Date.now() 
     };
+    setDiaries([...diaries, newNote]);
+    setCurrentFileId(newNote.id);
+    setEditMode(true); // <-- 新增：新建文件后，直接进入编辑模式
+    setTimeout(() => textareaRef.current?.focus(), 50); 
+    if(window.innerWidth < 640) setSidebarOpen(false);
+};
 
     const handleCreateFolder = () => {
         const name = prompt("新建文件夹名称:");
         if(name) { setFolders([...folders, { id: Date.now().toString(), name, parentId: selectedFolderId, collapsed: false }]); }
     };
 
-    const handleWikiLink = (title: string) => {
-        const target = diaries.find(d => d.title === title);
-        if (target) { setCurrentFileId(target.id); setEditMode(false); } 
-        else if (confirm(`笔记 "[[${title}]]" 不存在。\n\n要立即创建它吗？`)) {
-            const newNote: DiaryEntry = { id: Date.now().toString(), title, content: `# ${title}\n\n从 [[${activeNote?.title || '上一页'}]] 链接而来。\n`, folderId: activeNote?.folderId || 'root', updatedAt: Date.now() };
-            setDiaries([...diaries, newNote]);
-            setCurrentFileId(newNote.id);
-            setEditMode(true);
-        }
-    };
+// 这是一组什么代码：【修改】点击双链创建新文件时，也自动进入编辑模式
+const handleWikiLink = (title: string) => {
+    const target = diaries.find(d => d.title === title);
+    if (target) { 
+        setCurrentFileId(target.id); 
+        setEditMode(false); // <-- 修改：跳转到旧文件，进入阅读模式
+    } else if (confirm(`笔记 "[[${title}]]" 不存在。\n\n要立即创建它吗？`)) {
+        const newNote: DiaryEntry = { id: Date.now().toString(), title, content: `# ${title}\n\n从 [[${activeNote?.title || '上一页'}]] 链接而来。\n`, folderId: activeNote?.folderId || 'root', updatedAt: Date.now() };
+        setDiaries([...diaries, newNote]);
+        setCurrentFileId(newNote.id);
+        setEditMode(true); // <-- 新增：创建新文件，进入编辑模式
+       setTimeout(() => textareaRef.current?.focus(), 50);
+    }
+};
 
     const handleShareToAI = (contactId: string) => {
         if (!activeNote) return;
@@ -974,58 +1005,127 @@ const DiaryApp: React.FC<DiaryAppProps> = ({ settings, setSettings, contacts, se
 
 
 
-// ... 在 handleShareToAI 下面插入 ...
-    const handleDeleteFile = () => {
-        if (!activeNote) return;
-        if (confirm(`确定要删除 "${activeNote.title || '未命名'}" 吗？此操作无法撤销。`)) {
-            const newDiaries = diaries.filter(d => d.id !== activeNote.id);
-            setDiaries(newDiaries);
-            // 删除后，尝试选中上一篇或者第一篇，或者清空选中
-            const nextNote = newDiaries.find(d => d.folderId === selectedFolderId) || newDiaries[0];
-            setCurrentFileId(nextNote ? nextNote.id : null);
-            // 如果删光了，退出编辑模式
-            if (newDiaries.length === 0) setEditMode(false);
-        }
+// 这是一组什么代码：【修改】删除笔记后，确保退出编辑模式
+const handleDeleteFile = () => {
+    if (!activeNote) return;
+    if (confirm(`确定要删除 "${activeNote.title || '未命名'}" 吗？此操作无法撤销。`)) {
+        const newDiaries = diaries.filter(d => d.id !== activeNote.id);
+        setDiaries(newDiaries);
+        const nextNote = newDiaries.find(d => d.folderId === selectedFolderId) || newDiaries[0];
+        setCurrentFileId(nextNote ? nextNote.id : null);
+        setEditMode(false); // <-- 修改：删除后总是退回阅读模式
+    }
+};
+
+
+
+
+
+
+
+
+
+
+// 这是一组什么代码：【最终水印版】截图功能，可以自动在图片底部加上汉堡包水印
+const handleSaveImage = async () => {
+    if (editMode) {
+        alert("请先点击【完成编辑】，回到阅读模式后再保存图片哦！");
+        return;
+    }
+
+    if (!contentRef.current || !activeNote) return;
+    setIsSaving(true);
+
+    const filter = (node: HTMLElement) => {
+        return !node.classList?.contains('ignore-in-screenshot');
     };
+    
+    // 我们依然需要手动展开长内容
+    const scrollElement = document.getElementById('diary-scroll-view');
+    const wrapperOldStyle = contentRef.current.style.cssText;
+    let scrollOldStyle = '';
+    if (scrollElement) scrollOldStyle = scrollElement.style.cssText;
 
+    // ==================== 👇 核心新增：水印逻辑 👇 ====================
+    // 创建一个临时的水印元素，ID 用于之后移除
+    const watermark = document.createElement('div');
+    watermark.id = 'temp-watermark'; 
+    
+    try {
+        // --- 准备水印内容 ---
+        const authorName = settings.userName || 'hannie & 安乾铺'; // 从设置里读取用户名，如果没有就用默认的
+        const now = new Date();
+        // 格式化时间戳，例如: 2025/12/30 01:07:07
+        const timestamp = `${now.getFullYear()}/${String(now.getMonth() + 1).padStart(2, '0')}/${String(now.getDate()).padStart(2, '0')} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
 
+        // --- 用 HTML 和内联 CSS 构建水印的样式和内容 ---
+        watermark.innerHTML = `
+            <div style="display: flex; align-items: center; gap: 10px; font-family: sans-serif; font-weight: bold; color: #8d6e63; letter-spacing: 1px;">
+                <span style="font-size: 1.5em;">🍔</span>
+                <span>HAMBURGER PHONE</span>
+            </div>
+            <div style="font-family: sans-serif; font-size: 0.75em; color: #a1887f; text-align: right;">
+                <div>@${authorName}</div>
+                <div>${timestamp}</div>
+            </div>
+        `;
+        
+        // --- 设置水印容器的样式 ---
+        watermark.style.cssText = `
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 20px 40px;
+            margin-top: 30px; /* 在水印和正文之间留点空隙 */
+            background-color: #fffdf5; /* 确保背景色和纸张一样 */
+            box-sizing: border-box;
+            width: 100%;
+        `;
 
-
-
-
-
-
-
-
-    // 修复后的截图功能
-    const handleSaveImage = async () => {
-        if (!contentRef.current || !activeNote) return;
-        setIsSaving(true);
-        const scrollElement = document.getElementById('diary-scroll-view');
-        const wrapperOldStyle = contentRef.current.style.cssText;
-        let scrollOldStyle = '';
-        if (scrollElement) scrollOldStyle = scrollElement.style.cssText;
-        try {
-            if (scrollElement) {
-                scrollElement.style.position = 'relative'; 
-                scrollElement.style.height = 'auto'; 
-                scrollElement.style.overflow = 'visible'; 
-                scrollElement.style.inset = 'auto'; 
-            }
-            contentRef.current.style.height = 'auto';
-            contentRef.current.style.overflow = 'visible';
-            contentRef.current.style.paddingBottom = '50px';
-            const dataUrl = await htmlToImage.toJpeg(contentRef.current, { quality: 0.95, backgroundColor: '#fffdf5', width: contentRef.current.offsetWidth });
-            const link = document.createElement('a');
-            link.download = `Diary-${activeNote.title || 'untitled'}.jpg`;
-            link.href = dataUrl;
-            link.click();
-        } catch (e) { console.error(e); alert("保存失败，请重试"); } finally { 
-            contentRef.current.style.cssText = wrapperOldStyle;
-            if (scrollElement) scrollElement.style.cssText = scrollOldStyle;
-            setIsSaving(false); 
+        // --- 展开内容，准备截图 ---
+        if (scrollElement) {
+            scrollElement.style.position = 'relative'; 
+            scrollElement.style.height = 'auto'; 
+            scrollElement.style.overflow = 'visible'; 
+            scrollElement.style.inset = 'auto'; 
         }
-    };
+        contentRef.current.style.height = 'auto';
+        contentRef.current.style.overflow = 'visible';
+        
+        // --- 在按下快门前，把水印“贴”上去！ ---
+        contentRef.current.appendChild(watermark);
+
+        // --- 开始拍照！ ---
+        const dataUrl = await htmlToImage.toJpeg(contentRef.current, { 
+            quality: 0.95, 
+            backgroundColor: '#fffdf5', 
+            width: contentRef.current.offsetWidth,
+            filter: filter 
+        });
+
+        // --- 下载图片 ---
+        const link = document.createElement('a');
+        link.download = `Diary-${activeNote.title || 'untitled'}.jpg`;
+        link.href = dataUrl;
+        link.click();
+
+    } catch (e) { 
+        console.error(e); 
+        alert("保存失败，请重试"); 
+    } finally { 
+        // --- 无论成功与否，都要恢复原样 ---
+        contentRef.current.style.cssText = wrapperOldStyle;
+        if (scrollElement) scrollElement.style.cssText = scrollOldStyle;
+        
+        // --- 并且把临时水印“撕掉”！ ---
+        const watermarkElement = document.getElementById('temp-watermark');
+        if (watermarkElement) {
+            watermarkElement.remove();
+        }
+
+        setIsSaving(false); 
+    }
+};
 
 const handleAIAction = async (action: string, payload: any) => { // 注意这里加了 async
         console.log(`[AI Action] ${action}`);
@@ -1143,21 +1243,73 @@ const handleAIAction = async (action: string, payload: any) => { // 注意这里
                                 <div ref={contentRef} className="flex-1 flex flex-col h-full relative">
                                     <div className="px-8 pt-8 pb-2 shrink-0">
                                         <input value={activeNote.title} onChange={(e) => setDiaries(prev => prev.map(d => d.id === activeNote.id ? { ...d, title: e.target.value } : d))} placeholder="无标题" className="w-full bg-transparent text-3xl font-black text-[#3e2723] font-serif outline-none placeholder-gray-300/50" />
-                                        <div className="flex gap-2 text-[10px] text-[#a1887f] uppercase tracking-wider mt-2 border-b-2 border-dashed border-[#d7ccc8] pb-4 w-full"><span>{new Date(activeNote.updatedAt).toLocaleString()}</span><span>• {editMode ? 'WRITING' : 'READING'}</span><span>• {activeNote.content.length} WORDS</span></div>
+                                        <div className="flex gap-2 text-[10px] text-[#a1887f] uppercase tracking-wider mt-2 border-b-2 border-dashed border-[#d7ccc8] pb-4 w-full"><span>{new Date(activeNote.updatedAt).toLocaleString()}</span>
+<span>• WRITING</span><span>• {activeNote.content.length} WORDS</span></div>
                                     </div>
-                                    <div className="flex-1 relative w-full overflow-hidden">
-                                        {editMode ? (
-                                            <textarea id="diary-scroll-view" ref={textareaRef} className="absolute inset-0 w-full h-full p-8 pt-2 pb-40 text-base leading-loose text-gray-800 outline-none resize-none font-serif bg-transparent custom-scrollbar z-10" value={activeNote.content} onChange={handleContentChange} placeholder="在此处落笔..." autoFocus />
-                                        ) : (
-                                            <div id="diary-scroll-view" className="absolute inset-0 w-full h-full p-8 pt-2 pb-40 overflow-y-auto custom-scrollbar z-10" onClick={() => setEditMode(true)}>
-                                                <PrettyRenderer content={activeNote.content} onLinkClick={handleWikiLink} />
-                                            </div>
-                                        )}
-                                        <LinkSuggestions visible={showSuggestions} query={suggestionQuery} allFiles={diaries} onSelect={handleSelectSuggestion} />
-                                    </div>
-                                    <div className="absolute bottom-6 right-6 z-20">
-                                        <button onClick={() => setEditMode(!editMode)} className={`w-12 h-12 rounded-full shadow-lg flex items-center justify-center text-xl transition active:scale-95 border-2 ${editMode ? 'bg-[#3e2723] text-white border-[#3e2723]' : 'bg-[#fffdf5] text-[#3e2723] border-[#3e2723]'}`}>{editMode ? '👁️' : '✎'}</button>
-                                    </div>
+
+<div 
+    className="flex-1 relative w-full overflow-hidden"
+>
+    {/* 
+        💡 核心逻辑：
+        1. 如果是编辑模式 (editMode is true)，就显示原始的 textarea。
+        2. 如果是阅读模式 (editMode is false)，就显示漂亮的 PrettyRenderer。
+        3. 点击 PrettyRenderer 区域，就会切换到编辑模式。
+    */}
+
+    {editMode ? (
+        <>
+            {/* 编辑模式：只显示输入框 */}
+            <textarea 
+                id="diary-editor-textarea"
+                ref={textareaRef} 
+                className="absolute inset-0 w-full h-full p-8 pt-2 pb-40 text-base leading-loose font-serif resize-none outline-none custom-scrollbar bg-transparent caret-stone-800"
+                value={activeNote.content} 
+                onChange={handleContentChange} 
+                placeholder="在此处落笔..." 
+            />
+            {/* 点击完成按钮，退出编辑模式 */}
+
+<button 
+    onClick={() => setEditMode(false)}
+    className="ignore-in-screenshot absolute bottom-5 right-5 z-50 bg-[#3e2723] text-white px-4 py-2 rounded-full font-bold text-sm shadow-lg hover:scale-105 active:scale-95 transition"
+>
+    完成编辑
+</button>
+        </>
+    ) : (
+        <>
+            {/* 阅读模式：只显示渲染器 */}
+            <div 
+                id="diary-scroll-view"
+                // 点击这个区域就进入编辑模式
+                onClick={() => setEditMode(true)}
+                className="absolute inset-0 w-full h-full p-8 pt-2 pb-40 overflow-y-auto custom-scrollbar z-10 cursor-text"
+            >
+                <PrettyRenderer 
+                    content={activeNote.content} 
+                    onLinkClick={handleWikiLink} 
+                />
+            </div>
+            {/* 阅读模式下，加一个提示 */}
+
+<div className="ignore-in-screenshot absolute bottom-4 left-1/2 -translate-x-1/2 text-xs text-gray-300 bg-gray-50 px-2 py-1 rounded-full pointer-events-none">
+    点击任意位置开始编辑
+</div>
+        </>
+    )}
+    
+    {/* 智能补全 (只在编辑模式下显示) */}
+    {editMode && (
+        <LinkSuggestions 
+            visible={showSuggestions} 
+            query={suggestionQuery} 
+            allFiles={diaries} 
+            onSelect={handleSelectSuggestion} 
+        />
+    )}
+</div>
+                    
                                 </div>
                             ) : (
                                 <div className="flex-1 flex items-center justify-center text-[#d7ccc8] flex-col"><div className="text-4xl mb-4 opacity-50">🍂</div><p className="font-serif">请打开侧边栏选择笔记</p><button onClick={() => setSidebarOpen(true)} className="mt-4 px-4 py-2 bg-[#8d6e63] text-white rounded-lg text-sm">打开侧边栏</button></div>
@@ -1208,7 +1360,12 @@ const handleAIAction = async (action: string, payload: any) => { // 注意这里
                                         // ↑↑↑↑↑↑ 缝合点结束 ↑↑↑↑↑↑
                                         onToggle={(id) => setFolders(folders.map(x => x.id === id ? { ...x, collapsed: !x.collapsed } : x))} 
                                         onSelectFolder={(id) => setSelectedFolderId(id)} 
-                                        onSelectFile={(id) => { setCurrentFileId(id); if (window.innerWidth < 640) setSidebarOpen(false); }} 
+                                       // 这是一组什么代码：【修改】切换文件时，默认进入阅读模式
+onSelectFile={(id) => { 
+    setCurrentFileId(id); 
+    setEditMode(false); // <-- 新增：切换文件时，设置为阅读模式
+    if (window.innerWidth < 640) setSidebarOpen(false); 
+}}
                                     />
                                 ))}
                             </div>

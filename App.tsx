@@ -634,17 +634,19 @@ lifeAIHistory?: {role: 'user'|'assistant', content: string}[];
     return saved ? JSON.parse(saved) : null;
   });
 
-  // 处理登录成功的函数
-  const handleSystemLogin = (user: any) => {
+// 这是一组什么代码：【升级版】登录处理函数，这是唯一修改 settings 的地方
+// 作用：当任何地方登录成功时，都调用它来统一处理状态
+const handleSystemLogin = (user: any) => {
+    // 1. 记住当前登录的用户信息
     setCurrentUser(user);
-    localStorage.setItem('site_login_user', JSON.stringify(user)); // 记住登录状态
-    
-    // 可选：登录时自动把昵称改成朋友的名字
+    localStorage.setItem('site_login_user', JSON.stringify(user));
+
+    // 2. ✅ 核心：把登录用户的真实名字，存入全局设置里！
     setGlobalSettings(prev => ({
         ...prev,
-        userName: user.name || prev.userName
+        userName: user.name // 例如，把 "hannie" 或 "好朋友" 存进去
     }));
-  };
+};
 
   // 处理退出登录的函数 (你可以把这个绑在某个按钮上，如果不加就得清除缓存才能退)
   const handleSystemLogout = () => {
@@ -1827,16 +1829,11 @@ const renderHome = () => {
   // ==================== 7. 主渲染 JSX ====================
 
 
-// ==================== [插入代码 3] 门卫拦截系统 ====================
-  // 逻辑：如果没登录，直接返回登录页，不再往下执行！
-  if (!currentUser) {
-    return <LoginScreen onLogin={(user) => {
-      setCurrentUser(user);
-      localStorage.setItem('site_login_user', JSON.stringify(user));
-      // 登录后自动把名字改成这个账号的昵称
-      setGlobalSettings(prev => ({ ...prev, userName: user.name })); 
-    }} />;
-  }
+// 这是一组什么代码：【修改版】门卫拦截系统
+// 改动点：让 onLogin 直接调用我们刚才升级的 handleSystemLogin 函数
+if (!currentUser) {
+    return <LoginScreen onLogin={handleSystemLogin} />;
+}
   // ==================== [插入结束] ====================
 
 
