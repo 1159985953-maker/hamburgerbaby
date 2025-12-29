@@ -292,7 +292,15 @@ const handleAISend = async (overrideContent?: string) => {
 
     try {
       // 1. 整理数据喂给AI
-      const activePreset = settings.apiPresets?.find(p => p.id === settings.activePresetId);
+// 获取当前激活的预设
+const activePreset = settings.apiPresets?.find(p => p.id === settings.activePresetId);
+
+let aiReply = "";
+if (activePreset) {
+    aiReply = await generateResponse(messages as any, activePreset);
+} else {
+    aiReply = "大厨，你还没在「设置App」里配置 API Key 呢！我饿得动不了了...";
+}
       const today = new Date().toISOString().slice(0, 10);
       
       // 数据摘要
