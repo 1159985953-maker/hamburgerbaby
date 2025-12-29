@@ -22,7 +22,7 @@ import { readTavernPng, fileToBase64 } from './utils/fileUtils';
 
 
 
-// ==================== [插入代码 1] (修复黑屏版) 欢迎引导页 + 账号系统 ====================
+// ==================== [插入代码 1] 全新·小清新开机引导流程 ====================
 
 // 1. 账号密码在这里改 (功能不变)
 const ALLOWED_USERS = [
@@ -30,150 +30,166 @@ const ALLOWED_USERS = [
   { id: "2", user: "admin",  pass: "admin888", name: "管理员", role: "admin" },
 ];
 
-// 2. 你的豹纹汉堡壁纸URL
-const LOGIN_WALLPAPER = "https://files.catbox.moe/tffb8b.png";
+// 2. 这是开机引导流程的组件
+const LoginScreen = ({ onLogin }: { onLogin: (u:any)=>void }) => {
+  // step 用来控制显示哪一页
+  const [step, setStep] = useState(0); 
+  const [featurePage, setFeaturePage] = useState(0); // 功能介绍的小分页
+  
+  // 登录页用的状态
+  const [u, setU] = useState("");
+  const [p, setP] = useState("");
+  const [err, setErr] = useState("");
 
-// 3. 全新的多页面欢迎引导组件
-const WelcomeSequence = ({ onLogin }: { onLogin: (u:any)=>void }) => {
-  // ★★★ 修复：统一使用 React.useState 写法，防止黑屏
-  const [step, setStep] = React.useState(0); 
-  const [loggedInUser, setLoggedInUser] = React.useState<any>(null);
+  // 登录成功后，用来显示欢迎语
+  const [welcomeName, setWelcomeName] = useState("");
 
-  const [username, setUsername] = React.useState("");
-  const [password, setPassword] = React.useState("");
-  const [error, setError] = React.useState("");
+  // 功能介绍的内容
+  const FEATURES = [
+    { 
+      icon: "💬", 
+      title: "AI 聊天", 
+      desc: "与你的专属AI伙伴进行深度对话，TA拥有独特的性格和记忆，会随着交流不断成长。" 
+    },
+    { 
+      icon: "💞", 
+      title: "关系空间", 
+      desc: "当好感度足够时，可以解锁的私密区域。包含了信箱、问答、花园、恋爱清单和相册等多种互动玩法。" 
+    },
+    { 
+      icon: "📝", 
+      title: "生活清单", 
+      desc: "一个全能生活助手，帮你管理每日待办事项（To-Do）和个人财务（记账），让生活井井有条。" 
+    },
+    { 
+      icon: "🎨", 
+      title: "主题与外观", 
+      desc: "高度自定义你的“手机”界面，从壁纸、聊天气泡到字体大小，一切由你决定。" 
+    },
+    { 
+      icon: "📚", 
+      title: "世界书", 
+      desc: "为你和AI所处的世界添加背景设定（Lore），让TA的言行举止更加沉浸和符合世界观。" 
+    },
+  ];
 
-  const handleLogin = () => {
-    const validUser = ALLOWED_USERS.find(u => u.user === username && u.pass === password);
-    if (validUser) {
-      setError("");
-      setLoggedInUser(validUser);
+  const handleLoginCheck = () => {
+    const validUser = ALLOWED_USERS.find(x => x.user === u && x.pass === p);
+    if(validUser) {
+      setWelcomeName(validUser.name); // 记录名字
+      setStep(step + 1); // 跳转到最后一页欢迎页
     } else {
-      setError("账号或密码不对哦！");
-      if(navigator.vibrate) navigator.vibrate([100, 50, 100]);
+      setErr("账号或密码不对哦 🚫");
+      if(navigator.vibrate) navigator.vibrate(200);
     }
   };
-  
-  if (loggedInUser) {
-    return (
-      <div 
-        className="h-screen w-screen bg-cover bg-center flex items-center justify-center text-center text-white p-6 cursor-pointer animate-fadeIn"
-        style={{ backgroundImage: `url(${LOGIN_WALLPAPER})` }}
-        onClick={() => onLogin(loggedInUser)}
-      >
-        <div className="relative">
-            <div className="absolute inset-0 bg-black/30 rounded-full blur-2xl"></div>
-            <h1 className="text-4xl font-black drop-shadow-lg relative animate-bounce">
-              欢迎 {loggedInUser.name} <br/> 进入汉堡包大手机!
-            </h1>
-            <p className="text-sm mt-4 opacity-80 relative">(点击任意处进入)</p>
-        </div>
+
+  const renderContent = () => {
+    // 欢迎页
+    if (step === 0) return (
+      <div className="text-center p-8 animate-fadeIn">
+        <h1 className="text-3xl font-black text-gray-800">欢迎来到</h1>
+        <h2 className="text-5xl font-black text-transparent bg-clip-text bg-gradient-to-r from-orange-400 to-rose-500 mt-2 mb-4 animate-pulse">HamburgerPhone!</h2>
+        <span className="text-6xl block my-6">🎆</span>
+        <button onClick={() => setStep(1)} className="w-full bg-gray-800 text-white font-bold py-4 rounded-2xl shadow-lg active:scale-95 transition-transform">下一页</button>
       </div>
     );
-  }
+    // 介绍页1
+    if (step === 1) return (
+      <div className="p-8 animate-fadeIn">
+        <p className="text-center text-lg leading-relaxed font-medium text-gray-700">
+          这是一个由 <b className="text-blue-500">hannie</b> 制作的仿手机生态的AI聊天网页，
+          在这里你可以用AI聊天、学习、甚至记录生活琐事。
+        </p>
+        <button onClick={() => setStep(2)} className="w-full bg-gray-800 text-white font-bold py-4 rounded-2xl shadow-lg active:scale-95 transition-transform mt-8">下一页</button>
+      </div>
+    );
+    // 功能介绍页
+    if (step === 2) {
+      const currentFeature = FEATURES[featurePage];
+      return (
+        <div className="p-8 animate-fadeIn flex flex-col justify-between h-full">
+          <div className="text-center">
+            <span className="text-6xl block mb-4">{currentFeature.icon}</span>
+            <h3 className="text-2xl font-bold text-gray-800 mb-2">{currentFeature.title}</h3>
+            <p className="text-sm text-gray-500 leading-relaxed">{currentFeature.desc}</p>
+          </div>
+          <div>
+            <div className="flex justify-center gap-2 my-6">
+              {FEATURES.map((_, i) => <div key={i} className={`w-2 h-2 rounded-full transition-all ${i === featurePage ? 'bg-gray-800 w-4' : 'bg-gray-300'}`}></div>)}
+            </div>
+            {featurePage === FEATURES.length - 1 ? (
+              <button onClick={() => setStep(3)} className="w-full bg-blue-500 text-white font-bold py-4 rounded-2xl shadow-lg">我看完了！</button>
+            ) : (
+              <div className="flex gap-3">
+                <button onClick={() => setFeaturePage(p => Math.max(0, p - 1))} className="flex-1 bg-gray-200 text-gray-700 font-bold py-4 rounded-2xl">上一页</button>
+                <button onClick={() => setFeaturePage(p => Math.min(FEATURES.length - 1, p + 1))} className="flex-1 bg-gray-800 text-white font-bold py-4 rounded-2xl">下一页</button>
+              </div>
+            )}
+          </div>
+        </div>
+      );
+    }
+    // Hannie的留言
+    if (step === 3) return (
+        <div className="p-8 animate-fadeIn text-center">
+            <h2 className="text-2xl font-black text-gray-800 mb-4">Hannie 留言说</h2>
+            <div className="bg-yellow-50 border border-yellow-200 p-6 rounded-2xl text-sm text-gray-700 leading-relaxed space-y-3">
+                <p>一时兴起做了这个项目，花费两个礼拜和代码决斗做了大概框架，现在还是1.0版本，还有很多没有扩充的部分。</p>
+                <p>以后也许(!)会慢慢更新，如果有什么bug或者建议，请在第二页的反馈app留下你的宝贵留言～</p>
+                <p>虽然本hannie不一定有时间更新嘻嘻嘻😁💚</p>
+            </div>
+            <button onClick={() => setStep(4)} className="w-full bg-gray-800 text-white font-bold py-4 rounded-2xl shadow-lg mt-6">下一页</button>
+        </div>
+    );
+    // 结束语
+    if (step === 4) return (
+      <div className="p-8 animate-fadeIn text-center">
+        <p className="text-lg font-medium text-gray-700">希望你游玩愉快！</p>
+        <p className="text-lg font-medium text-gray-700 mt-2">在AI时代好好利用AI这个工具一起前进吧～～～</p>
+        <button onClick={() => setStep(5)} className="w-full bg-gray-800 text-white font-bold py-4 rounded-2xl shadow-lg mt-8">进入登录</button>
+      </div>
+    );
+    // 登录页
+    if (step === 5) return (
+      <div className="p-8 animate-fadeIn">
+        <div className="text-center mb-6">
+          <h2 className="font-bold text-gray-800 text-2xl">身份验证</h2>
+          <p className="text-xs text-gray-400">请输入访问凭证</p>
+        </div>
+        <div className="space-y-4">
+          <input type="text" value={u} onChange={e=>setU(e.target.value)} className="w-full bg-gray-100 border border-gray-200 rounded-xl px-4 py-3 text-sm font-semibold outline-none focus:border-blue-400 transition" placeholder="账号" />
+          <input type="password" value={p} onChange={e=>setP(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleLoginCheck()} className="w-full bg-gray-100 border border-gray-200 rounded-xl px-4 py-3 text-sm font-semibold outline-none focus:border-blue-400 transition" placeholder="密码" />
+        </div>
+        <div className="h-6 mt-3 text-center">{err && <span className="text-red-500 bg-red-100 px-3 py-1 rounded-full text-xs font-bold">{err}</span>}</div>
+        <button onClick={handleLoginCheck} className="w-full bg-blue-500 text-white font-bold py-4 rounded-2xl shadow-lg mt-4">解锁 →</button>
+      </div>
+    );
+    // 最终欢迎页
+    if (step === 6) {
+        const validUser = ALLOWED_USERS.find(x => x.name === welcomeName);
+        return (
+            <div className="text-center p-8 animate-fadeIn" onClick={() => onLogin(validUser)}>
+                <h2 className="text-3xl font-black text-gray-800">欢迎</h2>
+                <h1 className="text-4xl font-black text-transparent bg-clip-text bg-gradient-to-r from-blue-500 to-purple-500 my-4">{welcomeName}</h1>
+                <p className="text-gray-500">进入汉堡包大手机!!!</p>
+                <div className="text-6xl mt-8 animate-bounce">🍔</div>
+                <p className="text-xs text-gray-400 mt-8 animate-pulse">点击任意处进入</p>
+            </div>
+        );
+    }
+    return null;
+  };
 
   return (
-    <div className="h-screen w-screen bg-gradient-to-br from-blue-50 to-pink-50 flex items-center justify-center p-4">
-      <div className="w-full max-w-sm bg-white/80 backdrop-blur-xl rounded-[2rem] shadow-xl shadow-blue-100 p-8 flex flex-col items-center text-center transition-all duration-500 min-h-[500px] justify-between">
-        
-        {step === 0 && (
-          <div className="animate-fadeIn w-full flex flex-col items-center justify-center flex-1">
-            <h1 className="text-3xl font-black text-gray-800">欢迎来到</h1>
-            <h2 className="text-5xl font-black text-transparent bg-clip-text bg-gradient-to-r from-yellow-400 to-orange-500 my-4 animate-pulse">
-              HamburgerPhone!
-            </h2>
-            <div className="text-6xl animate-bounce">🎆</div>
-          </div>
-        )}
-
-        {step === 1 && (
-          <div className="animate-fadeIn w-full">
-            <div className="text-4xl mb-4">📱</div>
-            <p className="text-gray-700 leading-relaxed font-medium">
-              这是一个由 <b className="text-pink-500">hannie</b> 制作的仿手机生态的AI聊天网页。
-              <br/><br/>
-              在这里你可以用AI聊天、学习、甚至记录生活琐事。
-            </p>
-          </div>
-        )}
-
-        {step === 2 && (
-          <div className="animate-fadeIn w-full">
-            <h3 className="font-bold text-gray-500 text-sm mb-6">核心功能</h3>
-            <div className="space-y-4 text-left">
-              <div className="flex items-center gap-4"><div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center text-2xl">💬</div><div><h4 className="font-bold">AI 聊天</h4><p className="text-xs text-gray-500">与你的AI伙伴进行有记忆、有情感的对话。</p></div></div>
-              <div className="flex items-center gap-4"><div className="w-12 h-12 bg-rose-100 rounded-xl flex items-center justify-center text-2xl">❤️</div><div><h4 className="font-bold">关系空间</h4><p className="text-xs text-gray-500">解锁专属空间，包含信箱、花园、相册等多种玩法。</p></div></div>
-            </div>
-          </div>
-        )}
-        
-        {step === 3 && (
-            <div className="animate-fadeIn w-full">
-                <h3 className="font-bold text-gray-500 text-sm mb-6">生活助手</h3>
-                 <div className="space-y-4 text-left">
-                    <div className="flex items-center gap-4"><div className="w-12 h-12 bg-green-100 rounded-xl flex items-center justify-center text-2xl">📅</div><div><h4 className="font-bold">待办清单</h4><p className="text-xs text-gray-500">记录每日任务，让生活井井有条。</p></div></div>
-                    <div className="flex items-center gap-4"><div className="w-12 h-12 bg-yellow-100 rounded-xl flex items-center justify-center text-2xl">💰</div><div><h4 className="font-bold">我的钱包</h4><p className="text-xs text-gray-500">轻松记账，掌握财务状况。</p></div></div>
-                    <div className="flex items-center gap-4"><div className="w-12 h-12 bg-purple-100 rounded-xl flex items-center justify-center text-2xl">📝</div><div><h4 className="font-bold">日记本</h4><p className="text-xs text-gray-500">随时随地，记录你的心情与故事。</p></div></div>
-                </div>
-            </div>
-        )}
-
-        {step === 4 && (
-          <div className="animate-fadeIn w-full">
-            <h3 className="text-xl font-black text-gray-800 mb-4">Hannie 留言说</h3>
-            <div className="bg-green-50 text-green-800 p-4 rounded-xl text-sm leading-relaxed font-medium border border-green-200">
-              一时兴起做了这个项目，花费两个礼拜和代码决斗做了大概框架，现在还是1.0版本，还有很多没有扩充的部分，以后也许(!)会慢慢更新...
-              <br/><br/>
-              如果有什么bug或者建议，请在第二页的反馈app留下你的宝贵留言～虽然本hannie不一定有时间更新嘻嘻嘻😁💚
-            </div>
-          </div>
-        )}
-
-        {step === 5 && (
-            <div className="animate-fadeIn w-full flex-1 flex flex-col items-center justify-center">
-                <div className="text-5xl mb-6">🚀</div>
-                <p className="text-gray-700 leading-relaxed font-medium text-lg">
-                    希望你游玩愉快！
-                    <br/><br/>
-                    在AI时代好好利用AI这个工具一起前进吧～～～
-                </p>
-            </div>
-        )}
-
-        {step === 6 && (
-          <div className="animate-fadeIn w-full">
-            <h3 className="font-bold text-gray-500 text-sm mb-6">请登录</h3>
-            <div className="space-y-3">
-              <input type="text" value={username} onChange={e=>setUsername(e.target.value)} className="w-full bg-white border border-gray-200 p-3 rounded-xl outline-none" placeholder="账号"/>
-              <input type="password" value={password} onChange={e=>setPassword(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleLogin()} className="w-full bg-white border border-gray-200 p-3 rounded-xl outline-none" placeholder="密码"/>
-            </div>
-            {error && <p className="text-red-500 text-xs mt-2">{error}</p>}
-          </div>
-        )}
-
-        <div className="w-full mt-8">
-            <div className="flex justify-center gap-2 mb-4">
-                {[...Array(7)].map((_, i) => (
-                    <div key={i} className={`w-2 h-2 rounded-full transition-all ${step === i ? 'bg-blue-500 scale-125' : 'bg-gray-200'}`}></div>
-                ))}
-            </div>
-
-            {step < 4 ? (
-                <button onClick={() => setStep(s => s + 1)} className="w-full bg-blue-500 text-white font-bold py-3 rounded-xl shadow-lg shadow-blue-100 active:scale-95 transition">下一页</button>
-            ) : step === 4 ? (
-                <button onClick={() => setStep(s => s + 1)} className="w-full bg-green-500 text-white font-bold py-3 rounded-xl shadow-lg shadow-green-100 active:scale-95 transition">我看完了！</button>
-            ): step === 5 ? (
-                 <button onClick={() => setStep(s => s + 1)} className="w-full bg-purple-500 text-white font-bold py-3 rounded-xl shadow-lg shadow-purple-100 active:scale-95 transition">准备好了！</button>
-            ) : (
-                <button onClick={handleLogin} className="w-full bg-black text-white font-bold py-3 rounded-xl shadow-lg active:scale-95 transition">进入</button>
-            )}
-        </div>
+    <div className="h-screen w-screen bg-slate-50 flex items-center justify-center p-4">
+      <div className="w-full max-w-sm h-[80vh] max-h-[600px] bg-white rounded-3xl shadow-2xl border border-gray-200 flex flex-col justify-center">
+        {renderContent()}
       </div>
     </div>
   );
 };
 // ==================== [插入结束] ====================
-
 
 
 
