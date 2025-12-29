@@ -1,6 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react';
 import SafeAreaHeader from './SafeAreaHeader';
-import { GlobalSettings, Contact, Message } from '../types';
+// 这是一组什么代码：【类型导入修复】
+// 作用：告诉 DiaryApp.tsx 文件，去哪里找 WorldBookCategory 和 WorldBookEntry 的“说明书”。
+import { GlobalSettings, Contact, Message, WorldBookCategory, WorldBookEntry } from '../types';
 import * as htmlToImage from 'html-to-image';
 import localforage from 'localforage';
 import { generateResponse } from '../services/apiService'; // 引入 AI 服务
@@ -608,9 +610,9 @@ const AIAdminChat: React.FC<{
     }, [history, mode]);
 
     // 发送消息函数 (逻辑不变)
-    const handleSend = async () => {
+   const handleSend = async (presetInput?: string) => {
         if (!input.trim()) return;
-        const userText = input;
+      const userText = presetInput || input;
         const newHistory = [...history, { role: 'user' as const, content: userText }];
         setHistory(newHistory);
         setInput("");
@@ -645,10 +647,18 @@ const AIAdminChat: React.FC<{
     };
     
     // 灵感按钮
-    const promptSuggestions = [
-        { label: '✨ 整理最近 7 天', scope: 'last_week' },
-        { label: '📂 整理“未分类”', scope: 'unclassified' },
-    ];
+ // 这是一组什么代码：【全新版 - 指令按钮定义】
+// 我们在这里定义了所有快捷指令按钮。
+// "action" 字段用来区分不同类型的任务：
+// - SMART_ORGANIZE: 执行整理、创建文件的任务。
+// - GENERATE_TEXT:  只生成一段文字并显示在聊天里，不创建文件。
+const promptSuggestions = [
+    { label: '✨ 整理最近 7 天', action: 'SMART_ORGANIZE', payload: { scope: 'last_week' } },
+    { label: '📂 整理“未分类”', action: 'SMART_ORGANIZE', payload: { scope: 'unclassified' } },
+    { label: '🗂️ 整理当前文件夹', action: 'SMART_ORGANIZE', payload: { scope: 'current_folder' } },
+    { label: '💡 给我今日总结', action: 'GENERATE_TEXT', payload: { type: 'today_summary' } },
+    { label: '🎨 生成金句', action: 'GENERATE_TEXT', payload: { type: 'golden_quote' } },
+];
 
     return (
         <div className="flex flex-col h-full bg-[#f5f5f0]">
@@ -682,17 +692,36 @@ const AIAdminChat: React.FC<{
                         <div ref={messagesEndRef} />
                     </div>
                     <div className="p-3 bg-white border-t border-gray-200">
-                        <div className="flex gap-2 pb-2">
-                            {promptSuggestions.map(s => (
-                                <button
-                                    key={s.label}
-                                    onClick={() => onAction('SMART_ORGANIZE', { scope: s.scope, aiConfig })}
-                                    className="flex-shrink-0 px-3 py-1.5 bg-gray-100 text-gray-600 text-[10px] font-bold rounded-full border"
-                                >
-                                    {s.label}
-                                </button>
-                            ))}
-                        </div>
+
+<div className="flex gap-2 pb-2 overflow-x-auto">
+    {promptSuggestions.map(s => (
+        <button
+            key={s.label}
+            onClick={() => {
+                // 根据 action 类型，决定调用哪个函数
+                if (s.action === 'SMART_ORGANIZE') {
+                    onAction(s.action, { ...s.payload, aiConfig });
+                } else if (s.action === 'GENERATE_TEXT') {
+                    // 对于生成文本的请求，我们直接在聊天组件内部处理
+                    const textRequest = s.payload.type === 'today_summary'
+                        ? "请帮我总结一下我今天写的日记"
+                        : "请从我最近的日记里，帮我提炼一句金句";
+                    
+                    // 模拟用户发送，并让 AI 回答
+                    const newHistory = [...history, { role: 'user' as const, content: textRequest }];
+                    setHistory(newHistory);
+                    // 注意：这里我们直接调用 handleSend 的内部逻辑，但传入的是预设问题
+                    handleSend(textRequest); 
+                }
+            }}
+            className="flex-shrink-0 px-3 py-1.5 bg-gray-100 text-gray-600 text-[10px] font-bold rounded-full border hover:bg-gray-200 transition"
+        >
+            {s.label}
+        </button>
+    ))}
+</div>
+
+
                         <div className="flex items-center gap-2 bg-gray-100 rounded-2xl px-3 py-2 mt-2">
                             <textarea className="flex-1 bg-transparent text-sm outline-none resize-none" rows={1} placeholder={`和 ${aiConfig.name} 聊聊...`} value={input} onChange={e => setInput(e.target.value)} onKeyDown={e => { if(e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); } }} />
                             <button onClick={handleSend} disabled={isLoading} className="bg-[#5d4037] text-white w-8 h-8 rounded-full font-bold">↑</button>
@@ -742,28 +771,28 @@ const AIAdminChat: React.FC<{
                                 + 保存当前
                             </button>
                         </div>
-                        <div className="space-y-2">
-                            <label className="text-[10px] font-bold text-gray-400">当前名字</label>
-                            <input 
-                                value={aiConfig.name}
-                                // ★★★ 核心改造：输入时，实时更新全局状态 ★★★
-                                onChange={e => setSettings(prev => ({
-                                    ...prev,
-                                    diaryAIConfig: { ...prev.diaryAIConfig, name: e.target.value }
-                                }))}
-                                className="w-full bg-gray-50 p-3 rounded-xl text-sm font-bold"
-                            />
-                            <label className="text-[10px] font-bold text-gray-400">性格 Prompt</label>
-                            <textarea 
-                                value={aiConfig.persona}
-                                // ★★★ 核心改造：输入时，实时更新全局状态 ★★★
-                                onChange={e => setSettings(prev => ({
-                                    ...prev,
-                                    diaryAIConfig: { ...prev.diaryAIConfig, persona: e.target.value }
-                                }))}
-                                className="w-full bg-gray-50 p-3 rounded-xl text-xs h-32 resize-none"
-                            />
-                        </div>
+<div className="space-y-2">
+    <label className="text-[10px] font-bold text-gray-400">当前名字</label>
+    <input 
+        value={aiConfig.name}
+        onChange={e => setSettings(prev => ({
+            ...prev,
+            // ★★★ 修复点在这里！★★★
+            diaryAIConfig: { ...(prev.diaryAIConfig || {}), name: e.target.value }
+        }))}
+        className="w-full bg-gray-50 p-3 rounded-xl text-sm font-bold"
+    />
+    <label className="text-[10px] font-bold text-gray-400">性格 Prompt</label>
+    <textarea 
+        value={aiConfig.persona}
+        onChange={e => setSettings(prev => ({
+            ...prev,
+            // ★★★ 修复点在这里！★★★
+            diaryAIConfig: { ...(prev.diaryAIConfig || {}), persona: e.target.value }
+        }))}
+        className="w-full bg-gray-50 p-3 rounded-xl text-xs h-32 resize-none"
+    />
+</div>
                     </div>
 
                     {/* --- 2. 知识库授权区 (逻辑不变) --- */}
@@ -842,11 +871,14 @@ const AIAdminChat: React.FC<{
 
 
 
-
-
 // ==================== 📔 DiaryApp 主程序 ====================
 // 改成这样
 const DiaryApp: React.FC<DiaryAppProps> = ({ settings, setSettings, contacts, setContacts, worldBooks, onClose }) => {
+   
+
+
+   
+   
     // --- 数据状态 ---
     const defaultFolders = [
         { id: 'root', name: '我的手账本', parentId: null, collapsed: false },
@@ -917,6 +949,74 @@ const [loadingMessage, setLoadingMessage] = useState<string | null>(null);
     const textareaRef = useRef<HTMLTextAreaElement>(null);
     const activeNote = diaries.find(d => d.id === currentFileId);
     const [editMode, setEditMode] = useState(false); 
+
+
+
+
+
+// 这是一组什么代码：【新增 - 大脑和记忆库的容器】
+// 这是为我们的“自动化工厂”准备的核心部件。
+// embedderRef: 用来存放那个能把文字变坐标的AI模型（大脑）。
+// diaryIndexRef: 用来存放所有日记的“思想坐标星图”（记忆库）。
+// isIndexing: 一个状态，用来告诉用户我们是否正在构建星图。
+const embedderRef = useRef<any>(null);
+const diaryIndexRef = useRef<any[]>([]);
+const [isIndexing, setIsIndexing] = useState(true);
+
+
+
+
+// 这是一组什么代码：【新增 - 构建记忆库的useEffect】
+// 这是“创世纪”的过程。它会在你的日记加载完毕后自动运行。
+// 1. 加载那个小小的、能在浏览器里运行的AI模型。
+// 2. 遍历你所有的日记。
+// 3. 为每一篇日记生成一个“思想坐标”（向量）。
+// 4. 把所有坐标和日记ID存起来，形成我们的“星图”。
+// 这个过程只在启动时或日记更新时做一次，之后整理就会飞快！
+useEffect(() => {
+    const initializeAndIndex = async () => {
+        if (!isLoaded || diaries.length === 0) return;
+
+        // 如果大脑还没初始化，就先初始化
+        if (!embedderRef.current) {
+            try {
+                // @ts-ignore
+                const { pipeline } = await import("https://cdn.jsdelivr.net/npm/@xenova/transformers@2.16.0");
+                embedderRef.current = await pipeline('feature-extraction', 'Xenova/multilingual-e5-small');
+            } catch (error) {
+                console.error("AI模型加载失败!", error);
+                setLoadingMessage("AI模型加载失败，请刷新页面重试。");
+                return;
+            }
+        }
+        
+        // 开始构建/更新“星图”
+        setLoadingMessage('正在构建思想索引...');
+        setIsIndexing(true);
+
+        const newIndex = [];
+        for (const diary of diaries) {
+            const result = await embedderRef.current(diary.content.slice(0, 512), { pooling: 'mean', normalize: true });
+            newIndex.push({
+                id: diary.id,
+                vector: Array.from(result.data)
+            });
+        }
+        diaryIndexRef.current = newIndex;
+        
+        setIsIndexing(false);
+        setLoadingMessage(null);
+        console.log("思想索引构建完成！包含", newIndex.length, "篇日记。");
+    };
+
+    initializeAndIndex();
+}, [isLoaded, diaries]); // 当数据加载完成或日记变化时，重新构建索引
+
+
+
+
+
+
 // --- 🗑️ 多选删除功能区 ---
     const [isSelectionMode, setIsSelectionMode] = useState(false);
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -1173,160 +1273,150 @@ const handleSaveImage = async () => {
 
 
 
-const handleSmartOrganize = async (diariesToOrganize: DiaryEntry[], aiConfig: any, enabledWorldBookIds: Set<string>, allWorldBooks: WorldBookCategory[]) => {
-    
-    if (diariesToOrganize.length === 0) {
-        alert(`${aiConfig.name} 说：“主人，我没有收到任何可以整理的日记哦。”`);
-        return;
+// 这是一个数学辅助工具，用来计算两个“思想坐标”有多接近。
+// 你不需要理解它的细节，只需要知道它能告诉我们哪两篇日记在思想上是相似的。
+const cosineSimilarity = (vecA: number[], vecB: number[]) => {
+    let dotProduct = 0;
+    let normA = 0;
+    let normB = 0;
+    for (let i = 0; i < vecA.length; i++) {
+        dotProduct += vecA[i] * vecB[i];
+        normA += vecA[i] * vecA[i];
+        normB += vecB[i] * vecB[i];
     }
+    return dotProduct / (Math.sqrt(normA) * Math.sqrt(normB));
+};
 
-    const activePreset = settings.apiPresets?.find(p => p.id === settings.activePresetId);
-    if (!activePreset) {
-        alert("请先在设置中配置有效的 API Key！");
-        return;
-    }
-    
-    // 1. 打开加载动画
-    setLoadingMessage(`${aiConfig.name} 正在深度思考中...`);
- const parseTKV = (text: string) => {
-        const fragments: any[] = [];
-        const entries = text.split('%%');
-        for (const entryText of entries) {
-            const lines = entryText.trim().split('\n');
-            const fragment: { [key: string]: any } = { source_ids: [] };
+// 这是我们的“星云发现器”，它会在“星图”中自动找出聚集在一起的日记群（主题）。
+const clusterDiaries = (index: {id: string, vector: number[]}[], similarityThreshold = 0.75) => {
+    const clusters: string[][] = [];
+    const visited = new Set<string>();
+
+    for (const entry of index) {
+        if (visited.has(entry.id)) continue;
+
+        const currentCluster = [entry.id];
+        visited.add(entry.id);
+
+        for (const otherEntry of index) {
+            if (visited.has(otherEntry.id)) continue;
             
-            for (const line of lines) {
-                const separatorIndex = line.indexOf(':');
-                if (separatorIndex > -1) {
-                    const key = line.substring(0, separatorIndex).trim();
-                    const value = line.substring(separatorIndex + 1).trim();
-                    if (key === '类型') fragment.category = value;
-                    else if (key === '标题') fragment.title = value;
-                    else if (key === '内容') fragment.content = value;
-                    else if (key === '来源ID') fragment.source_ids = value.split(',').map(id => id.trim());
-                }
-            }
-            if (fragment.category && fragment.title && fragment.content) {
-                fragments.push(fragment);
+            const similarity = cosineSimilarity(entry.vector, otherEntry.vector);
+            if (similarity > similarityThreshold) {
+                currentCluster.push(otherEntry.id);
+                visited.add(otherEntry.id);
             }
         }
-        return fragments;
-    };
+        clusters.push(currentCluster);
+    }
+    return clusters;
+};
+
+
+// 这是一组什么代码：【V12 - 最终架构 - 向量驱动的智能整理】
+// 这就是我们“自动化工厂”的核心生产线！
+// 1. 它不再需要分批，而是直接在本地的“思想星图”上进行计算。
+// 2. 使用 clusterDiaries 函数，瞬间找出所有思想上相关的日记群（主题）。
+// 3. 对于每一个找出的主题，只调用一次LLM进行深度总结。
+// 结果：速度极快，成本极低，效果极其精准！
+const handleSmartOrganize = async (diariesToOrganize: DiaryEntry[], aiConfig: any) => {
+    const activePreset = settings.apiPresets?.find(p => p.id === settings.activePresetId);
+    if (!activePreset) { alert("请先在设置中配置有效的 API Key！"); return; }
+    if (isIndexing) { alert("正在构建思想索引，请稍后再试..."); return; }
+
+    setLoadingMessage("正在分析思想关联...");
+
+    // 从完整的“星图”中，只筛选出我们需要整理的那些日记的坐标
+    const organizeIds = new Set(diariesToOrganize.map(d => d.id));
+    const subIndex = diaryIndexRef.current.filter(item => organizeIds.has(item.id));
+    
+    if (subIndex.length === 0) {
+        alert("没有找到可供分析的日记。");
+        setLoadingMessage(null);
+        return;
+    }
+
+    // ★★★ 核心：瞬间完成主题聚类！ ★★★
+    const diaryClusters = clusterDiaries(subIndex);
+
+    setLoadingMessage(`发现了 ${diaryClusters.length} 个主题，正在深度总结...`);
+    
+    let allFragments = [];
+    
+    const summarizationPromptTemplate = (diariesText: string, sourceIds: string[]) => `
+You are a brilliant synthesizer and analyst.
+You will be given a collection of diary entries that are ALL related to a single, underlying theme.
+Your task is to write ONE SINGLE, cohesive, and insightful summary that connects the ideas, emotions, and events from ALL of the provided entries.
+Find the deeper connection.
+Your final output MUST be a SINGLE JSON object with four keys: "category", "title", "content", and "source_ids".
+- "category" should be a short, accurate name for the theme you discovered.
+- "title" should be a highly creative and fitting title for your summary.
+- "content" should be your deep, synthesized summary text.
+- "source_ids" must be this exact array: ${JSON.stringify(sourceIds)}
+
+DO NOT output anything else. Just the raw JSON object.
+
+Diary Entries:
+${diariesText}
+`;
+
     try {
-        const diaryMaterials = diariesToOrganize.map(d => `ID: ${d.id}\n标题: ${d.title}\n内容: ${d.content}`).join('\n\n---\n\n');
-        
-        const textToScanForKeywords = diariesToOrganize.map(d => d.content).join('\n');
-        const relevantEntries = findRelevantWorldBookEntries(textToScanForKeywords, allWorldBooks, enabledWorldBookIds);
-        const worldBookContext = relevantEntries.length > 0 
-            ? `【参考资料：世界书】\n${relevantEntries.map(entry => `- ${entry.content}`).join('\n')}`
-            : "";
-        // ==================== ✅ 核心修复点在这里 ✅ ====================
-        // 在 masterPrompt 中为 worldBookContext 增加一个专属的占位符
-const masterPrompt = `
-          # 身份
-          你现在是 [${aiConfig.name}]，一个极其高效、客观、且注重全面的信息整理专家。你的核心人设是：[${aiConfig.persona}]。
-
-          # 行为铁律 (Behavioral Ironclad Rules) - 这是最高指令！
-          1.  **全面性原则**: 你必须分析**所有**日记材料，并尽可能多地提取**不同主题**的片段。禁止只关注一个最强烈的主题而忽略其他内容。
-          2.  **平衡性原则**: 请在‘深刻洞察’和‘轻松日常’之间保持平衡。用户的追星、看剧感悟和日常生活同样重要，必须一视同仁地进行整理。
-          3.  **忠实原则**: 严格根据下方提供的【原始日记材料】进行分析，禁止任何形式的凭空想象或过度解读。
-
-          # 参考资料：世界书
-          这是用户提供的背景设定，用于理解特定术语。请结合这些信息进行分析。
-          ${worldBookContext}
-          ---
-
-          # 核心分类列表 (你必须从以下类别中进行挖掘):
-          - "情绪洞察": 对复杂情感、内心挣扎、自我反思的记录。
-          - "人际关系": 关于与朋友、家人、伴侣的互动和感悟。
-          - "休闲娱乐": 关于追星、看剧、听歌、玩游戏等放松活动的记录和感悟。
-          - "创意灵感": 任何新奇的想法、计划、对未来的构想。
-          - "工作学习": 关于工作、学习、项目的进展、吐槽或思考。
-          - "高光时刻": 记录生活中快乐、成功、值得纪念的正面瞬间。
-          - "待办事项": 从日记中提取出的明确需要去做的事情。
-
-          # 输出格式铁律 (TKV格式)
-          使用 "关键词: 值" 的格式，每个完整的主题片段之间用 "%%" 分隔。绝对禁止使用JSON。
-
-          --- 格式示例 (请严格遵守) ---
-          类型: 休闲娱乐
-          标题: 对新剧《赛博行者》的感悟
-          内容: 剧中的主角为了梦想奋不顾身，虽然结局悲壮，但过程真的很燃。
-          来源ID: d3
-          %%
-          类型: 人际关系
-          标题: 关于家庭的复杂感受
-          内容: 感觉自己像一只想要挣脱牢笼的鸟，这种对自由的渴望非常强烈。
-          来源ID: d1
-          %%
-          类型: 创意灵感
-          标题: 一个关于汉堡包手机的App想法
-          内容: 如果能把日记App做成一个需要“投喂”精神食粮的电子宠物，互动感会更强。
-          来源ID: d5
-          --- 示例结束 ---
-
-          【原始日记材料】
-          ${diaryMaterials}
-
-          请严格遵守以上所有规则，开始全面、平衡地分析和整理。
-        `;
-        
- const rawResponse = await generateResponse([{ role: 'user', content: masterPrompt }], activePreset);
-        
-        console.log("【AI 原始回复】:", rawResponse);
-
-        if (rawResponse.trim() === "无需整理" || !rawResponse.includes(':')) {
-             // ★★★ 逻辑优化：这里只弹窗，不关闭加载，交给 finally 统一处理
-             alert(`${aiConfig.name} 看完后说：“唔...好像没有发现可以特别整理出来的主题呢。”`);
-             return; // 直接退出 try 代码块，程序会跳转到 finally
+        for (const cluster of diaryClusters) {
+            const groupOfDiaries = diaries.filter(d => cluster.includes(d.id));
+            const diaryMaterials = groupOfDairies.map(d => `ID: ${d.id}\n内容: ${d.content}`).join('\n\n---\n\n');
+            
+            const prompt = summarizationPromptTemplate(diaryMaterials, cluster);
+            const rawResponse = await generateResponse([{ role: 'user', content: prompt }], activePreset);
+            
+            try {
+                const fragment = JSON.parse(rawResponse);
+                if (fragment && fragment.content) {
+                    allFragments.push(fragment);
+                }
+            } catch (e) { console.error("总结阶段JSON解析失败", rawResponse); }
         }
 
-        const fragments = parseTKV(rawResponse); // 假设你的 parseTKV 函数是正常的
-        
-        if (fragments.length === 0) {
-            throw new Error("AI 返回了内容，但无法解析出有效的主题片段。");
+        // --- ★★★ 最后一步：整理和保存 (和以前一样) ★★★ ---
+        if (allFragments.length === 0) {
+             alert(`${aiConfig.name} 分析了所有内容，但没有找到可以总结的主题片段。`);
+             return; 
         }
 
-        let newFolders: Folder[] = [...folders];
-        let newDiaries: DiaryEntry[] = [...diaries];
-
-
+        let newFolders = [...folders];
+        let newDiaries = [...diaries];
         let rootOrganizeFolder = newFolders.find(f => f.name.includes("灵魂切片"));
         if (!rootOrganizeFolder) {
             const newRootFolderId = "organized_" + Date.now();
             rootOrganizeFolder = { id: newRootFolderId, name: `📂 ${aiConfig.name}的灵魂切片`, parentId: 'root', collapsed: false };
             newFolders.push(rootOrganizeFolder);
         }
-
-        fragments.forEach((fragment: any) => {
+        
+        allFragments.forEach((fragment: any) => {
+            if (!fragment.category || !fragment.title || !fragment.content || !fragment.source_ids) { return; }
             let categoryFolder = newFolders.find(f => f.name === fragment.category && f.parentId === rootOrganizeFolder.id);
             if (!categoryFolder) {
                 const newCatFolderId = "cat_" + Date.now() + Math.random();
                 categoryFolder = { id: newCatFolderId, name: fragment.category, parentId: rootOrganizeFolder.id, collapsed: false };
                 newFolders.push(categoryFolder);
             }
-
             const newNote: DiaryEntry = {
-                id: "note_" + Date.now() + Math.random(),
-                title: fragment.title,
+                id: "note_" + Date.now() + Math.random(), title: fragment.title,
                 content: `# ${fragment.title}\n\n${fragment.content}\n\n---\n*原始素材来源于日记ID: ${fragment.source_ids.join(', ')}*`,
-                folderId: categoryFolder.id,
-                updatedAt: Date.now(),
+                folderId: categoryFolder.id, updatedAt: Date.now(),
             };
             newDiaries.push(newNote);
         });
 
         setFolders(newFolders);
         setDiaries(newDiaries);
+        alert(`整理完毕！${aiConfig.name} 帮你提炼出了 ${allFragments.length} 个深刻主题！`);
 
-        alert(`整理完毕！${aiConfig.name} 帮你提炼出了 ${fragments.length} 个主题片段！`);
-
-// 这是一组什么代码：【修改版】的错误捕获模块，能显示来自“金牌服务员”的清晰错误报告
-} catch (error: any) {
-    console.error("智能整理失败:", error);
-    // ✅ 核心：现在 error.message 会是“AI 返回了空内容...”或“API 请求失败...”等清晰的错误
-    alert(`整理失败了... (${error.message})`);
-}
+    } catch (error: any) {
+        console.error("智能整理失败:", error);
+        alert(`整理失败了... (${error.message})`);
+    } finally {
+        setLoadingMessage(null);
+    }
 };
 
 
@@ -1347,15 +1437,28 @@ const handleAIAction = async (action: string, payload: any) => {
             case 'last_week':
                 diariesToProcess = diaries.filter(d => d.updatedAt >= oneWeekAgo);
                 break;
-            case 'unclassified':
-                const folderIdSet = new Set(folders.map(f => f.id));
-                diariesToProcess = diaries.filter(d => !folderIdSet.has(d.folderId) || d.folderId === 'root');
-                break;
-            case 'current_folder':
-                diariesToProcess = diaries.filter(d => d.folderId === selectedFolderId);
-                break;
-            default:
-                diariesToProcess = diaries;
+// 这是一组什么代码：【修复版】“整理未分类”逻辑修复
+// 修复前：错误的判断导致所有笔记都被认为“已分类”
+// 修复后：只有真正不在任何文件夹里的（folderId 无效）才算“未分类”
+case 'unclassified':
+    const validFolderIds = new Set(folders.map(f => f.id));
+    diariesToProcess = diaries.filter(d => 
+        !validFolderIds.has(d.folderId) || 
+        d.folderId === '' || 
+        d.folderId === null || 
+        d.folderId === undefined
+    );
+    break;
+    // 这是一组什么代码：【新增的指令处理逻辑】
+// 作用：教会 handleAIAction 函数，当收到 'current_folder' 这个指令时，
+// 应该去筛选出当前选中的文件夹里的所有日记，并交给 AI 处理。
+
+case 'current_folder':
+    diariesToProcess = diaries.filter(d => d.folderId === selectedFolderId);
+    break;
+      default:
+    const oneMonthAgo = Date.now() - 30 * 24 * 60 * 60 * 1000;
+    diariesToProcess = diaries.filter(d => d.updatedAt >= oneMonthAgo);
         }
 
         // ★★★ 核心修复：在这里进行岗前检查！★★★
@@ -1443,35 +1546,44 @@ const handleAIAction = async (action: string, payload: any) => {
     return (
         <div className="h-full w-full bg-[#eeeae4] flex flex-col pt-[calc(44px+env(safe-area-inset-top))] relative overflow-hidden">
             <PaperStyle />
-            <SafeAreaHeader 
-                title={
-                    <div className="flex flex-col items-center leading-tight">
-                        <span className="font-bold text-[#5d4037] text-base tracking-widest uppercase">
-                            {activeTab === 'note' ? 'My Journal' : activeTab === 'dashboard' ? 'Overview' : 'AI Manager'}
-                        </span>
-                        {activeTab === 'note' && selectedFolderId && <span className="text-[9px] text-[#a1887f]">in {folders.find(f=>f.id===selectedFolderId)?.name || 'Root'}</span>}
-                    </div>
-                }
-                left={<button onClick={onClose} className="text-sm font-bold text-[#8d6e63] bg-white/50 px-3 py-1.5 rounded-full shadow-sm hover:bg-white transition flex items-center gap-1">← 返回</button>}
-                right={
-                    activeTab === 'note' ? (
-                        <div className="flex gap-2 relative">
-                            <button onClick={() => setSidebarOpen(!sidebarOpen)} className="text-xl text-[#8d6e63] p-2 hover:bg-black/5 rounded-full transition">{sidebarOpen ? '📖' : '🗂️'}</button>
-                            <div className="relative">
-                                <button onClick={() => setShowMenu(!showMenu)} className="text-xl text-[#8d6e63] px-3 py-2 hover:bg-black/5 rounded-full transition font-black">≡</button>
-                               <MenuDropdown 
-    isOpen={showMenu} 
-    onClose={() => setShowMenu(false)} 
-    onShareClick={() => setShowShareModal(true)} 
-    onSaveImageClick={handleSaveImage} 
-    onToggleAI={() => setShowAI(!showAI)}
-    onDeleteClick={handleDeleteFile} // <--- 缝合这里！
+<SafeAreaHeader 
+    title={
+        <div className="flex flex-col items-center leading-tight">
+            <span className="font-bold text-[#5d4037] text-base tracking-widest uppercase">
+                {activeTab === 'note' ? 'My Journal' : activeTab === 'dashboard' ? 'Overview' : 'AI Manager'}
+            </span>
+            {activeTab === 'note' && selectedFolderId && <span className="text-[9px] text-[#a1887f]">in {folders.find(f=>f.id===selectedFolderId)?.name || 'Root'}</span>}
+        </div>
+    }
+    left={
+        // ★★★ 我们所有的希望，都在这个小小的按钮上 ★★★
+        <div className="flex items-center">
+            <button onClick={onClose} className="text-sm font-bold text-[#8d6e63] bg-white/50 px-3 py-1.5 rounded-full shadow-sm hover:bg-white transition flex items-center gap-1">
+                ← 返回
+            </button>
+        
+        </div>
+        // ★★★ 请确保你的 left prop 看起来像上面这样 ★★★
+    }
+    right={
+        activeTab === 'note' ? (
+            <div className="flex gap-2 relative">
+                <button onClick={() => setSidebarOpen(!sidebarOpen)} className="text-xl text-[#8d6e63] p-2 hover:bg-black/5 rounded-full transition">{sidebarOpen ? '📖' : '🗂️'}</button>
+                <div className="relative">
+                    <button onClick={() => setShowMenu(!showMenu)} className="text-xl text-[#8d6e63] px-3 py-2 hover:bg-black/5 rounded-full transition font-black">≡</button>
+                   <MenuDropdown 
+                        isOpen={showMenu} 
+                        onClose={() => setShowMenu(false)} 
+                        onShareClick={() => setShowShareModal(true)} 
+                        onSaveImageClick={handleSaveImage} 
+                        onToggleAI={() => setShowAI(!showAI)}
+                        onDeleteClick={handleDeleteFile}
+                    />
+                </div>
+            </div>
+        ) : null
+    }
 />
-                            </div>
-                        </div>
-                    ) : null
-                }
-            />
 
             {/* 主内容区域 - 根据Tab切换 */}
             <div className="flex-1 flex overflow-hidden relative shadow-2xl mx-2 mb-2 rounded-3xl bg-[#fffdf5] paper-texture border border-[#d7ccc8]">
@@ -1704,5 +1816,8 @@ onSelectFile={(id) => {
         </div>
     );
 };
+
+
+
 
 export default DiaryApp;

@@ -1,9 +1,8 @@
-// services/apiService.ts
-// @ts-ignore
-import { GoogleGenerativeAI } from '@google/generative-ai';
+// 文件位置: src/services/apiService.ts
+// 请用这段代码，完整覆盖掉你的旧文件！
 
-// 引入或定义 Message 类型，确保这里能读到 type 属性
-export interface ApiConfig {
+// 这是我们 API 配置的“图纸”，确保它在文件的最上方
+interface ApiConfig {
   type: 'gemini' | 'openai';
   baseUrl?: string;
   apiKey: string;
@@ -13,205 +12,102 @@ export interface ApiConfig {
   topP?: number;
 }
 
-let currentConfig: ApiConfig | null = null;
-
-export const setCurrentConfig = (config: ApiConfig) => {
-  currentConfig = config;
-};
-
-export const getCurrentConfig = (): ApiConfig | null => {
-  return currentConfig;
-};
-
-// 自动拉取模型列表（支持反代） - 保持原样
-export const fetchModels = async (
-  type: 'gemini' | 'openai',
-  baseUrl: string | undefined,
-  apiKey: string
-): Promise<string[]> => {
-  if (type === 'gemini') {
-    return [
-      'gemini-1.5-flash',
-      'gemini-1.5-pro',
-      'gemini-1.5-flash-exp',
-      'gemini-2.0-flash-exp'
-    ];
-  }
-
-  if (!baseUrl) return [];
-
-  try {
-    const res = await fetch(`${baseUrl.replace(/\/$/, '')}/models`, {
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        'Content-Type': 'application/json'
-      }
-    });
-
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-
-    const data = await res.json();
-    return data.data?.map((m: any) => m.id).sort() || [];
-  } catch (e) {
-    console.error('Fetch models failed:', e);
-    return [];
-  }
-};
-
-// 统一生成回复函数
+// 这是一组什么代码：【最终版 - 绝对诚实的信使 generateResponse】
+// 作用：这是整个项目的网络请求核心。它被修复后，任何API层的错误都会被真实、详细地报告出来。
 export const generateResponse = async (
-  // ★★★ 修改点1：把类型改为 any[]，因为我们需要读取 msg.type (text/image)，
-  // 而不仅仅是 role 和 content。这样兼容性最强，不会报错。
   messages: any[], 
   config: ApiConfig
 ): Promise<string> => {
+  
+  // 检查传入的配置是否存在，这是第一道保险
+  if (!config || !config.apiKey || !config.model) {
+    // 如果没有有效的配置，直接返回一个清晰的、我们自己定义的错误
+    return "[前端错误] 调用 generateResponse 时，传入的 API 配置 (config) 无效。";
+  }
+
   const {
     type,
     baseUrl,
     apiKey,
     model,
     temperature = 1.0,
-    maxTokens = 10000,
+    maxTokens = 4096,
     topP = 1
   } = config;
 
-  // ==================== Gemini 官方模式 ====================
+  // 根据类型，准备好要发送的“信件”
+  let url = '';
+  let body: any = {};
+  const headers: any = {
+    'Content-Type': 'application/json',
+  };
+
   if (type === 'gemini') {
-    try {
-      const genai = new GoogleGenerativeAI(apiKey);
-      const geminiModel = genai.getGenerativeModel({
-        model,
-        generationConfig: {
-          temperature,
-          maxOutputTokens: maxTokens,
-          topP
-        }
-      });
-
-      // ★★★ 修改点2：Gemini 的图片处理逻辑 ★★★
-      const formatted = messages.map(m => {
-        const role = m.role === 'user' ? 'user' : 'model';
-
-        // 如果是图片消息
-        if (m.type === 'image') {
-          // m.content 是 "data:image/jpeg;base64,......"
-          // Gemini SDK 需要去掉头部，只留 base64 数据
-          try {
-            const base64Data = m.content.split(',')[1]; 
-            const mimeType = m.content.split(';')[0].split(':')[1] || 'image/jpeg';
-            return {
-              role,
-              parts: [
-                { text: "（用户发送了一张图片）" }, // 可选：给个文字提示
-                {
-                  inlineData: {
-                    mimeType: mimeType,
-                    data: base64Data
-                  }
-                }
-              ]
-            };
-          } catch (e) {
-            console.error("图片解析失败", e);
-            return { role, parts: [{ text: "[图片上传失败]" }] };
-          }
-        }
-
-        // 普通文字消息
-        return {
-          role,
-          parts: [{ text: m.content }]
-        };
-      });
-
-      const result = await geminiModel.generateContent({ contents: formatted });
-      return result.response.text() || '(无回复)';
-    } catch (e: any) {
-      return `(Gemini Error: ${e.message || '未知错误'})`;
-    }
-  }
-
-  // ==================== OpenAI 兼容模式（反代） ====================
-  if (!baseUrl) {
-    throw new Error('OpenAI 模式必须填写 Base URL');
-  }
-
-  // ★★★ 修改点3：OpenAI 的图片处理逻辑 (Vision 格式) ★★★
-  const apiMessages = messages.map(m => {
-    // 1. 如果是图片，构造多模态 content 数组
-    if (m.type === 'image') {
-      return {
-        role: m.role,
-        content: [
-          { type: "text", text: "（用户发送了一张图片）" },
-          {
-            type: "image_url",
-            image_url: {
-              url: m.content // OpenAI 兼容接口通常直接吃 Data URL
-            }
-          }
-        ]
-      };
-    }
-    
-    // 2. 普通文字，保持原样
-    return {
-      role: m.role,
-      content: m.content
-    };
-  });
-
-  try {
-    const res = await fetch(`${baseUrl.replace(/\/$/, '')}/chat/completions`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${apiKey}`
+    // 适用于 Google Gemini 官方接口的配置
+    url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+    body = {
+      contents: messages.map(msg => ({
+          role: msg.role === 'assistant' ? 'model' : msg.role,
+          parts: [{ text: msg.content }]
+      })),
+      generationConfig: {
+        temperature: temperature,
+        topP: topP,
+        maxOutputTokens: maxTokens,
       },
-      body: JSON.stringify({
-        model,
-        messages: apiMessages, // 使用处理过包含图片的 messages
-        temperature,
-        max_tokens: maxTokens,
-        top_p: topP
-      })
+    };
+  } else { // OpenAI 兼容模式 (适用于所有反向代理)
+    url = `${baseUrl?.replace(/\/$/, '')}/chat/completions`;
+    body = {
+      model: model,
+      messages: messages,
+      temperature: temperature,
+      max_tokens: maxTokens,
+      top_p: topP,
+      stream: false 
+    };
+    headers['Authorization'] = `Bearer ${apiKey}`;
+  }
+
+  // ★★★ 这里是整个流程的心脏 ★★★
+  try {
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: headers,
+      body: JSON.stringify(body)
     });
 
-    if (!res.ok) {
-      const errText = await res.text();
-      throw new Error(`HTTP ${res.status}: ${errText || '未知错误'}`);
-    }
-
-    const data = await res.json();
-
-    // 智能解析多种返回格式（保持你原来的逻辑完全不变）
-   // ★★★ 增强版解析逻辑 ★★★
-    if (data.choices && data.choices.length > 0) {
-      const msg = data.choices[0].message;
-      const content = msg.content;
-      const reasoning = msg.reasoning_content; // 兼容深度思考模型
-
-      // 1. 如果有内容，直接返回
-      if (content && content.length > 0) return content;
+    // 如果信使在路上收到了“服务器的白眼”（比如 401, 404, 500 等错误）
+    if (!response.ok) {
+      // 我们不等了，直接把服务器的“抱怨信”全文读出来
+      const errorBodyText = await response.text(); 
+      const detailedError = `API 请求失败!
+      - 状态码 (Status): ${response.status}
+      - 错误信息 (Message): ${response.statusText}
+      - 服务器详细回复 (Server Response): ${errorBodyText}`;
       
-      // 2. 如果只有思考过程（针对某些深度思考模型）
-      if (reasoning && reasoning.length > 0) return `(思考中...)\n${reasoning}`;
-
-      // 3. 如果内容是空字符串，且 token 为 0 (这就是你遇到的情况)
-      return "(AI 返回了空内容，请重roll)";
+      // 把这份详细的“事故报告”作为异常抛出
+      throw new Error(detailedError);
     }
 
-    if (data.candidates && data.candidates[0]?.content?.parts?.[0]?.text) {
-      return data.candidates[0].content.parts[0].text;
+    // 如果一切顺利，解析服务器返回的 JSON 数据
+    const data = await response.json();
+
+    // 从返回的数据中，把 AI 说的话（核心内容）拿出来
+    if (type === 'openai') {
+      return data.choices[0]?.message?.content || "[AI回复解析错误] 服务器返回了成功状态，但'choices'数组为空或格式不正确。";
     }
+    if (type === 'gemini') {
+      return data.candidates[0]?.content?.parts[0]?.text || "[AI回复解析错误] 服务器返回了成功状态，但'candidates'数组为空或格式不正确。";
+    }
+    
+    return "[前端错误] 未知的 API 类型，无法解析回复。";
 
-    if (data.text) return data.text;
-    if (data.content) return data.content;
-    if (data.response) return data.response;
-
-    // 兜底返回原始数据
-    return `(未知格式回复: ${JSON.stringify(data)})`;
-  } catch (e: any) {
-    return `(网络错误: ${e.message || '未知错误'})`;
+  } catch (error: any) {
+    // 如果在整个 try 过程中（包括 fetch 自己遇到的网络问题），发生了任何意外
+    console.error("【generateResponse 捕获到致命错误】:", error);
+    
+    // 我们不再说谎，而是把最真实的错误原因返回给“大脑”
+    return `[API Service 错误报告] ${error.message}`;
   }
 };
