@@ -22,7 +22,7 @@ import { readTavernPng, fileToBase64 } from './utils/fileUtils';
 
 
 
-// ==================== [插入代码 1] 全新·小清新开机引导流程 ====================
+// ==================== [插入代码 1] 全新·卡片式动态引导流程 ====================
 
 // 1. 账号密码在这里改 (功能不变)
 const ALLOWED_USERS = [
@@ -30,160 +30,193 @@ const ALLOWED_USERS = [
   { id: "2", user: "admin",  pass: "admin888", name: "管理员", role: "admin" },
 ];
 
-// 2. 这是开机引导流程的组件
+// 2. 这是全新的开机引导组件
 const LoginScreen = ({ onLogin }: { onLogin: (u:any)=>void }) => {
-  // step 用来控制显示哪一页
-  const [step, setStep] = useState(0); 
-  const [featurePage, setFeaturePage] = useState(0); // 功能介绍的小分页
-  
-  // 登录页用的状态
-  const [u, setU] = useState("");
-  const [p, setP] = useState("");
-  const [err, setErr] = useState("");
+  // --- 状态管理 ---
+  const [step, setStep] = useState(0); // 控制主流程页面
+  const [featurePage, setFeaturePage] = useState(0); // 控制功能介绍的滑动页面
+  const [u, setU] = useState(""); // 登录账号
+  const [p, setP] = useState(""); // 登录密码
+  const [err, setErr] = useState(""); // 错误提示
+  const [welcomeName, setWelcomeName] = useState(""); // 登录成功后的名字
 
-  // 登录成功后，用来显示欢迎语
-  const [welcomeName, setWelcomeName] = useState("");
+  // --- 滑动功能所需的状态和引用 ---
+  const swipeContainerRef = React.useRef<HTMLDivElement>(null);
+  const isDragging = React.useRef(false);
+  const startX = React.useRef(0);
+  const currentTranslateX = React.useRef(0);
 
-  // 功能介绍的内容
+  // --- 功能介绍文案 ---
   const FEATURES = [
-    { 
-      icon: "💬", 
-      title: "AI 聊天", 
-      desc: "与你的专属AI伙伴进行深度对话，TA拥有独特的性格和记忆，会随着交流不断成长。" 
-    },
-    { 
-      icon: "💞", 
-      title: "关系空间", 
-      desc: "当好感度足够时，可以解锁的私密区域。包含了信箱、问答、花园、恋爱清单和相册等多种互动玩法。" 
-    },
-    { 
-      icon: "📝", 
-      title: "生活清单", 
-      desc: "一个全能生活助手，帮你管理每日待办事项（To-Do）和个人财务（记账），让生活井井有条。" 
-    },
-    { 
-      icon: "🎨", 
-      title: "主题与外观", 
-      desc: "高度自定义你的“手机”界面，从壁纸、聊天气泡到字体大小，一切由你决定。" 
-    },
-    { 
-      icon: "📚", 
-      title: "世界书", 
-      desc: "为你和AI所处的世界添加背景设定（Lore），让TA的言行举止更加沉浸和符合世界观。" 
-    },
+    { icon: "💬", title: "AI 聊天", desc: "与你的专属AI伙伴进行深度对话，TA拥有独特的性格和记忆，会随着交流不断成长。" },
+    { icon: "💞", title: "关系空间", desc: "当好感度足够时，可以解锁的私密区域。包含了信箱、问答、花园、恋爱清单和相册等多种互动玩法。" },
+    { icon: "📝", title: "生活清单", desc: "一个全能生活助手，帮你管理每日待办事项（To-Do）和个人财务（记账），让生活井井-有条。" },
+    { icon: "📖", title: "日记本", desc: "随时记录你的心情和故事，一个完全属于你的私密角落。" },
+    { icon: "🎨", title: "主题外观", desc: "高度自定义你的“手机”界面，从壁纸、聊天气泡到字体大小，一切由你决定。" },
   ];
 
+  // --- 滑动逻辑 ---
+  const handleSwipeStart = (clientX: number) => {
+    isDragging.current = true;
+    startX.current = clientX;
+    if (swipeContainerRef.current) swipeContainerRef.current.style.transition = 'none';
+  };
+  const handleSwipeMove = (clientX: number) => {
+    if (!isDragging.current || !swipeContainerRef.current) return;
+    const dx = clientX - startX.current;
+    const containerWidth = swipeContainerRef.current.offsetWidth;
+    currentTranslateX.current = -featurePage * containerWidth + dx;
+    swipeContainerRef.current.style.transform = `translateX(${currentTranslateX.current}px)`;
+  };
+  const handleSwipeEnd = () => {
+    isDragging.current = false;
+    if (!swipeContainerRef.current) return;
+    swipeContainerRef.current.style.transition = 'transform 0.3s ease-out';
+    const containerWidth = swipeContainerRef.current.offsetWidth;
+    const movedBy = -featurePage * containerWidth - currentTranslateX.current;
+    
+    if (movedBy < -50 && featurePage > 0) { // Swipe right
+      setFeaturePage(featurePage - 1);
+    } else if (movedBy > 50 && featurePage < FEATURES.length - 1) { // Swipe left
+      setFeaturePage(featurePage + 1);
+    } else { // Snap back
+      swipeContainerRef.current.style.transform = `translateX(${-featurePage * containerWidth}px)`;
+    }
+  };
+
+  React.useEffect(() => {
+    if (swipeContainerRef.current) {
+      const containerWidth = swipeContainerRef.current.offsetWidth;
+      swipeContainerRef.current.style.transform = `translateX(${-featurePage * containerWidth}px)`;
+    }
+  }, [featurePage]);
+
+  // --- 登录逻辑 ---
   const handleLoginCheck = () => {
     const validUser = ALLOWED_USERS.find(x => x.user === u && x.pass === p);
     if(validUser) {
-      setWelcomeName(validUser.name); // 记录名字
-      setStep(step + 1); // 跳转到最后一页欢迎页
+      setWelcomeName(validUser.name);
+      setStep(step + 1);
     } else {
       setErr("账号或密码不对哦 🚫");
       if(navigator.vibrate) navigator.vibrate(200);
     }
   };
 
+  // --- 渲染不同页面的函数 ---
   const renderContent = () => {
-    // 欢迎页
-    if (step === 0) return (
-      <div className="text-center p-8 animate-fadeIn">
-        <h1 className="text-3xl font-black text-gray-800">欢迎来到</h1>
-        <h2 className="text-5xl font-black text-transparent bg-clip-text bg-gradient-to-r from-orange-400 to-rose-500 mt-2 mb-4 animate-pulse">HamburgerPhone!</h2>
-        <span className="text-6xl block my-6">🎆</span>
-        <button onClick={() => setStep(1)} className="w-full bg-gray-800 text-white font-bold py-4 rounded-2xl shadow-lg active:scale-95 transition-transform">下一页</button>
-      </div>
-    );
-    // 介绍页1
-    if (step === 1) return (
-      <div className="p-8 animate-fadeIn">
-        <p className="text-center text-lg leading-relaxed font-medium text-gray-700">
-          这是一个由 <b className="text-blue-500">hannie</b> 制作的仿手机生态的AI聊天网页，
-          在这里你可以用AI聊天、学习、甚至记录生活琐事。
-        </p>
-        <button onClick={() => setStep(2)} className="w-full bg-gray-800 text-white font-bold py-4 rounded-2xl shadow-lg active:scale-95 transition-transform mt-8">下一页</button>
-      </div>
-    );
-    // 功能介绍页
-    if (step === 2) {
-      const currentFeature = FEATURES[featurePage];
-      return (
-        <div className="p-8 animate-fadeIn flex flex-col justify-between h-full">
-          <div className="text-center">
-            <span className="text-6xl block mb-4">{currentFeature.icon}</span>
-            <h3 className="text-2xl font-bold text-gray-800 mb-2">{currentFeature.title}</h3>
-            <p className="text-sm text-gray-500 leading-relaxed">{currentFeature.desc}</p>
-          </div>
+    switch(step) {
+      case 0: return (
+        <div className="text-center p-8 animate-fadeIn h-full flex flex-col justify-between">
           <div>
-            <div className="flex justify-center gap-2 my-6">
-              {FEATURES.map((_, i) => <div key={i} className={`w-2 h-2 rounded-full transition-all ${i === featurePage ? 'bg-gray-800 w-4' : 'bg-gray-300'}`}></div>)}
-            </div>
-            {featurePage === FEATURES.length - 1 ? (
-              <button onClick={() => setStep(3)} className="w-full bg-blue-500 text-white font-bold py-4 rounded-2xl shadow-lg">我看完了！</button>
-            ) : (
-              <div className="flex gap-3">
-                <button onClick={() => setFeaturePage(p => Math.max(0, p - 1))} className="flex-1 bg-gray-200 text-gray-700 font-bold py-4 rounded-2xl">上一页</button>
-                <button onClick={() => setFeaturePage(p => Math.min(FEATURES.length - 1, p + 1))} className="flex-1 bg-gray-800 text-white font-bold py-4 rounded-2xl">下一页</button>
-              </div>
-            )}
+            <h1 className="text-lg font-bold text-gray-400">WELCOME TO</h1>
+            <h2 className="text-4xl font-black text-transparent bg-clip-text bg-gradient-to-r from-orange-400 to-rose-500 mt-2 mb-4">HamburgerPhone!</h2>
           </div>
+          <span className="text-8xl block my-6 animate-bounce">🍔</span>
+          <button onClick={() => setStep(1)} className="w-full bg-gray-800 text-white font-bold py-4 rounded-2xl shadow-lg active:scale-95 transition-transform">下一页</button>
         </div>
       );
-    }
-    // Hannie的留言
-    if (step === 3) return (
-        <div className="p-8 animate-fadeIn text-center">
-            <h2 className="text-2xl font-black text-gray-800 mb-4">Hannie 留言说</h2>
-            <div className="bg-yellow-50 border border-yellow-200 p-6 rounded-2xl text-sm text-gray-700 leading-relaxed space-y-3">
-                <p>一时兴起做了这个项目，花费两个礼拜和代码决斗做了大概框架，现在还是1.0版本，还有很多没有扩充的部分。</p>
-                <p>以后也许(!)会慢慢更新，如果有什么bug或者建议，请在第二页的反馈app留下你的宝贵留言～</p>
-                <p>虽然本hannie不一定有时间更新嘻嘻嘻😁💚</p>
+      case 1: return (
+        <div className="p-8 animate-fadeIn h-full flex flex-col justify-center text-center">
+          <p className="text-lg leading-relaxed font-medium text-gray-700">
+            这是一个由 <b className="text-blue-500">hannie</b> 制作的<br/>
+            <i>仿手机生态</i> 的 AI 聊天网页，<br/>
+            在这里你可以用 AI 聊天、学习、<br/>
+            甚至记录生活琐事。
+          </p>
+          <button onClick={() => setStep(2)} className="w-full bg-gray-800 text-white font-bold py-4 rounded-2xl shadow-lg active:scale-95 transition-transform mt-12">下一页</button>
+        </div>
+      );
+      case 2:
+        const currentFeature = FEATURES[featurePage];
+        return (
+          <div className="animate-fadeIn flex flex-col h-full overflow-hidden">
+            <div className="overflow-hidden flex-1">
+              <div 
+                ref={swipeContainerRef}
+                className="flex h-full"
+                style={{ width: `${FEATURES.length * 100}%` }}
+                onMouseDown={e => handleSwipeStart(e.clientX)}
+                onMouseMove={e => handleSwipeMove(e.clientX)}
+                onMouseUp={handleSwipeEnd}
+                onMouseLeave={handleSwipeEnd}
+                onTouchStart={e => handleSwipeStart(e.touches[0].clientX)}
+                onTouchMove={e => handleSwipeMove(e.touches[0].clientX)}
+                onTouchEnd={handleSwipeEnd}
+              >
+                {FEATURES.map(f => (
+                  <div key={f.title} className="w-full h-full flex flex-col justify-center text-center p-8" style={{ width: `${100 / FEATURES.length}%` }}>
+                    <div className="w-24 h-24 bg-gray-50 rounded-3xl flex items-center justify-center text-5xl mx-auto mb-6 shadow-inner border border-gray-100">{f.icon}</div>
+                    <h3 className="text-2xl font-bold text-gray-800 mb-2">{f.title}</h3>
+                    <p className="text-sm text-gray-500 leading-relaxed">{f.desc}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div className="p-8 pt-0">
+              <div className="flex justify-center gap-2 mb-6">
+                {FEATURES.map((_, i) => <div key={i} onClick={() => setFeaturePage(i)} className={`w-2 h-2 rounded-full transition-all cursor-pointer ${i === featurePage ? 'bg-gray-800 w-4' : 'bg-gray-300'}`}></div>)}
+              </div>
+              <button onClick={() => setStep(3)} className="w-full bg-blue-500 text-white font-bold py-4 rounded-2xl shadow-lg">我看完了！</button>
+            </div>
+          </div>
+        );
+      case 3: return (
+        <div className="p-8 animate-fadeIn text-center flex flex-col h-full justify-between">
+            <div>
+              <h2 className="text-2xl font-black text-gray-800 mb-4">Hannie 留言说 ✌️</h2>
+              <div className="bg-yellow-50 border-2 border-dashed border-yellow-300 p-6 rounded-2xl text-sm text-gray-700 leading-relaxed space-y-3 shadow-sm">
+                  <p><b>一时兴起</b>做了这个项目，花费两个礼拜和代码决斗做了大概框架，现在还是 <i className="text-red-500">1.0版本</i>，还有很多没有扩充的部分。</p>
+                  <p>以后<b className="text-green-500">也许(!)</b>会慢慢更新，如果有什么bug或者建议，请在第二页的反馈app留下你的宝贵留言～</p>
+                  <p>虽然本hannie不一定有时间更新嘻嘻嘻😁💚</p>
+              </div>
             </div>
             <button onClick={() => setStep(4)} className="w-full bg-gray-800 text-white font-bold py-4 rounded-2xl shadow-lg mt-6">下一页</button>
         </div>
-    );
-    // 结束语
-    if (step === 4) return (
-      <div className="p-8 animate-fadeIn text-center">
-        <p className="text-lg font-medium text-gray-700">希望你游玩愉快！</p>
-        <p className="text-lg font-medium text-gray-700 mt-2">在AI时代好好利用AI这个工具一起前进吧～～～</p>
-        <button onClick={() => setStep(5)} className="w-full bg-gray-800 text-white font-bold py-4 rounded-2xl shadow-lg mt-8">进入登录</button>
-      </div>
-    );
-    // 登录页
-    if (step === 5) return (
-      <div className="p-8 animate-fadeIn">
-        <div className="text-center mb-6">
-          <h2 className="font-bold text-gray-800 text-2xl">身份验证</h2>
-          <p className="text-xs text-gray-400">请输入访问凭证</p>
+      );
+      case 4: return (
+        <div className="p-8 animate-fadeIn text-center flex flex-col h-full justify-center">
+          <p className="text-lg font-medium text-gray-700">希望你游玩愉快！</p>
+          <p className="text-lg font-medium text-gray-700 mt-2">在 AI 时代好好利用 AI 这个工具<br/>一起前进吧～～～🚀</p>
+          <button onClick={() => setStep(5)} className="w-full bg-gray-800 text-white font-bold py-4 rounded-2xl shadow-lg mt-12">进入登录</button>
         </div>
-        <div className="space-y-4">
-          <input type="text" value={u} onChange={e=>setU(e.target.value)} className="w-full bg-gray-100 border border-gray-200 rounded-xl px-4 py-3 text-sm font-semibold outline-none focus:border-blue-400 transition" placeholder="账号" />
-          <input type="password" value={p} onChange={e=>setP(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleLoginCheck()} className="w-full bg-gray-100 border border-gray-200 rounded-xl px-4 py-3 text-sm font-semibold outline-none focus:border-blue-400 transition" placeholder="密码" />
+      );
+      case 5: return (
+        <div className="p-8 animate-fadeIn h-full flex flex-col justify-center">
+          <div className="text-center mb-6">
+            <div className="w-20 h-20 bg-gray-100 rounded-3xl flex items-center justify-center text-4xl mx-auto mb-4 shadow-inner border"><span className="animate-bounce">🔑</span></div>
+            <h2 className="font-bold text-gray-800 text-2xl">身份验证</h2>
+            <p className="text-xs text-gray-400">请输入访问凭证</p>
+          </div>
+          <div className="space-y-4">
+            <input type="text" value={u} onChange={e=>{setU(e.target.value);setErr('')}} className="w-full bg-gray-100 border border-gray-200 rounded-xl px-4 py-3 text-sm font-semibold outline-none focus:border-blue-400 transition" placeholder="账号" />
+            <input type="password" value={p} onChange={e=>{setP(e.target.value);setErr('')}} onKeyDown={e => e.key === 'Enter' && handleLoginCheck()} className="w-full bg-gray-100 border border-gray-200 rounded-xl px-4 py-3 text-sm font-semibold outline-none focus:border-blue-400 transition" placeholder="密码" />
+          </div>
+          <div className="h-6 mt-3 text-center">{err && <span className="text-red-500 bg-red-100 px-3 py-1 rounded-full text-xs font-bold">{err}</span>}</div>
+          <button onClick={handleLoginCheck} className="w-full bg-blue-500 text-white font-bold py-4 rounded-2xl shadow-lg mt-4">解锁 →</button>
         </div>
-        <div className="h-6 mt-3 text-center">{err && <span className="text-red-500 bg-red-100 px-3 py-1 rounded-full text-xs font-bold">{err}</span>}</div>
-        <button onClick={handleLoginCheck} className="w-full bg-blue-500 text-white font-bold py-4 rounded-2xl shadow-lg mt-4">解锁 →</button>
-      </div>
-    );
-    // 最终欢迎页
-    if (step === 6) {
+      );
+      case 6: 
         const validUser = ALLOWED_USERS.find(x => x.name === welcomeName);
         return (
-            <div className="text-center p-8 animate-fadeIn" onClick={() => onLogin(validUser)}>
+            <div className="text-center p-8 animate-fadeIn h-full flex flex-col justify-center cursor-pointer" onClick={() => onLogin(validUser)}>
                 <h2 className="text-3xl font-black text-gray-800">欢迎</h2>
                 <h1 className="text-4xl font-black text-transparent bg-clip-text bg-gradient-to-r from-blue-500 to-purple-500 my-4">{welcomeName}</h1>
                 <p className="text-gray-500">进入汉堡包大手机!!!</p>
-                <div className="text-6xl mt-8 animate-bounce">🍔</div>
+                <div className="text-8xl mt-8 animate-bounce">📱</div>
                 <p className="text-xs text-gray-400 mt-8 animate-pulse">点击任意处进入</p>
             </div>
         );
+      default: return null;
     }
-    return null;
   };
 
   return (
     <div className="h-screen w-screen bg-slate-50 flex items-center justify-center p-4">
-      <div className="w-full max-w-sm h-[80vh] max-h-[600px] bg-white rounded-3xl shadow-2xl border border-gray-200 flex flex-col justify-center">
+      <div className="w-full max-w-sm h-[85vh] max-h-[650px] bg-white rounded-[2rem] shadow-2xl border border-gray-200/50 flex flex-col relative overflow-hidden" key={step}>
+        <div className="absolute top-4 left-0 right-0 flex justify-center gap-1.5 z-10">
+          {[...Array(7)].map((_, i) => <div key={i} className={`h-1 rounded-full transition-all duration-500 ${step >= i ? 'bg-gray-800 w-6' : 'bg-gray-200 w-2'}`}></div>)}
+        </div>
         {renderContent()}
       </div>
     </div>
