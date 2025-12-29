@@ -26,14 +26,16 @@ const ALLOWED_USERS = [
   { id: "3", user: "vip_user", pass: "vip666", name: "moon", role: "moon" },
 ];
 
-// 2. 高颜值·iOS风登录界面
+// 2. 这是你提供的豹纹汉堡图片URL链接
+const LOGIN_WALLPAPER = "https://files.catbox.moe/tffb8b.png";
+
+// 3. 小清新登录界面组件 (已更新壁纸)
 const LoginScreen = ({ onLogin }: { onLogin: (u:any)=>void }) => {
   const [u, setU] = React.useState("");
   const [p, setP] = React.useState("");
   const [err, setErr] = React.useState("");
   const [time, setTime] = React.useState(new Date());
 
-  // 让时间动起来，像真正的锁屏一样
   React.useEffect(() => {
     const timer = setInterval(() => setTime(new Date()), 1000);
     return () => clearInterval(timer);
@@ -45,79 +47,63 @@ const LoginScreen = ({ onLogin }: { onLogin: (u:any)=>void }) => {
       onLogin(valid);
     } else {
       setErr("密码不对哦 🚫");
-      // 震动反馈
       if(navigator.vibrate) navigator.vibrate(200);
     }
   };
 
   return (
-    // 背景层：使用一张唯美的壁纸
+    // 背景层：直接使用你的URL链接
     <div className="h-screen w-screen relative flex flex-col items-center justify-center overflow-hidden bg-cover bg-center"
-         style={{ backgroundImage: "url('https://images.unsplash.com/photo-1618331835717-801e976710b2')" }}>
+         style={{ backgroundImage: `url('${LOGIN_WALLPAPER}')` }}>
       
-      {/* 遮罩层：加一点模糊和变暗，让文字更清晰 */}
-      <div className="absolute inset-0 bg-black/20 backdrop-blur-sm"></div>
+      <div className="absolute inset-0 bg-black/10 backdrop-blur-sm"></div>
 
-      {/* 内容层 */}
       <div className="relative z-10 flex flex-col items-center w-full max-w-sm px-6">
         
-        {/* 锁屏时间 */}
-        <div className="text-center mb-10 text-white drop-shadow-md">
-          <div className="text-xl font-bold mb-1">{time.toLocaleDateString()}</div>
+        <div className="text-center mb-10 text-white drop-shadow-lg">
           <div className="text-6xl font-thin tracking-wider">
             {time.getHours().toString().padStart(2,'0')}:{time.getMinutes().toString().padStart(2,'0')}
           </div>
+          <div className="text-xl font-bold mt-1">{time.toLocaleDateString('zh-CN', { month: 'long', day: 'numeric', weekday: 'long' })}</div>
         </div>
 
-        {/* 玻璃卡片登录框 */}
-        <div className="w-full bg-white/20 backdrop-blur-xl border border-white/30 rounded-[40px] p-8 shadow-2xl animate-slideUp">
-          
-          {/* 头像圈圈 */}
-          <div className="w-20 h-20 mx-auto bg-white/30 rounded-full flex items-center justify-center mb-6 border-2 border-white/50 shadow-lg">
-            <span className="text-3xl">🔒</span>
+        <div className="w-full bg-white/20 backdrop-blur-xl border border-white/30 rounded-[40px] p-6 shadow-2xl animate-slideUp">
+          <div className="text-center mb-6">
+            <h2 className="font-bold text-white text-2xl drop-shadow">欢迎回来</h2>
+            <p className="text-xs text-white/70">请输入密码以继续</p>
           </div>
 
           <div className="space-y-4">
-            {/* 账号输入 */}
-            <div className="bg-white/40 rounded-2xl p-1 flex items-center border border-white/20 transition-all focus-within:bg-white/60 focus-within:scale-105">
-              <span className="pl-3 text-lg">👤</span>
+            <div className="bg-white/40 rounded-xl p-1 flex items-center border border-white/20 transition-all focus-within:bg-white/60 focus-within:scale-105">
+              <span className="pl-3 text-lg opacity-50">👤</span>
               <input 
                 type="text" value={u} onChange={e=>{setU(e.target.value);setErr("")}}
-                className="w-full bg-transparent px-3 py-3 outline-none text-gray-800 placeholder-gray-600 font-bold"
-                placeholder="Who are you?"
+                className="w-full bg-transparent px-3 py-2.5 outline-none text-gray-800 placeholder-gray-700 font-semibold"
+                placeholder="账号"
               />
             </div>
-
-            {/* 密码输入 */}
-            <div className="bg-white/40 rounded-2xl p-1 flex items-center border border-white/20 transition-all focus-within:bg-white/60 focus-within:scale-105">
-              <span className="pl-3 text-lg">🔑</span>
+            <div className="bg-white/40 rounded-xl p-1 flex items-center border border-white/20 transition-all focus-within:bg-white/60 focus-within:scale-105">
+              <span className="pl-3 text-lg opacity-50">🔑</span>
               <input 
                 type="password" value={p} onChange={e=>{setP(e.target.value);setErr("")}}
                 onKeyDown={(e) => e.key === 'Enter' && handleCheck()}
-                className="w-full bg-transparent px-3 py-3 outline-none text-gray-800 placeholder-gray-600 font-bold"
-                placeholder="Password"
+                className="w-full bg-transparent px-3 py-2.5 outline-none text-gray-800 placeholder-gray-700 font-semibold"
+                placeholder="密码"
               />
             </div>
           </div>
 
-          {/* 错误提示 */}
-          <div className="h-6 mt-2 text-center">
+          <div className="h-6 mt-3 text-center">
             {err && <span className="text-red-100 bg-red-500/50 px-3 py-1 rounded-full text-xs font-bold shadow-sm animate-bounce">{err}</span>}
           </div>
 
-          {/* 登录按钮 */}
           <button 
             onClick={handleCheck}
-            className="w-full mt-4 bg-white/90 hover:bg-white text-blue-600 font-black py-4 rounded-2xl shadow-lg active:scale-95 transition-all flex items-center justify-center gap-2"
+            className="w-full mt-4 bg-white/90 hover:bg-white text-blue-600 font-black py-3.5 rounded-xl shadow-lg active:scale-95 transition-all flex items-center justify-center gap-2"
           >
-            <span>解锁进入</span> ➜
+            <span>解锁</span> →
           </button>
-
         </div>
-        
-        <p className="mt-6 text-white/60 text-xs font-medium tracking-widest uppercase">
-          Private Space OS
-        </p>
       </div>
     </div>
   );
