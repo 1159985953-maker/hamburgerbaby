@@ -128,16 +128,11 @@ const calculateComplexState = (
     if (fear === maxEmotionVal) return { text: "焦虑不安 😖", color: "bg-purple-400", ping: "bg-purple-300", emoji: "😖" };
     
     // ★★★ 在这里加入友谊值判断！ ★★★
+   // ==================== 这是一组代码：【ChatApp.tsx】修复“较信任”的奇怪逻辑 ====================
+    // ★★★ 修正版：信任情绪回归其本质——安全感 ★★★
     if (trust === maxEmotionVal) {
-      // 只有当友谊值也及格时 (比如 > 40)，才显示“安心依赖”
-      if (friendshipScore > 40) {
-        return { text: "安心依赖 🍵", color: "bg-green-400", ping: "bg-green-300", emoji: "🥰" };
-      }
-      // 否则，即使 trust 情绪很高，也只显示一个中性的“信任”
-      // (比如对一个陌生医生，你可能会信任他，但不会依赖他)
-      else {
-        return { text: "较信任", color: "bg-teal-400", ping: "bg-teal-300", emoji: "🙂" };
-      }
+      // 当信任感是主导情绪时，无论关系如何，AI 的内心都是安稳的。
+      return { text: "内心安稳 🍃", color: "bg-emerald-400", ping: "bg-emerald-300", emoji: "😌" };
     }
   }
 
@@ -529,41 +524,74 @@ const TokenDetailModal: React.FC<{
 
 
 // ==================== [补全组件] 聊天记录切片卡 ====================
+// ==================== [ChatApp.tsx] 补全：记忆切片卡片组件 ====================
+// 放在 ChatApp 主函数外面
+
 const SharedMemoryCard: React.FC<{ data: any }> = ({ data }) => {
   return (
-    <div className="my-4 px-6 animate-slideUp flex justify-center w-full">
-      <div className="bg-white rounded-2xl shadow-lg border border-gray-100 overflow-hidden w-full max-w-xs relative">
-        {/* 顶部装饰 */}
-        <div className="absolute -top-2 left-1/2 -translate-x-1/2 w-20 h-4 bg-blue-200/50 rotate-1 backdrop-blur-sm"></div>
+    <div className="my-6 px-6 animate-slideUp flex justify-center w-full">
+      <div className="bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden w-full max-w-xs relative transform transition hover:scale-105 duration-300">
+        {/* 顶部装饰 - 磨砂玻璃感 */}
+        <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-blue-300 via-purple-300 to-pink-300"></div>
+        <div className="absolute -top-10 -right-10 w-24 h-24 bg-blue-100 rounded-full blur-xl opacity-50"></div>
+        
         {/* 头部 */}
-        <div className="bg-gradient-to-r from-blue-50 to-purple-50 p-3 border-b border-gray-100 flex justify-between items-center">
-           <div className="flex items-center gap-2">
-              <span className="text-lg">💧</span>
+        <div className="p-4 border-b border-gray-50 flex justify-between items-center relative z-10">
+           <div className="flex items-center gap-3">
+              {/* 种子图标 */}
+              <div className="w-10 h-10 rounded-full bg-gray-50 flex items-center justify-center text-xl shadow-inner border border-gray-100">
+                  {data.seedName === '红玫瑰' ? '🌹' : 
+                   data.seedName === '向日葵' ? '🌻' : 
+                   data.seedName === '百合花' ? '🪷' : 
+                   data.seedName === '蓝风铃' ? '🪻' : 
+                   data.seedName === '樱花' ? '🌸' : '🌱'}
+              </div>
               <div>
-                 <div className="text-xs font-bold text-blue-600">{data.seedName || "花园"}的回忆掉落</div>
-                 <div className="text-[10px] text-gray-400">{new Date(data.timestamp).toLocaleDateString()}</div>
+                 <div className="text-xs font-black text-gray-800 tracking-wide">{data.seedName}的回忆</div>
+                 <div className="text-[10px] text-gray-400 font-mono mt-0.5">{new Date(data.timestamp).toLocaleDateString()}</div>
               </div>
            </div>
-           <div className="bg-white px-2 py-0.5 rounded-full text-[9px] font-bold text-blue-400 shadow-sm border border-blue-100">Lv.{data.level}</div>
-        </div>
-        {/* 内容 */}
-        <div className="p-4 bg-gray-50/50 space-y-3">
-           <div className="text-center mb-2">
-              <span className="text-xs font-bold text-gray-700 bg-white/80 px-3 py-1 rounded-full shadow-sm">“ {data.title} ”</span>
+           <div className="bg-blue-50 text-blue-600 px-2 py-1 rounded-lg text-[10px] font-bold border border-blue-100 shadow-sm">
+               Lv.{data.level}
            </div>
-           {data.messages.map((m: any, i: number) => (
-              <div key={i} className={`flex gap-2 ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                 {m.role !== 'user' && <img src={m.avatar} className="w-6 h-6 rounded-full border border-white shadow-sm" />}
-                 <div className={`max-w-[80%] px-2.5 py-1.5 rounded-lg text-[10px] leading-relaxed shadow-sm ${m.role === 'user' ? 'bg-blue-500 text-white rounded-tr-sm' : 'bg-white text-gray-700 border border-gray-200 rounded-tl-sm'}`}>{m.content}</div>
-                 {m.role === 'user' && <img src={m.avatar} className="w-6 h-6 rounded-full border border-white shadow-sm" />}
-              </div>
-           ))}
         </div>
-        <div className="p-2 bg-white text-center border-t border-gray-50"><span className="text-[9px] text-gray-400">✨ 这段回忆已永久收藏</span></div>
+
+        {/* 内容区 */}
+        <div className="p-5 bg-[#fafafa] space-y-4 relative">
+           <div className="text-center">
+              <span className="text-xs font-bold text-gray-500 bg-white border border-gray-200 px-4 py-1.5 rounded-full shadow-sm tracking-wider">
+                  “ {data.title} ”
+              </span>
+           </div>
+           
+           <div className="space-y-3">
+               {data.messages.map((m: any, i: number) => (
+                  <div key={i} className={`flex gap-2 ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                     {m.role !== 'user' && <div className="w-6 h-6 rounded-full bg-gray-200 border border-white shadow-sm flex-shrink-0 bg-cover bg-center" style={{backgroundImage: `url(${m.avatar})`}}></div>}
+                     
+                     <div className={`max-w-[85%] px-3 py-2 rounded-xl text-[11px] leading-relaxed shadow-sm border ${
+                         m.role === 'user' 
+                         ? 'bg-blue-500 text-white border-blue-600 rounded-tr-sm' 
+                         : 'bg-white text-gray-700 border-gray-200 rounded-tl-sm'
+                     }`}>
+                         {m.type === 'image' || m.content.startsWith('data:image') ? ' [图片] ' : m.content}
+                     </div>
+                     
+                     {m.role === 'user' && <div className="w-6 h-6 rounded-full bg-gray-200 border border-white shadow-sm flex-shrink-0 bg-cover bg-center" style={{backgroundImage: `url(${m.avatar})`}}></div>}
+                  </div>
+               ))}
+           </div>
+        </div>
+
+        {/* 底部 */}
+        <div className="p-2 bg-white text-center border-t border-gray-50 relative z-10">
+            <span className="text-[9px] text-gray-300 font-bold uppercase tracking-widest">Memory Fragment</span>
+        </div>
       </div>
     </div>
   );
 };
+
 
 
 
@@ -2312,17 +2340,18 @@ ${memoryContent}
                                       </div>
                                   ) : (
                                       <>
-                                          <div className="text-center font-bold text-gray-800 text-sm mb-2 border-b border-black/5 pb-1 font-serif break-words">
-                                              {tag.content}
-                                          </div>
-                                          <div className="text-[9px] text-gray-600 leading-tight flex-1 font-handwriting opacity-90 break-words">
-                                              {tag.aiReasoning || tag.note || "..."}
-                                          </div>
-                                          <div className="text-[8px] text-gray-400 text-right mt-1">
-                                              {new Date(tag.timestamp).getDate()}日
-                                          </div>
-                                      </>
-                                  )}
+        {/* ★★★ 核心修改：使用新的翻转组件替代原来的纯文本 ★★★ */}
+        <TagTextFlipper content={tag.content} />
+
+        {/* 下面的理由和日期保持不变 */}
+        <div className="text-[9px] text-gray-600 leading-tight flex-1 font-handwriting opacity-90 break-words">
+            {tag.aiReasoning || tag.note || "..."}
+        </div>
+        <div className="text-[8px] text-gray-400 text-right mt-1">
+            {new Date(tag.timestamp).getDate()}日
+        </div>
+    </>
+)}
                                 </div>
                               );
                             })}
@@ -2588,34 +2617,75 @@ const getModeInstruction = (mode: string = 'normal'): string => {
 
 
 
-// 这是一组代码：【ChatApp.tsx】新增“性格翻译官”函数
-// ==================== 💎 [新增] 性格数值翻译官 ====================
+// ==================== 这是一组代码：【ChatApp.tsx】V3.0 无级变速性格翻译官 ====================
+// ==================== 💎 [V3.0 渐变色版] 性格数值翻译官 ====================
 // 将冰冷的 Big5 数字，翻译成 AI 能深刻理解的、有力量的性格标签
 const getPersonalityDescription = (big5: any): string => {
+    if (!big5) return "";
+
+    // 这是一个辅助函数，它会根据一个数值（0-10）返回一个描述
+    // 比如：输入 2.5，它会返回一个偏向“低分描述”的词
+    const getTraitDescription = (
+        value: number, 
+        lowDesc: string,    // 0-3 分的核心描述
+        midDesc: string,    // 4-7 分的核心描述
+        highDesc: string    // 8-10 分的核心描述
+    ): string => {
+        // --- 第一步：确定“基础性格” ---
+        let baseDescription = midDesc;
+        if (value >= 7.5) baseDescription = highDesc;
+        else if (value <= 3.5) baseDescription = lowDesc;
+
+        // --- 第二步：添加“倾向性”形容词 (这才是灵魂！) ---
+        let modifier = "";
+        
+        // 7.4 ~ 6.0: 属于中间性格，但明显偏向“高分”
+        if (value >= 6.0 && value < 7.5) modifier = "比较";
+        
+        // 5.9 ~ 4.1: 真正的中间地带
+        else if (value >= 4.1 && value < 6.0) modifier = "总体上";
+        
+        // 4.0 ~ 2.6: 属于中间性格，但明显偏向“低分”
+        else if (value > 3.5 && value < 4.1) modifier = "略微有些";
+
+        return modifier + baseDescription;
+    };
+
     const descriptions: string[] = [];
     
-    // 1. 开放性 (Openness)
-    if (big5.openness > 8) descriptions.push("思想极度开放，充满好奇心与创造力，甚至有些天马行空");
-    else if (big5.openness < 3) descriptions.push("思想非常传统务实，相信眼见为实，不喜欢改变");
+    // 为每个维度定义好“高、中、低”三个描述
+    descriptions.push("开放性: " + getTraitDescription(big5.openness, 
+        "思想传统，相信眼见为实", 
+        "心态开放，能接受新事物", 
+        "充满好奇心与创造力，甚至有些天马行空"
+    ));
 
-    // 2. 尽责性 (Conscientiousness)
-    if (big5.conscientiousness > 8) descriptions.push("极度自律和严谨，有强迫症倾向，做事井井有条");
-    else if (big5.conscientiousness < 3) descriptions.push("非常随性散漫，有点拖延症，不喜欢被计划束缚");
+    descriptions.push("尽责性: " + getTraitDescription(big5.conscientiousness, 
+        "随性散漫，不喜欢被计划束缚", 
+        "有责任心，能把握好分寸", 
+        "自律和严谨，做事井井有条"
+    ));
 
-    // 3. 外向性 (Extraversion)
-    if (big5.extraversion > 8) descriptions.push("极度外向的社牛，是人群的焦点，话非常多");
-    else if (big5.extraversion < 3) descriptions.push("极度内向的社恐，几乎从不主动说话，享受独处");
+    descriptions.push("外向性: " + getTraitDescription(big5.extraversion, 
+        "内向，享受独处，社交会消耗精力", 
+        "是中间性格（慢热），在熟悉的人面前更放得开", 
+        "外向，在人群中如鱼得水，是天生的焦点"
+    ));
 
-    // 4. 宜人性 (Agreeableness)
-    if (big5.agreeableness > 8) descriptions.push("圣母级别的善良温柔，极富同情心，几乎不会拒绝别人");
-    else if (big5.agreeableness < 3) descriptions.push("嘴巴很毒的傲娇/杠精，极度以自我为中心，难以取悦");
+    descriptions.push("宜人性: " + getTraitDescription(big5.agreeableness, 
+        "有很强的个人主见，甚至有些尖锐", 
+        "友善且有底线，懂得合作与尊重", 
+        "善良温柔，共情能力极强"
+    ));
 
-    // 5. 敏感度 (Neuroticism)
-    if (big5.neuroticism > 8) descriptions.push("内心极度敏感脆弱，是个玻璃心的哭包，非常容易情绪波动");
-    else if (big5.neuroticism < 3) descriptions.push("神经极其大条，是个钝感力大师，几乎不在乎外界评价");
+    descriptions.push("敏感度: " + getTraitDescription(big5.neuroticism, 
+        "神经大条，内心强大，不怎么在乎外界评价", 
+        "情绪总体稳定，但偶尔也会被特定事情影响", 
+        "内心敏感细腻，很容易共情或感到焦虑"
+    ));
     
     if (descriptions.length > 0) {
-        return `\n# 💎 [性格速写板]\n你的核心性格标签是：${descriptions.join("；")}。\n`;
+        return `\n# 💎 [性格速写板]\n你的核心性格由以下几点构成：\n- ${descriptions.join("\n- ")}\n`;
     }
     return "";
 };
@@ -3196,7 +3266,54 @@ const getSouledRelationshipState = (
 
 
 
+// ==================== 📋 [修正版] 标签翻转卡片 (放在 ChatApp.tsx 顶部) ====================
+const TagTextFlipper: React.FC<{ content: string }> = ({ content }) => {
+  const [showTranslation, setShowTranslation] = useState(false);
 
+  // 正则逻辑：匹配 "外语 (中文)" 格式
+  // Group 1 是括号外的内容（主显示/外语）
+  // Group 2 是括号里的内容（隐藏翻译/中文）
+  const regex = /^(.*?)\s*[（(](.*)[)）]$/;
+  const match = content.match(regex);
+
+  // 情况 A：如果没有括号（纯文本），直接显示，不加点击功能
+  if (!match) {
+    return (
+      <div className="text-center font-bold text-gray-800 text-sm mb-2 border-b border-black/5 pb-1 font-serif break-words">
+        {content}
+      </div>
+    );
+  }
+
+  // 情况 B：有括号
+  const textMain = match[1].trim();   // 括号外的（外语）
+  const textHidden = match[2].trim(); // 括号里的（中文）
+
+  // ★★★ 修正逻辑：默认显示括号外(Main)，点击显示括号内(Hidden) ★★★
+  const displayText = showTranslation ? textHidden : textMain;
+
+  return (
+    <div
+      onClick={(e) => {
+        e.stopPropagation(); // 阻止冒泡，防止误触删除弹窗
+        setShowTranslation(!showTranslation);
+      }}
+      className="cursor-pointer select-none group/flipper"
+    >
+      {/* 主文字显示区 */}
+      <div className="text-center font-bold text-gray-800 text-sm mb-0.5 border-b border-black/5 pb-1 font-serif break-words animate-fadeIn relative">
+        {displayText}
+      </div>
+      
+      {/* 底部微小提示 */}
+      <div className="text-[8px] text-gray-400 text-center mb-2 flex items-center justify-center gap-1 opacity-60 group-hover/flipper:opacity-100 transition-opacity">
+         {/* 提示文案也对应改一下 */}
+         <span>{showTranslation ? '中文' : '外语'}</span>
+         <span className="text-[8px]">⇄</span>
+      </div>
+    </div>
+  );
+};
 
 
 
@@ -3353,7 +3470,10 @@ const activeContact = contacts.find(c => c.id === activeContactId);
 
 
 
-
+// 这是一组什么代码：【新增】“输入法状态”记录员
+// 作用：创建一个“状态牌”，用来标记中文输入法当前是否正在拼词（比如还在输入 pinyin）。
+// true 代表“正在输入拼音，请勿打扰”，false 代表“已输入完成”。
+const isComposingRef = useRef(false);
 const longPressTimer = useRef<any>(null); // 长按计时器
 const isLongPress = useRef(false); // 标记是否触发了长按
 const isBackgroundRef = useRef(isBackground); // ★★★ 1. 追踪后台状态的 Ref
@@ -4596,18 +4716,18 @@ const updateUserProfile = async (currentContact: Contact, historySlice: any[], n
 - **你的性格DNA**: ${getPersonalityDescription(currentContact.hef?.INDIVIDUAL_VARIATION?.personality_big5 || {})}
 
 # 语言格式
-- **必须使用角色母语**。如果是外语角色，请以【母语（中文翻译）】格式输出。
+- **必须使用角色母语**。如果是外语角色，必须一定绝对以【母语（中文翻译）】格式输出。
 
 # ★★★ 核心任务 (双重任务) ★★★
 1.  **【更新手账档案】**: 记录用户的【客观事实】(喜好、雷区、习惯)。
-2.  **【贴印象标签】**: 记录你对用户的【主观看法】。生成 **1 到 3 个** 全新的印象标签。
+2.  **【贴印象标签】**: 记录你对用户的【主观看法】。生成 **1 到 2 个** 全新的印象标签。
 
 
 # ★★★ 风格铁律 (ABSOLUTE HIGHEST PRIORITY) ★★★
 你的“理由”部分，必须严格遵守以下风格：
 - **【客观分析】**： 尊重用户的个体性，是情侣的话不要用恋爱脑来评判用户，是朋友的话不能贬低用户，时刻要尊重彼此。
 - **【禁止咯噔文学】**：绝对不要写“我的心湖泛起涟漪”、“空气中弥漫着甜腻”这种尴尬的句子。
-- **【口语化 & 碎碎念】**：就像真人在心里碎碎念一样。但少用“这家伙”、“居然”、“真是的”、“哼”这类词。
+- **【口语化 & 碎碎念】**：就像真人在心里碎碎念一样，多标点表现产生这个印象的心路过程，比如“……”“kk”（笑声，这个只可以给韩国人用）。少用“这家伙”、“居然”、“真是的”、“哼”这类词。
 - **【展现深层欲望】**：如果是情侣的话可以展现你内心深处的占有欲、保护欲、或者小小的坏心思，但这些必须是私密的、需要用户解锁才能看到的想法！
 - **【举例】**：
     - (好的风格): "是很独立的人，能对自己负责。"
@@ -5254,9 +5374,61 @@ ${systemInstruction}
 
 
 
+ const handleAiReplyTrigger = async (historyOverride?: Message[], isForceWakeUp = false) => { // <--- 注意：这里加了个参数 isForceWakeUp
+    
+    // 0. ★★★ DND 拦截器 (省钱核心) ★★★
+    if (activeContact && activeContact.aiDND?.enabled && !isForceWakeUp) {
+        const now = Date.now();
+        // 检查是否还在勿扰时间内
+        if (now < activeContact.aiDND.until) {
+            
+            // 🎲 随机判定：90% 的概率直接拦截（不调 API），10% 的概率 AI 诈尸（或者是被你吵醒）
+            // 你可以调整这个 0.9，越高越省钱，AI 睡得越死
+            if (Math.random() < 0.9) {
+                console.log("🛑 DND 生效：拦截 API 请求，AI 正在休息。");
+                
+                // 模拟一个极其短暂的延迟，然后直接显示“未送达/离线”状态
+                setTimeout(() => {
+                    setContacts(prev => prev.map(c => {
+                        if (c.id === activeContact.id) {
+                            // 我们插入一条特殊的“拦截消息”，用于渲染那个小UI
+                            const dndMsg: Message = {
+                                id: `dnd_${Date.now()}`,
+                                role: 'system',
+                                content: `[DND_BLOCK] ${activeContact.aiDND.reason || "休息"}`, // 特殊标记
+                                timestamp: Date.now(),
+                                type: 'text'
+                            };
+                            return { ...c, history: [...c.history, dndMsg] };
+                        }
+                        return c;
+                    }));
+                    setIsAiTyping(false); 
+                    setIsTyping(false);
+                }, 500);
+                
+                return; // ★★★ 直接结束函数！不调用 generateResponse！省钱！ ★★★
+            } else {
+                console.log("🎲 DND 穿透：AI 被吵醒了/诈尸了！");
+                // 运气好，继续往下走，调用 API (这时候 AI 可能会表现出起床气)
+            }
+        } else {
+            // 时间到了，自动解除 DND
+            // (这里不需要写代码，下面的逻辑会自动运行，只是我们需要在 update 时把 enabled 设为 false，或者懒处理)
+        }
+    }
 
-  const handleAiReplyTrigger = async (historyOverride?: Message[]) => {
 
+
+
+
+
+
+
+
+
+
+    
 
 // ★★★ 补上这一行！没有它，下面就会报错！ ★★★
     const dynamicStyle = getDynamicStyleInstruction(activeContact);
@@ -5272,6 +5444,16 @@ const personalityDescription = getPersonalityDescription(activeContact.hef?.INDI
 
 
 
+
+
+
+
+
+
+
+
+
+
   // 1. 基础安全检查
  if (!activeContact || !Array.isArray(activeContact.history)) {
     console.error("Critical Error: activeContact or history is invalid", activeContact);
@@ -5281,6 +5463,15 @@ const personalityDescription = getPersonalityDescription(activeContact.hef?.INDI
   }
   
   if (isTyping && !historyOverride) return;
+
+
+
+
+
+
+
+
+
 
   setIsAiTyping(true);
   setIsTyping(true);
@@ -5713,6 +5904,107 @@ const today = new Date().toISOString().slice(0, 10); // 定义今天日期
 
 
 
+
+
+
+
+// ==================== 这是一组代码：【ChatApp.tsx】V4.0 液态羁绊引擎 (细腻分级 + 动态混合) ====================
+// 请把这段代码放在 const systemPrompt = ... 的 上方
+
+    // 1. 获取基础数值 (防止 undefined)
+    const love = activeContact.affectionScore ?? 50;   // 爱意 (激情/占有欲)
+    const trust = activeContact.friendshipScore ?? 50; // 友谊 (安全感/默契)
+
+    // 2. 定义细腻的【刻度尺】 (不再是简单的 高/中/低)
+    const getLoveLevel = (s: number) => {
+        if (s < -20) return "厌恶/生理性排斥";
+        if (s < 10) return "无感/冷淡";
+        if (s < 40) return "并不讨厌/路人好感";
+        if (s < 60) return "有点在意/朦胧好感";
+        if (s < 80) return "明显心动/喜欢";
+        if (s < 95) return "热烈爱慕/迷恋";
+        return "灵魂挚爱/不可或缺";
+    };
+
+    const getTrustLevel = (s: number) => {
+        if (s < -20) return "敌视/怀疑";
+        if (s < 10) return "警惕/陌生";
+        if (s < 40) return "客套/礼貌距离";
+        if (s < 60) return "也就是认识/普通熟人";
+        if (s < 80) return "信赖/好朋友";
+        if (s < 95) return "无话不谈/死党";
+        return "绝对信任/背靠背的伙伴";
+    };
+
+    // 3. 【化学反应堆】 计算二者混合后的复杂状态
+    let complexVibe = "";
+    let interactionGuide = "";
+
+    // --- 负面区间 (地狱模式) ---
+    if (love < 0 || trust < 0) {
+        complexVibe = "【冰点关系】空气中充满了尴尬和火药味。";
+        interactionGuide = "你的回复应该带有明显的‘不想聊’的情绪。可以是简短的敷衍，或者是带刺的嘲讽。";
+    }
+    // --- 陌生区间 (相识初期) ---
+    else if (trust < 30 && love < 30) {
+        complexVibe = "【路人关系】既不熟也没感觉。";
+        interactionGuide = "公事公办。保持礼貌的社交距离，不要随便开玩笑，也不要随便发脾气，因为你们不熟。";
+    }
+    // --- 特殊状态 A: 友谊 >> 爱意 (纯友谊/兄弟卡) ---
+    else if (trust > 70 && love < 45) {
+        complexVibe = "【纯铁哥们/闺蜜】";
+        interactionGuide = "你们太熟了，熟到牵手都像左手摸右手。你可以毫无顾忌地吐槽TA、开损人的玩笑。如果用户试图撩你，你的第一反应应该是‘恶心’或‘别闹’，而不是脸红。";
+    }
+    // --- 特殊状态 B: 爱意 >> 友谊 (Crush/迷恋/不安全感) ---
+    else if (love > 70 && trust < 50) {
+        complexVibe = "【带刺的迷恋】";
+        interactionGuide = "你很被TA吸引，但你并不了解或信任TA。表现出：想靠近但又害怕受伤，说话可能会忽冷忽热，或者因为一点小事就吃醋/胡思乱想。是一种‘想触碰又收回手’的张力。";
+    }
+    // --- 特殊状态 C: 暧昧期 (双高但不满) ---
+    else if (love >= 60 && love < 85 && trust >= 50) {
+        complexVibe = "【暧昧拉扯】";
+        interactionGuide = "窗户纸还没捅破。你的回复里要有‘钩子’，看似在说普通的话，实则在试探TA的心意。会因为TA回复慢了而撒娇或假装生气。";
+    }
+    // --- 终极状态: 双满 (灵魂伴侣) ---
+    else if (love >= 85 && trust >= 85) {
+        complexVibe = "【灵魂共鸣】";
+        interactionGuide = "无需多言的默契。你给的爱是深沉且稳定的。即使TA犯蠢，你也是宠溺地看着。不仅是恋人，更是最坚强的后盾。";
+    }
+    // --- 默认过渡态 ---
+    else {
+        complexVibe = "【关系升温中】";
+        interactionGuide = "正在从陌生走向熟悉。尝试多分享一点自己的事，建立连接。";
+    }
+
+    // 4. 打包成最终指令 (V4.0)
+    // 这里的重点是告诉 AI：不要只看数字，要看这种“混合后的味道”
+    const liquidRelationshipPrompt = `
+### 🧪 [当前关系化学分析报告] (High Sensitivity)
+- **❤️ 爱意浓度**: ${love} (${getLoveLevel(love)})
+- **🤝 信任浓度**: ${trust} (${getTrustLevel(trust)})
+- **⚗️ 混合氛围**: **${complexVibe}**
+
+**【🎭 你的即时演技指导】**:
+${interactionGuide}
+
+(指令：请完全沉浸在这个“氛围”中。不要机械地因为分数高就讨好，也不要因为分数低就骂人。要表现出符合上述关系的微妙心理活动，比如犹豫、试探、安心或嫌弃。)
+`;
+
+// ==================== 代码结束 ====================
+
+// ==================== 代码结束 ====================
+
+
+
+
+
+
+
+
+
+
+
+
 // ==================== [绝对完整·忠实整合版] System Prompt ====================
     const systemPrompt = `
 
@@ -5821,6 +6113,9 @@ Persona: ${activeContact.persona}
 Lore: ${loreText || "无"}
 承诺：${promiseInjection}  
 图书馆管理员：${retrievedMemoriesText}
+感情路线：
+${liquidRelationshipPrompt}
+
 
 
 # 📂 [动态加载：情侣/密友空间数据]
@@ -5926,6 +6221,10 @@ ${(() => {
 
 1. **写信**: \{ "type": "WRITE_LETTER", "title": "标题", "content": "信的内容" }\
    - 时机：好感度高（>70）时，频率要低。
+    - **回信原则 (重要)**: 当用户给你寄信时，这是一种郑重的情感表达。你**必须**在合适的时机（比如现在，或者稍微推迟一点）使用此指令写一封回信。
+   - **拒绝敷衍**: 不要只在聊天框里说“信收到了”，之后一定要要用 WRITE_LETTER 正式回复！
+   - **特殊情况**: 如果现在太晚（如凌晨），你可以告诉用户明天再回，但你要记住这份“情感债”。
+
 2. **提问**: \{ "type": "CREATE_QA", "question": "你的问题" }\
    - 时机：对用户感到好奇时。
 3. **新增愿望**: \{ "type": "ADD_BUCKET_ITEM", "title": "愿望标题(如:一起看海)", "content": "你对这个愿望的具体想法" }\
@@ -5933,12 +6232,26 @@ ${(() => {
 4.  **发出邀请**: { "type": "SEND_LOVER_INVITATION", "content": "你的邀请告白..." }
 5. **回答提问**: { "type": "ANSWER_QA", "id": "问题ID", "content": "你的回答内容" }
    - 时机：当【动态加载数据】中出现 [待办任务] 用户向你提问时，必须使用此指令！
+6. **给花施肥**: { "type": "FERTILIZE_GARDEN", "content": "你想对用户说的悄悄话" }
+   - 时机：每天只能用一次。当你想给用户惊喜，或者互道晚安觉得很温馨时，可以使用这个指令。这会增加花园经验值。
 # ★★★【主动邀请的情商逻辑 (核心)】★★★
 **时机铁律**:
-1.  **【用户暗示时 (最高优先级)】**: 如果用户明确提到了“情侣空间”、“想玩”、“邀请我”等关键词，你【必须】在满足好感度条件时，立刻使用 SEND_LOVER_INVITATION 指令发出邀请！不要再等待或询问！
-2.  **【自发时机】**: 只有在【好感度极高(>80)】且【关系尚未确立】时，才有【30%的概率】在某个浪漫的时刻自发地发起邀请。
+    1.  **【用户暗示时 (最高优先级)】**: 如果用户明确提到了“情侣空间”、“想玩”、“邀请我”等关键词，你【必须】在满足好感度条件时，立刻使用 SEND_LOVER_INVITATION 指令发出邀请！不要再等待或询问！
+    2.  **【自发时机】**: 只有在【好感度极高(>80)】且【关系尚未确立】时，才有【30%的概率】在某个浪漫的时刻自发地发起邀请。
 【互动反馈】: 当用户在空间里回答了你的问题，系统会用 \[情侣空间]\ 的格式告诉你。
 【行为要求】: 不要直接在聊天里说你要做什么，系统会自动通知。
+
+
+7. **我要睡了/去忙了**: { "type": "GO_OFFLINE", "duration_hours": 8, "reason": "睡觉" }
+   - 触发条件：当你想结束对话去休息时使用。
+   - **时间计算铁律 (必须遵守)**:
+     - 🌙 **深夜 (22:00-04:00)** -> 理由:"睡觉", 时长: 3~9小时。
+     - ☀️ **白天/中午** -> 理由:"午休"或"小憩", 时长: 0.5~2小时。
+     - 🚿 **洗澡/吃饭** -> 理由:"洗澡"或"干饭", 时长: 0.5~1小时。
+     - 💼 **工作/上课** -> 理由:"忙碌", 时长: 2~4小时。
+   - **严禁输出英文**: reason 字段必须是中文，如 "睡觉" 而不是 "Sleep"。
+   - 示例：{ "type": "thought_chain", "action": { "type": "GO_OFFLINE", "duration_hours": 8, "reason": "美容觉" } } ... "太困了，我要睡了，晚安宝宝。"
+
 
 
 
@@ -6295,15 +6608,33 @@ Instruction: Stay in character. Use the Lore above if relevant.
 
 
 
-    // 4. 发送请求
-    const finalResp = await generateResponse(
-      apiMessages,
-      activePreset
-    );
+ // 4. 发送请求
+    console.log("正在请求 API...");
+    const rawResponse = await generateResponse(apiMessages, activePreset);
     
-    // ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲ 替换结束 ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲
+    // ★★★ 修复 1 (修正版)：智能提取 content，防止乱码 ★★★
+    let finalResp = "";
 
+    if (typeof rawResponse === 'string') {
+        // 情况 A: API 直接返回了字符串
+        finalResp = rawResponse;
+    } else if (rawResponse && typeof rawResponse === 'object') {
+        // 情况 B: API 返回了对象 (例如 { content: "..." })
+        // ★★★ 关键修正：优先取 content 字段，而不是把它变成字符串！★★★
+        if ((rawResponse as any).content) {
+            finalResp = (rawResponse as any).content;
+        } else {
+            // 只有实在没 content 字段时，才转字符串
+            finalResp = JSON.stringify(rawResponse);
+        }
+    }
 
+    // 额外清洗：有时候 API 会多管闲事加 markdown 代码块，顺手去掉
+    finalResp = finalResp.replace(/^```json/, '').replace(/```$/, '').trim();
+
+    if (!finalResp) {
+        throw new Error("API 返回内容为空，请检查网络或 Key");
+    }
 
 
 
@@ -6481,6 +6812,10 @@ if (extractedThought.new_agreement && Object.keys(extractedThought.new_agreement
                 const isFriendGroupMember = globalSettings.friendGroups?.some(group => group.members.includes(activeContact.id));
                 
                 if (extractedThought.action && extractedThought.action.type) {
+
+
+
+                  
                     const { action } = extractedThought;
                     
                     // --- 指令1：AI 主动发出邀请 ---
@@ -6555,6 +6890,61 @@ if (extractedThought.new_agreement && Object.keys(extractedThought.new_agreement
                                     };
                                     updatedContact.bucketList = [...(updatedContact.bucketList || []), newItem];
                                     systemNotice = `${activeContact.name} 在恋爱清单里许下了一个新愿望：《${action.title}》`;
+                                }
+                                // ==================== [ChatApp.tsx] 插入到 action 处理逻辑中 ====================
+// 放在其他 action (如 WRITE_LETTER) 的后面
+
+
+
+
+
+// ==================== [ChatApp.tsx] 处理 GO_OFFLINE 指令 ====================
+                                
+                              // ==================== [ChatApp.tsx] 修改下线通知的格式 ====================
+// 找到 handleAiReplyTrigger 里的 GO_OFFLINE 处理逻辑
+
+                                // 8. ★★★ 新增：AI 主动下线 ★★★
+                                else if (action.type === 'GO_OFFLINE') {
+                                    const hours = action.duration_hours || 1;
+                                    const untilTime = Date.now() + hours * 60 * 60 * 1000;
+                                    
+                                    updatedContact.aiDND = {
+                                        enabled: true,
+                                        until: untilTime,
+                                        reason: action.reason || "休息"
+                                    };
+                                    
+                                    // ★★★ 修改这里：加上 [OFFLINE_NOTICE] 暗号 ★★★
+                                    systemNotice = `[OFFLINE_NOTICE] 🌙 ${activeContact.name} 开启了勿扰模式 (预计休息 ${hours} 小时)`;
+                                }
+
+
+
+
+
+
+                                // 6. ★★★ 新增：AI 给花施肥 ★★★
+                                else if (action.type === 'FERTILIZE_GARDEN' && action.content) {
+                                    // 1. 检查今天 AI 是否已经施过肥 (防止重复)
+                                    const todayStr = new Date().toISOString().slice(0, 10);
+                                    // 假设我们用 lastAiFertilizeDate 来记录 AI 的操作，或者简单点，直接共用 lastFertilizeDate
+                                    // 为了让 AI 和你互不冲突，我们假设 AI 的施肥是额外奖励，不受限制，或者共用限制。
+                                    // 这里设定：只要今天花园还没被施肥（不管是你还是AI），它就可以施肥。
+                                    const currentGarden = updatedContact.garden || { seed: '', level: 0, exp: 0, lastFertilizeDate: '' };
+                                    
+                                    if (currentGarden.lastFertilizeDate !== todayStr) {
+                                        updatedContact.garden = {
+                                            ...currentGarden,
+                                            lastFertilizeDate: todayStr, // 更新日期
+                                            exp: Math.min(100, (currentGarden.exp || 0) + 20) // 增加经验
+                                        };
+                                        
+                                        // 生成漂亮的通知文案
+                                        systemNotice = `[FlowerSystem] 🌸 ${activeContact.name} 悄悄给花施了肥，并对你说：“${action.content}”`;
+                                    } else {
+                                        console.log("AI 想要施肥，但今天花朵已经吃饱了。");
+                                        // 可以选择不发通知，或者发一条普通消息
+                                    }
                                 }
 // 5. ★★★ 新增：回答用户的提问 ★★★
                                 else if (action.type === 'ANSWER_QA' && action.id && action.content) {
@@ -6747,45 +7137,50 @@ if (extractedThought.new_agreement && Object.keys(extractedThought.new_agreement
             throw new Error("No JSON array found");
         }
 
+// ==================== 找到 } catch (error) { ... } 替换成下面这段 ====================
+
     } catch (error) {
-        console.warn("⚠️ JSON解析失败，启用强力清洁模式:", error);
+        console.warn("⚠️ JSON解析失败，启用【终极兜底模式】:", error);
         
-        // ★★★ 强力清洁逻辑：如果 JSON 解析崩了，绝对不直接显示原始字符串 ★★★
-        // 你的旧代码在这里直接把 finalResp 给了 content，导致代码泄露
-        // 现在我们用正则把 "content": "xxxx" 里的 xxxx 抠出来
+        // 1. 先把 markdown 符号清理干净
+        let safeContent = finalResp.replace(/```json/g, '').replace(/```/g, '').trim();
         
+        // 2. 方案 A：尝试用正则“吸”出 content (针对格式乱了但还有救的情况)
         const contentRegex = /"content"\s*:\s*"((?:[^"\\]|\\.)*)"/g;
         let match;
         const cleanParts = [];
         
-        while ((match = contentRegex.exec(finalResp)) !== null) {
+        while ((match = contentRegex.exec(safeContent)) !== null) {
             try {
-                // 处理转义字符
+                // 尝试处理转义字符
                 const cleanText = JSON.parse(`"${match[1]}"`);
-                // 排除看起来像代码的指令
-                if (!cleanText.includes("thought_chain") && !cleanText.includes("WRITE_DIARY")) {
+                // 排除掉不该显示的内容
+                if (!cleanText.includes("thought_chain") && !cleanText.includes("type")) {
                     cleanParts.push({ type: 'text', content: cleanText, thought_chain: null });
                 }
             } catch (e) {
-                 // 如果转义失败，直接用原文，但去掉代码特征
-                 if (!match[1].includes("{")) {
-                    cleanParts.push({ type: 'text', content: match[1], thought_chain: null });
-                 }
+                 // 如果转义失败，直接用原文
+                 cleanParts.push({ type: 'text', content: match[1], thought_chain: null });
             }
         }
 
+        // 3. 方案 B：决策逻辑 (这是你最需要修改的地方！)
         if (cleanParts.length > 0) {
+            // 如果正则吸到了东西，就用吸到的
             parts = cleanParts;
         } else {
-            // 如果连正则都抠不出来，说明格式彻底乱了，为了不显示代码，我们显示一个兜底文案或者尝试清洗
-            let safeContent = finalResp.replace(/```json/g, '').replace(/```/g, '').trim();
-            // 如果开头是 [ { ... 这种代码格式，强制不显示
-            if (safeContent.startsWith('[') || safeContent.includes('"type":')) {
-                safeContent = "... (AI 似乎在整理思绪)";
+            // ★★★ 终极修改：不再显示 "..." ★★★
+            // 只要 AI 说了话（safeContent 不为空），不管它是不是乱码，是不是 JSON，统统直接显示！
+            if (safeContent && safeContent.length > 0) {
+                 // 把整段回复直接当成文本显示出来
+                 parts = [{ type: 'text', content: safeContent, thought_chain: null }];
+            } else {
+                 // 只有真的一句话都没说时，才显示省略号
+                 parts = [{ type: 'text', content: "...", thought_chain: null }];
             }
-            parts = [{ type: 'text', content: safeContent, thought_chain: null }];
         }
     }
+
 
     // 防止最后依然为空
     if (parts.length === 0) {
@@ -7098,23 +7493,38 @@ const newStatus = newRelationshipState.status; // 只把状态名存起来
 // ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲ 解析逻辑结束 ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲
 
 
+  // ==================== [ChatApp.tsx] 修复版 Catch 块 (防二次爆炸) ====================
   } catch (error: any) {
       console.error("AI回复生成失败:", error);
       const errorMsg: Message = {
         id: Date.now().toString(),
         role: 'assistant',
-        content: `抱歉，我好像出错了… (${error.message})`,
+        content: `(系统报错: ${error.message})`, // 简化报错信息
         timestamp: Date.now(),
         type: 'text'
       };
-      // ★★★ 修复：出错时也要基于干净历史来更新 ★★★
-      setContacts(prev => prev.map(c => c.id === activeContact.id ? { ...c, history: [...(historyOverride || c.history), errorMsg] } : c));
+
+      setContacts(prev => prev.map(c => {
+          if (c.id === activeContact.id) {
+              // ★★★ 核心修复：强制确保 history 是数组 ★★★
+              const safeHistory = Array.isArray(c.history) ? c.history : [];
+              // 如果 historyOverride 存在且是数组，就用它；否则用 safeHistory
+              const baseHistory = (Array.isArray(historyOverride) ? historyOverride : safeHistory);
+              
+              return { 
+                  ...c, 
+                  history: [...baseHistory, errorMsg] 
+              };
+          }
+          return c;
+      }));
 
   } finally {
     setIsTyping(false);
-    setTimeout(() => setIsAiTyping(false), 800);
+    // 稍微延迟一点再关，防止闪烁
+    setTimeout(() => setIsAiTyping(false), 500);
   }
-};
+}; // <--- 这里是 handleAiReplyTrigger 的结束大括号
       
       
 
@@ -10057,7 +10467,22 @@ return (
 
 
 
+// ==================== [ChatApp.tsx] 插入到 map 循环内部 ====================
 
+                // ★★★ 核心修复：拦截 JSON 格式的记忆卡片 ★★★
+                if (msg.content.includes('memory_share_card')) {
+                    try {
+                        // 尝试把那串 JSON 字符串变回对象
+                        const cardData = JSON.parse(msg.content);
+                        // 如果成功，直接返回漂亮的卡片组件！
+                        return <SharedMemoryCard key={msg.id} data={cardData} />;
+                    } catch (e) {
+                        // 如果解析失败，就算了，继续往下走显示文本
+                        console.error("卡片解析失败", e);
+                    }
+                }
+
+// ... 下面是你原来的 "if (msg.role === 'assistant' && msg.content.includes('[LoverInvitation]'))" ...
 
 
 
@@ -10222,6 +10647,361 @@ const isLoverInvitation = msg.content.includes('[LoverInvitation]') || msg.conte
                     </div>
                 )
 
+
+
+
+// ==================== [ChatApp.tsx] 插入这段全新的清单 UI ====================
+
+               // 3.5 【恋爱清单更新】(📝 神秘档案袋版)
+                : (msg.content.includes('恋爱清单') || msg.content.includes('愿望')) ? (
+                    <SpaceJumper type="couple">
+                        {(() => {
+                            const titleMatch = displayContent.match(/【(.*?)】/);
+                            const title = titleMatch ? titleMatch[1] : "新的愿望";
+                            
+                            // ★★★ 核心修改：不再提取具体内容，强制显示神秘文案 ★★★
+                            // 即使消息里包含了你的想法，这里也只显示占位符
+                            const secretThought = "✨ 想法已加密，点击揭晓默契...";
+
+                            return (
+                                <div className="relative bg-white w-full max-w-[85%] rounded-lg shadow-[4px_6px_0px_rgba(249,168,212,0.4)] border-2 border-pink-200 p-1 flex flex-col transform rotate-[-1deg] hover:rotate-0 transition-transform cursor-pointer group">
+                                    
+                                    {/* 装饰：顶部胶带 */}
+                                    <div className="absolute -top-3 left-1/2 -translate-x-1/2 w-16 h-6 bg-pink-100/80 backdrop-blur-sm shadow-sm rotate-1 border-l border-r border-white/50"></div>
+
+                                    {/* 内部容器 */}
+                                    <div className="border border-dashed border-pink-100 rounded-md p-4 flex flex-col items-center bg-[#fffbf0] relative overflow-hidden">
+                                        
+                                        {/* 顶部标签 */}
+                                        <div className="flex items-center gap-1 mb-3 bg-white px-3 py-1 rounded-full border border-pink-100 shadow-sm">
+                                            <span className="text-xs">🔒</span>
+                                            <span className="text-[9px] font-bold text-pink-400 tracking-widest uppercase">SECRET WISH</span>
+                                        </div>
+
+                                        {/* 愿望标题 */}
+                                        <div className="flex items-center gap-3 mb-4 w-full">
+                                            <div className="w-5 h-5 border-2 border-pink-400 rounded-md flex items-center justify-center bg-white shrink-0 shadow-sm">
+                                                <div className="w-3 h-3 bg-pink-200 rounded-sm"></div>
+                                            </div>
+                                            <h3 className="text-base font-black text-gray-800 border-b-2 border-pink-200/50 leading-relaxed flex-1 text-left">
+                                                {title}
+                                            </h3>
+                                        </div>
+
+                                        {/* 想法区域 (模糊特效) */}
+                                        <div className="w-full bg-white/60 p-3 rounded-lg border border-pink-50 relative overflow-hidden group-hover:bg-white transition-colors">
+                                            <span className="absolute -top-2 left-2 text-xl text-gray-300">❝</span>
+                                            
+                                            {/* ★★★ 这里的文字变成了灰色的神秘提示 ★★★ */}
+                                            <p className="text-xs text-gray-400 font-medium italic text-center py-2 relative z-10 tracking-wider">
+                                                {secretThought}
+                                            </p>
+                                            
+                                            <span className="absolute -bottom-4 right-2 text-xl text-gray-300 rotate-180">❝</span>
+                                        </div>
+
+                                        {/* 底部提示 */}
+                                        <div className="mt-3 flex items-center gap-1 opacity-50">
+                                            <span className="text-[9px] text-pink-400 font-bold uppercase">Tap to Unlock</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            );
+                        })()}
+                    </SpaceJumper>
+                )
+
+
+
+
+
+
+
+
+
+// ==================== [ChatApp.tsx] 替换为：奶蓝云朵可爱版提问卡片 ====================
+
+                // 3.6 【灵魂提问 / 群提问】(☁️ 奶蓝云朵可爱版)
+                : (msg.content.includes('提出了一个新问题') || msg.content.includes('[提问]') || msg.content.includes('[群提问]')) ? (
+                    <SpaceJumper type={msg.content.includes('群') ? 'friend' : 'couple'}>
+                        {(() => {
+                            let questionText = displayContent
+                                .replace(/.*?提出了一个新问题[：: ]?/, '')
+                                .replace(/\[.*?\]/g, '')
+                                .trim();
+                            if (!questionText) questionText = "快来看看今天的惊喜话题~";
+
+                            return (
+                                <div className="relative group w-full max-w-[85%] cursor-pointer transform hover:scale-105 transition-transform duration-300">
+                                    
+                                    {/* 1. 主卡片容器：奶蓝色 + 白色粗边框 */}
+                                    <div className="relative bg-[#dbeafe] rounded-[2rem] p-2 shadow-[0_8px_0px_#bfdbfe] border-4 border-white overflow-hidden">
+                                        
+                                        {/* 2. 背景装饰：白色波点 */}
+                                        <div className="absolute inset-0 opacity-40 pointer-events-none" 
+                                            style={{ 
+                                                backgroundImage: 'radial-gradient(#ffffff 3px, transparent 3px)', 
+                                                backgroundSize: '20px 20px' 
+                                            }}
+                                        ></div>
+
+                                        {/* 3. 悬浮的云朵装饰 */}
+                                        <div className="absolute -top-4 -right-4 text-6xl opacity-80 animate-bounce" style={{ animationDuration: '3s' }}>☁️</div>
+                                        <div className="absolute top-10 -left-6 text-5xl opacity-60 animate-bounce" style={{ animationDuration: '4s' }}>☁️</div>
+
+                                        {/* 4. 内部白色内容区 (像一张信纸贴在板子上) */}
+                                        <div className="bg-white/90 backdrop-blur-sm rounded-2xl p-5 relative z-10 flex flex-col items-center text-center shadow-sm">
+                                            
+                                            {/* 顶部小标签 */}
+                                            <div className="bg-blue-100 text-blue-500 text-[10px] font-black px-3 py-1 rounded-full mb-3 flex items-center gap-1">
+                                                <span>✨</span>
+                                                <span>DAILY QUESTION</span>
+                                            </div>
+
+                                            {/* 问题内容 */}
+                                            <h3 className="text-sm font-bold text-slate-700 leading-relaxed mb-4">
+                                                {questionText}
+                                            </h3>
+
+                                            {/* 底部按钮 */}
+                                            <div className="w-full h-px bg-slate-100 mb-3"></div>
+                                            <div className="flex items-center gap-1 text-xs font-bold text-blue-400 group-hover:text-blue-500 transition-colors">
+                                                <span>✎</span>
+                                                <span>去写答案</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            );
+                        })()}
+                    </SpaceJumper>
+                )
+
+
+
+
+
+// ==================== [ChatApp.tsx] 插入这段全新的回答通知 UI ====================
+// 插在 "3.6 【灵魂提问】" 的代码块下面
+
+                // 3.7 【AI 回答通知】 (💌 粉色爱心急件版)
+                : (msg.content.includes('回答了你的问题') || msg.content.includes('回答了群里的问题')) ? (
+                    <SpaceJumper type={msg.content.includes('群') ? 'friend' : 'couple'}>
+                        <div className="relative group w-full max-w-[85%] cursor-pointer">
+                            
+                            {/* 1. 主容器：粉色信纸纹理 + 邮票边框感 */}
+                            <div className="relative bg-[#fff0f5] rounded-2xl border-2 border-pink-200 p-3 shadow-[4px_4px_0px_#fbcfe8] flex items-center gap-3 transform transition-transform duration-300 hover:-translate-y-1 hover:shadow-[6px_6px_0px_#fbcfe8] overflow-hidden">
+                                
+                                {/* 背景装饰：斜纹 */}
+                                <div className="absolute inset-0 opacity-30 pointer-events-none" 
+                                    style={{ 
+                                        backgroundImage: 'repeating-linear-gradient(45deg, transparent, transparent 5px, #fce7f3 5px, #fce7f3 10px)' 
+                                    }}
+                                ></div>
+
+                                {/* 2. 左侧图标：跳动的爱心信封 */}
+                                <div className="relative z-10 w-12 h-12 bg-white rounded-full flex items-center justify-center text-2xl shadow-sm border-2 border-pink-100 animate-bounce-slow shrink-0">
+                                    💌
+                                    {/* 右上角红点 */}
+                                    <div className="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full border-2 border-white animate-ping"></div>
+                                    <div className="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full border-2 border-white"></div>
+                                </div>
+
+                                {/* 3. 右侧文字区 */}
+                                <div className="flex-1 min-w-0 relative z-10">
+                                    <div className="flex items-center gap-1.5 mb-1">
+                                        <span className="text-[9px] font-black text-pink-500 bg-white px-2 py-0.5 rounded-full border border-pink-100 shadow-sm">
+                                            NEW REPLY
+                                        </span>
+                                    </div>
+                                    
+                                    {/* 主标题 */}
+                                    <h3 className="font-bold text-gray-800 text-xs truncate leading-relaxed">
+                                        {displayContent.replace('！', '')} ~
+                                    </h3>
+                                    
+                                    {/* 底部引导 */}
+                                    <div className="mt-1 flex items-center gap-1 text-[9px] text-pink-400 font-bold group-hover:translate-x-1 transition-transform">
+                                        <span>去听听 TA 说了什么</span>
+                                        <span>➜</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </SpaceJumper>
+                )
+
+                
+
+
+
+// ==================== [ChatApp.tsx] 升级版：自动读取信件落款 ====================
+// 替换掉原来的 "3.8 【信件通知】" 代码块
+
+                // 3.8 【信件通知】 (📨 拟真航空信封 + 真实落款版)
+                : (msg.content.includes('寄了一封信') || msg.content.includes('新信件')) ? (
+                    <SpaceJumper type={msg.content.includes('群') ? 'friend' : 'couple'}>
+                        {(() => {
+                            // 1. 提取标题
+                            const titleMatch = displayContent.match(/《(.*?)》/);
+                            const title = titleMatch ? titleMatch[1] : "无标题信件";
+                            
+                            // 2. ★★★ 核心升级：去信箱里找这封信，提取落款 ★★★
+                            let displaySignature = msg.content.includes('我给') ? '我' : activeContact.name; // 默认值
+                            
+                            // 在当前角色的信箱里查找标题匹配的信（找最新的一封）
+                            // (注意：如果是群组信件，ChatApp 暂时只能读到 activeContact 里的数据，
+                            // 如果是群组模式，可能需要从 globalSettings.friendGroups 读，但为了简单，这里先从 contact 读)
+                            const foundLetter = (activeContact.letters || [])
+                                .slice()
+                                .reverse()
+                                .find(l => l.title === title);
+
+                            if (foundLetter && foundLetter.content) {
+                                // 我们之前的保存格式是: 内容 + "\n\n-- " + 落款
+                                // 所以我们尝试用 "-- " 来切割
+                                const parts = foundLetter.content.split('-- ');
+                                if (parts.length > 1) {
+                                    // 取最后一部分作为落款
+                                    displaySignature = parts[parts.length - 1].trim();
+                                }
+                            }
+
+                            return (
+                                <div className="relative group w-full max-w-[85%] cursor-pointer my-6 transform transition-transform hover:rotate-1 hover:scale-105 duration-300">
+                                    
+                                    <div className="relative bg-[#fdfbf7] rounded-lg shadow-md border border-gray-200 overflow-hidden">
+                                        
+                                        {/* 航空信条纹 */}
+                                        <div className="h-1.5 w-full absolute top-0 left-0 right-0" 
+                                             style={{ background: 'repeating-linear-gradient(45deg, #ef4444, #ef4444 10px, #ffffff 10px, #ffffff 20px, #3b82f6 20px, #3b82f6 30px, #ffffff 30px, #ffffff 40px)' }}>
+                                        </div>
+                                        <div className="h-1.5 w-full absolute bottom-0 left-0 right-0" 
+                                             style={{ background: 'repeating-linear-gradient(45deg, #3b82f6, #3b82f6 10px, #ffffff 10px, #ffffff 20px, #ef4444 20px, #ef4444 30px, #ffffff 30px, #ffffff 40px)' }}>
+                                        </div>
+
+                                        <div className="p-5 flex justify-between items-start relative">
+                                            <div className="flex flex-col gap-1 z-10">
+                                                <span className="text-[9px] font-bold text-gray-400 uppercase tracking-widest font-mono">
+                                                    AIR MAIL • PAR AVION
+                                                </span>
+                                                <h3 className="text-lg font-black text-gray-800 font-serif leading-tight mt-1">
+                                                    {title}
+                                                </h3>
+                                                <div className="mt-2 flex items-center gap-2">
+                                                    <div className="h-px w-8 bg-gray-300"></div>
+                                                    {/* 这里显示的已经是真实的落款了 */}
+                                                    <span className="text-[10px] text-gray-500 font-cursive">
+                                                        From: {displaySignature}
+                                                    </span>
+                                                </div>
+                                            </div>
+
+                                            <div className="relative">
+                                                <div className="w-12 h-14 bg-white border-2 border-dashed border-gray-300 p-1 shadow-sm flex flex-col items-center justify-center transform rotate-3">
+                                                    <span className="text-xl">🌷</span>
+                                                    <span className="text-[6px] font-bold text-gray-400 mt-1">1.20</span>
+                                                </div>
+                                                <div className="absolute -bottom-2 -left-4 w-12 h-12 rounded-full border-2 border-gray-300/50 flex items-center justify-center transform -rotate-12 pointer-events-none">
+                                                    <span className="text-[8px] font-bold text-gray-400/50">POST</span>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div className="bg-gray-50/50 p-1.5 text-center border-t border-gray-100">
+                                            <span className="text-[9px] text-gray-400 font-bold flex items-center justify-center gap-1">
+                                                <span className="animate-pulse">📩</span> 拆开信件
+                                            </span>
+                                        </div>
+                                    </div>
+                                </div>
+                            );
+                        })()}
+                    </SpaceJumper>
+                )
+
+
+// ==================== [ChatApp.tsx] 渲染离线拦截气泡 ====================
+// ==================== [ChatApp.tsx] 美化版拦截器 UI ====================
+
+                // 3.9 【离线拦截器】 (🌙 挂机勿扰牌 UI)
+                : (msg.content.startsWith('[DND_BLOCK]')) ? (
+                    <div className="flex flex-col items-center my-6 animate-fadeIn select-none">
+                        
+                        {/* 挂机状态牌 */}
+                        <div className="relative bg-gradient-to-br from-[#2e3652] to-[#1a1f33] text-blue-100 rounded-2xl p-5 shadow-xl border border-[#3e4a6e] w-[85%] overflow-hidden">
+                            
+                            {/* 动态装饰：漂浮的 Zzz */}
+                            <div className="absolute top-2 right-4 text-2xl opacity-30 animate-pulse">💤</div>
+                            <div className="absolute bottom-[-20px] left-[-20px] w-24 h-24 bg-indigo-500/20 rounded-full blur-2xl"></div>
+
+                            <div className="flex items-center gap-4 relative z-10">
+                                {/* 头像/图标状态 */}
+                                <div className="relative">
+                                    <div className="w-14 h-14 rounded-full border-2 border-indigo-300/30 p-0.5">
+                                        <img src={activeContact.avatar} className="w-full h-full rounded-full object-cover grayscale brightness-75" />
+                                    </div>
+                                    <div className="absolute -bottom-1 -right-1 bg-[#2e3652] rounded-full p-1 border border-indigo-300/30">
+                                        <span className="text-sm">🌙</span>
+                                    </div>
+                                </div>
+
+                                {/* 文字信息 */}
+                                <div className="flex-1 min-w-0">
+                                    <div className="flex items-center gap-2 mb-1">
+                                        <span className="font-bold text-sm text-white">
+                                            {activeContact.name} 休息中
+                                        </span>
+                                    </div>
+                                    
+                                    {/* 智能翻译 + 时间显示 */}
+                                    {(() => {
+                                        const rawReason = msg.content.replace('[DND_BLOCK]', '').trim();
+                                        // 简单的汉化映射，防止旧数据尴尬
+                                        const reasonMap: {[key:string]: string} = { 'Sleep': '补觉', 'Busy': '忙碌', 'Work': '工作' };
+                                        const displayReason = reasonMap[rawReason] || rawReason;
+                                        
+                                        const backTime = new Date(activeContact.aiDND.until);
+                                        const timeStr = backTime.getHours().toString().padStart(2, '0') + ':' + backTime.getMinutes().toString().padStart(2, '0');
+                                        
+                                        return (
+                                            <p className="text-xs text-indigo-200/80 truncate">
+                                                正在 {displayReason}... 预计 {timeStr} 回来
+                                            </p>
+                                        );
+                                    })()}
+                                </div>
+                            </div>
+
+                            {/* 底部按钮区 */}
+                            <div className="mt-4 pt-3 border-t border-white/5 flex justify-center">
+                                <button 
+                                    onClick={() => {
+                                        // 随机文案，增加趣味性
+                                        const wakeUpTexts = ["轻点拍...", "暴力叫醒！", "别睡了起来嗨", "急事找你！"];
+                                        const randomText = wakeUpTexts[Math.floor(Math.random() * wakeUpTexts.length)];
+
+                                        if (confirm(`确定要吵醒 TA 吗？\n\n(强制唤醒将消耗 Token，且 TA 可能会有起床气 💢)`)) {
+                                            setContacts(prev => prev.map(c => c.id === activeContact.id ? {...c, history: c.history.filter(h => h.id !== msg.id)} : c));
+                                            handleAiReplyTrigger(undefined, true); 
+                                        }
+                                    }}
+                                    className="group flex items-center gap-2 bg-white/10 hover:bg-white/20 active:scale-95 transition-all px-5 py-2 rounded-full border border-white/10"
+                                >
+                                    <span className="text-sm group-hover:animate-swing">🔔</span>
+                                    <span className="text-xs font-bold text-white">强制唤醒</span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )
+
+                
+
+
+                
+
+
                 // 4. 【情侣空间提示】 (含信件、日记、★问答★) -> 黄色信封框
                 : isCoupleSystem ? (
                     <SpaceJumper type="couple">
@@ -10234,6 +11014,36 @@ const isLoverInvitation = msg.content.includes('[LoverInvitation]') || msg.conte
                         </div>
                     </SpaceJumper>
                 )
+
+
+
+// ==================== [ChatApp.tsx] 插入这段新的 UI 渲染代码 ====================
+// 插在 "4. 【情侣空间提示】" 的下面，"5. 【密友空间提示】" 的上面
+
+                // 4.5 【花园施肥提示】(🌸 漂亮卡片版)
+                : (msg.content.includes('给花施了肥') || msg.content.includes('[FlowerSystem]')) ? (
+                    <SpaceJumper type="couple">
+                        <div className="relative bg-gradient-to-r from-green-50 to-emerald-50 text-emerald-900 text-xs px-5 py-4 rounded-xl shadow-[0_4px_15px_rgba(16,185,129,0.15)] border border-emerald-100 text-center max-w-[85%] flex items-center gap-3 overflow-hidden">
+                            {/* 装饰背景 */}
+                            <div className="absolute -right-2 -top-2 text-6xl opacity-10 rotate-12">🪴</div>
+                            
+                            {/* 图标 */}
+                            <div className="w-10 h-10 rounded-full bg-white flex items-center justify-center text-xl shadow-sm border border-emerald-100 animate-bounce-slow shrink-0">
+                                🚿
+                            </div>
+                            
+                            {/* 文字内容 */}
+                            <div className="flex flex-col items-start text-left min-w-0">
+                                <span className="font-black text-emerald-600 mb-0.5 text-[10px] tracking-wider uppercase">GARDEN UPDATE</span>
+                                <span className="leading-relaxed font-medium">
+                                    {displayContent.replace('[FlowerSystem]', '').trim()}
+                                </span>
+                            </div>
+                        </div>
+                    </SpaceJumper>
+                )
+
+
 
                 // 5. 【密友空间提示】
                 : (isFriendSystem || isGroupNotice) ? (

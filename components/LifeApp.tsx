@@ -218,24 +218,52 @@ const [showCategoryDetail, setShowCategoryDetail] = useState<string | null>(null
     return initialBalance + income - expense;
   };
   const [newTrans, setNewTrans] = useState<Partial<Transaction>>({ amount: 0, type: 'expense', categoryId: '', accountId: '', date: todayStr });
+// ==================== 这是一组代码：【LifeApp.tsx】升级版保存逻辑 (支持编辑+新增) ====================
   const handleSaveTrans = () => {
     if (!newTrans.amount || newTrans.amount <= 0) { alert("请输入金额"); return; }
-    if (!newTrans.categoryId) newTrans.categoryId = financeCats.find(c => c.type === newTrans.type)?.id;
-    if (!newTrans.accountId) newTrans.accountId = accounts[0].id;
+    
+    // 兜底逻辑：如果没有选分类/账户，使用默认值
+    let finalCategoryId = newTrans.categoryId;
+    if (!finalCategoryId) finalCategoryId = financeCats.find(c => c.type === newTrans.type)?.id;
+    
+    let finalAccountId = newTrans.accountId;
+    if (!finalAccountId) finalAccountId = accounts[0].id;
+
     const trans: Transaction = {
-      id: Date.now().toString(),
+      // ★★★ 核心修改：如果有 ID 就用原来的，没有就生成新的
+      id: newTrans.id || Date.now().toString(),
       type: newTrans.type as any,
       amount: Number(newTrans.amount),
-      categoryId: newTrans.categoryId!,
-      accountId: newTrans.accountId!,
+      categoryId: finalCategoryId!,
+      accountId: finalAccountId!,
       date: newTrans.date || todayStr,
       note: newTrans.note,
-      createdAt: Date.now()
+      // 如果是编辑，保留原来的创建时间；如果是新建，用现在的时间
+      createdAt: newTrans.createdAt || Date.now()
     };
-    setSettings(prev => ({ ...prev, transactions: [trans, ...(prev.transactions || [])] }));
-    setNewTrans({ amount: 0, type: 'expense', categoryId: '', accountId: '', date: todayStr, note: '' });
+
+    setSettings(prev => {
+      const currentList = prev.transactions || [];
+      if (newTrans.id) {
+        // === 编辑模式：找到旧的替换掉 ===
+        return { 
+          ...prev, 
+          transactions: currentList.map(t => t.id === newTrans.id ? trans : t) 
+        };
+      } else {
+        // === 新增模式：加到最前面 ===
+        return { 
+          ...prev, 
+          transactions: [trans, ...currentList] 
+        };
+      }
+    });
+
+    // 重置表单 (注意把 id 清空)
+    setNewTrans({ amount: 0, type: 'expense', categoryId: '', accountId: '', date: todayStr, note: '', id: undefined });
     setFinInputMode(false);
   };
+
   const deleteTrans = (id: string) => { if (confirm('删除这条账单？')) setSettings(prev => ({ ...prev, transactions: prev.transactions.filter(t => t.id !== id) })); };
   const handleSaveAccount = () => {
     if(!accountForm.name) return;
@@ -279,7 +307,8 @@ const [showCategoryDetail, setShowCategoryDetail] = useState<string | null>(null
 
 
 
-const handleAISend = async (overrideContent?: string) => {
+// ==================== [LifeApp.tsx] 修复版 handleAISend 函数 ====================
+  const handleAISend = async (overrideContent?: string) => {
     const userText = overrideContent || aiInput;
     if (!userText.trim()) return;
 
@@ -291,16 +320,7 @@ const handleAISend = async (overrideContent?: string) => {
     setAiLoading(true);
 
     try {
-      // 1. 整理数据喂给AI
-// 获取当前激活的预设
-const activePreset = settings.apiPresets?.find(p => p.id === settings.activePresetId);
-
-let aiReply = "";
-if (activePreset) {
-    aiReply = await generateResponse(messages as any, activePreset);
-} else {
-    aiReply = "大厨，你还没在「设置App」里配置 API Key 呢！我饿得动不了了...";
-}
+      // 1. 准备基础数据
       const today = new Date().toISOString().slice(0, 10);
       
       // 数据摘要
@@ -322,10 +342,8 @@ if (activePreset) {
       const balanceSummary = accounts.map(a => `${a.name}: ¥${getAccountBalance(a.id, a.balance).toFixed(2)}`).join(', ');
 
       // 2. 构造 Prompt
-      // ★★★ 如果名字是moon，强制使用隐藏的永生人设 ★★★
       const actualPersona = settings.lifeAI?.name === 'moon' ? MOON_HIDDEN_PERSONA : (settings.lifeAI?.persona || '你是一个生活助手。');
 
-      // ★★★ 修复核心：在这里告诉AI你是谁！★★★
       const systemPrompt = `
   你叫 ${settings.lifeAI?.name || 'Life Assistant'}。
   ${actualPersona}
@@ -349,15 +367,11 @@ if (activePreset) {
         ...newHistory.map(m => ({ role: m.role, content: m.content }))
       ];
 
+      // 获取预设
+      const activePreset = settings.apiPresets?.find(p => p.id === settings.activePresetId);
+      
       let responseText = "";
-      // 兼容逻辑：如果没有 activePreset 或 apiService 不支持 system，这里做个简单回退
       if (activePreset) {
-         // 为了防止API不支持system角色，我们在第一条消息里也带上prompt
-         const finalMessages = [
-             { role: 'user', content: systemPrompt + "\n\n" + userText } 
-             // 注意：这里简化处理，实际应该传完整messages，视你的API服务而定
-         ];
-         // 尝试调用
          responseText = await generateResponse(messages as any, activePreset);
          if (!responseText.trim()) responseText = "抱歉，我暂时无法回应，请稍后再试。";
       } else {
@@ -380,6 +394,7 @@ if (activePreset) {
       setAiLoading(false);
     }
   };
+  
 
   // --- 记账统计数据准备 ---
   const currentMonth = new Date().toISOString().slice(0, 7);
@@ -452,7 +467,8 @@ if (activePreset) {
         categoryId: '',
         accountId: accounts[0]?.id || '',
         date: todayStr,
-        note: ''
+        note: '',
+        id: undefined
       });
       setFinInputMode(true);
     }}
@@ -471,9 +487,51 @@ if (activePreset) {
                            {groupedTrans[date].sort((a,b) => b.createdAt - a.createdAt).map((t, idx) => {
                              const cat = financeCats.find(c => c.id === t.categoryId);
                              const acc = accounts.find(a => a.id === t.accountId);
-                             return (<SwipeRow key={t.id} actions={<button onClick={() => deleteTrans(t.id)} className="bg-red-500 text-white px-6 py-4 font-bold text-sm h-full">删除</button>}>
-                                 <div className={`p-4 flex items-center justify-between ${idx !== 0 ? 'border-t border-gray-50' : ''}`}><div className="flex items-center gap-3"><div className="w-9 h-9 rounded-full bg-gray-50 flex items-center justify-center text-lg">{cat?.icon}</div><div><div className="font-bold text-gray-800 text-sm">{cat?.name}</div><div className="text-xs text-gray-400 flex gap-2">{acc && <span>{acc.name}</span>}{t.note && <span>| {t.note}</span>}</div></div></div><div className={`font-bold ${t.type === 'expense' ? 'text-gray-900' : 'text-green-500'}`}>{t.type === 'expense' ? '-' : '+'} {t.amount}</div></div>
-                               </SwipeRow>)
+                           // ==================== 这是一组代码：【LifeApp.tsx】列表渲染 (加入编辑按钮) ====================
+                             return (
+                               <SwipeRow 
+                                 key={t.id} 
+                                 actions={
+                                   <>
+                                     {/* ★★★ 新增：编辑按钮 ★★★ */}
+                                     <button 
+                                       onClick={() => {
+                                          setNewTrans({ ...t }); // 把这笔账单的数据填回去
+                                          setFinInputMode(true); // 打开输入框
+                                       }} 
+                                       className="bg-blue-500 text-white px-6 py-4 font-bold text-sm h-full"
+                                     >
+                                       编辑
+                                     </button>
+                                     {/* 原有的删除按钮 */}
+                                     <button 
+                                       onClick={() => deleteTrans(t.id)} 
+                                       className="bg-red-500 text-white px-6 py-4 font-bold text-sm h-full"
+                                     >
+                                       删除
+                                     </button>
+                                   </>
+                                 }
+                               >
+                                 <div className={`p-4 flex items-center justify-between ${idx !== 0 ? 'border-t border-gray-50' : ''}`}>
+                                   <div className="flex items-center gap-3">
+                                     <div className="w-9 h-9 rounded-full bg-gray-50 flex items-center justify-center text-lg">
+                                       {cat?.icon}
+                                     </div>
+                                     <div>
+                                       <div className="font-bold text-gray-800 text-sm">{cat?.name}</div>
+                                       <div className="text-xs text-gray-400 flex gap-2">
+                                         {acc && <span>{acc.name}</span>}
+                                         {t.note && <span>| {t.note}</span>}
+                                       </div>
+                                     </div>
+                                   </div>
+                                   <div className={`font-bold ${t.type === 'expense' ? 'text-gray-900' : 'text-green-500'}`}>
+                                     {t.type === 'expense' ? '-' : '+'} {t.amount}
+                                   </div>
+                                 </div>
+                               </SwipeRow>
+                             )
                            })}
                         </div>
                      </div>

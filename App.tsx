@@ -1949,6 +1949,7 @@ return (
         <RelationshipSpace
           contacts={contacts}
           setContacts={setContacts}
+          worldBooks={worldBooks} 
            setGlobalSettings={setGlobalSettings} // <--- ★★★ 这一行必须加！！不然群组存不住！！
           globalSettings={globalSettings}
           onClose={() => setCurrentApp('home')}
