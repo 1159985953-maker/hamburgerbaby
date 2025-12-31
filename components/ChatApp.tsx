@@ -5830,13 +5830,30 @@ ${relevantDocs.map(doc => `- (来源: ${doc.type}) ${doc.content}`).join('\n')}
 
 
     
-    // 生成时间描述
-    let gapDescription = "刚刚";
-    if (maxGapMinutes > 10) gapDescription = `${maxGapMinutes}分钟`;
-    if (maxGapMinutes > 60) gapDescription = `${Math.floor(maxGapMinutes / 60)}小时`;
-    if (maxGapMinutes > 1440) gapDescription = "好几天";
-    if (isDifferentDay) gapDescription += " (已跨天)";
+// ==================== ⏱️ [修改这里] 分钟级时间计算逻辑 ====================
+    let gapDescription = "";
 
+    // 1. 小于 2 分钟 -> 才是真正的“刚刚/秒回”
+    if (maxGapMinutes < 2) {
+        gapDescription = "刚刚 (秒回状态)";
+    } 
+    // 2. 2分钟 ~ 59分钟 -> 精确显示分钟数！(不再模糊处理)
+    else if (maxGapMinutes < 60) {
+        gapDescription = `${maxGapMinutes}分钟`; 
+    } 
+    // 3. 大于 1 小时 -> 显示“X小时X分” (拒绝只显示整点)
+    else if (maxGapMinutes < 1440) {
+        const h = Math.floor(maxGapMinutes / 60);
+        const m = maxGapMinutes % 60;
+        gapDescription = m > 0 ? `${h}小时${m}分钟` : `${h}小时`;
+    } 
+    // 4. 超过一天
+    else {
+        gapDescription = "好几天";
+    }
+
+    if (isDifferentDay) gapDescription += " (已跨天)";
+    // ==================== [修改结束] ====================
     console.log(`[判责结果] 间隔:${gapDescription}, AI已读不回:${isAiIgnoredUser}, 用户迟到:${isUserLateReply}`);
 
     // =============================================================
