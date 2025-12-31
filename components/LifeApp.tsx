@@ -396,28 +396,36 @@ const [showCategoryDetail, setShowCategoryDetail] = useState<string | null>(null
   };
   
 
-  // --- 记账统计数据准备 ---
-  const currentMonth = new Date().toISOString().slice(0, 7);
+// ==================== [修复版] 记账统计数据准备 ====================
+  // ★★★ 核心修复：强制使用本地时间来判断“本月”，解决凌晨记账不统计的问题 ★★★
+  const nowCalc = new Date();
+  const currentMonth = `${nowCalc.getFullYear()}-${String(nowCalc.getMonth() + 1).padStart(2, '0')}`;
+  
+  // 过滤出“本月”的账单（现在用的是本地时间，绝对准了）
   const monthTrans = transactions.filter(t => t.date.startsWith(currentMonth));
+  
   const totalIncome = monthTrans.filter(t => t.type === 'income').reduce((s,t) => s + t.amount, 0);
   const totalExpense = monthTrans.filter(t => t.type === 'expense').reduce((s,t) => s + t.amount, 0);
   
+  // 生成图表数据
   const expenseByCat = financeCats
     .filter(c => c.type === 'expense')
     .map(c => ({
       name: c.name,
       color: c.color,
+      // 只统计本月的数据
       value: monthTrans.filter(t => t.type === 'expense' && t.categoryId === c.id).reduce((s,t) => s + t.amount, 0)
     }))
     .filter(item => item.value > 0)
     .sort((a,b) => b.value - a.value);
 
+  // 列表页的分组数据 (保持不变)
   const groupedTrans = transactions.reduce((groups, t) => {
     if (!groups[t.date]) groups[t.date] = [];
     groups[t.date].push(t);
     return groups;
   }, {} as Record<string, Transaction[]>);
-
+  // ==================== [修复结束] ====================
 
   return (
     <div className="h-full w-full bg-[#F5F5F7] flex flex-col relative">
