@@ -1,8 +1,10 @@
 // services/apiService.ts
+// 这是一组什么代码：核心 API 通讯服务（终极融合版）
+// 包含：Gemini/OpenAI 发送逻辑、模型拉取、DeepSeek 思考过程解析、多格式兼容
+
 // @ts-ignore
 import { GoogleGenerativeAI } from '@google/generative-ai';
 
-// 引入或定义 Message 类型，确保这里能读到 type 属性
 export interface ApiConfig {
   type: 'gemini' | 'openai';
   baseUrl?: string;
@@ -13,6 +15,7 @@ export interface ApiConfig {
   topP?: number;
 }
 
+// 1. 保留你原有的全局配置存储（防止其他文件报错）
 let currentConfig: ApiConfig | null = null;
 
 export const setCurrentConfig = (config: ApiConfig) => {
@@ -23,45 +26,66 @@ export const getCurrentConfig = (): ApiConfig | null => {
   return currentConfig;
 };
 
-// 自动拉取模型列表（支持反代） - 保持原样
+// 2. 自动拉取模型列表（加入了我的“强力兜底”修复）
 export const fetchModels = async (
   type: 'gemini' | 'openai',
   baseUrl: string | undefined,
   apiKey: string
 ): Promise<string[]> => {
+  
+  // === 场景 A：Gemini 官方 ===
   if (type === 'gemini') {
-    return [
-      'gemini-1.5-flash',
-      'gemini-1.5-pro',
-      'gemini-1.5-flash-exp',
-      'gemini-2.0-flash-exp'
-    ];
+    try {
+      // 尝试去 Google 官方拉取
+      const url = `https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`;
+      const res = await fetch(url);
+      if (!res.ok) throw new Error(`Google API 报错: ${res.status}`);
+      
+      const data = await res.json();
+      return data.models?.map((m: any) => m.name.replace('models/', '')) || [];
+    } catch (e) {
+      console.warn("Gemini 模型拉取失败，使用默认列表:", e);
+      // ★★★ 修复：拉取失败时返回默认列表，而不是空数组 ★★★
+      return [
+        'gemini-1.5-flash',
+        'gemini-1.5-pro',
+        'gemini-1.5-flash-8b',
+        'gemini-2.0-flash-exp'
+      ];
+    }
   }
 
+  // === 场景 B：OpenAI / 反代 ===
   if (!baseUrl) return [];
 
   try {
-    const res = await fetch(`${baseUrl.replace(/\/$/, '')}/models`, {
+    // 自动补全路径
+    const cleanBaseUrl = baseUrl.replace(/\/$/, '');
+    const url = cleanBaseUrl.endsWith('/v1') ? `${cleanBaseUrl}/models` : `${cleanBaseUrl}/v1/models`;
+
+    const res = await fetch(url, {
       headers: {
         Authorization: `Bearer ${apiKey}`,
         'Content-Type': 'application/json'
       }
     });
 
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    if (!res.ok) {
+       const errText = await res.text();
+       throw new Error(`HTTP ${res.status}: ${errText}`);
+    }
 
     const data = await res.json();
     return data.data?.map((m: any) => m.id).sort() || [];
   } catch (e) {
-    console.error('Fetch models failed:', e);
-    return [];
+    console.error('模型拉取失败:', e);
+    // ★★★ 修复：失败时返回常用模型，防止下拉框为空 ★★★
+    return ['gpt-3.5-turbo', 'gpt-4o', 'gpt-4o-mini', 'claude-3-5-sonnet', 'deepseek-chat'];
   }
 };
 
-// 统一生成回复函数
+// 3. 生成回复（结合了 Gemini SDK 和 你的万能解析逻辑）
 export const generateResponse = async (
-  // ★★★ 修改点1：把类型改为 any[]，因为我们需要读取 msg.type (text/image)，
-  // 而不仅仅是 role 和 content。这样兼容性最强，不会报错。
   messages: any[], 
   config: ApiConfig
 ): Promise<string> => {
@@ -71,8 +95,8 @@ export const generateResponse = async (
     apiKey,
     model,
     temperature = 1.0,
-    maxTokens = 10000,
-    topP = 1
+    maxTokens = 8192, // 调大默认 token
+    topP = 0.95
   } = config;
 
   // ==================== Gemini 官方模式 ====================
@@ -80,118 +104,100 @@ export const generateResponse = async (
     try {
       const genai = new GoogleGenerativeAI(apiKey);
       const geminiModel = genai.getGenerativeModel({
-        model,
-        generationConfig: {
-          temperature,
-          maxOutputTokens: maxTokens,
-          topP
-        }
+        model: model || 'gemini-1.5-flash',
+        generationConfig: { temperature, maxOutputTokens: maxTokens, topP }
       });
 
-      // ★★★ 修改点2：Gemini 的图片处理逻辑 ★★★
-      const formatted = messages.map(m => {
+      // 转换消息格式
+      const history = messages.map(m => {
         const role = m.role === 'user' ? 'user' : 'model';
-
-        // 如果是图片消息
+        
+        // 处理图片
         if (m.type === 'image') {
-          // m.content 是 "data:image/jpeg;base64,......"
-          // Gemini SDK 需要去掉头部，只留 base64 数据
           try {
             const base64Data = m.content.split(',')[1]; 
             const mimeType = m.content.split(';')[0].split(':')[1] || 'image/jpeg';
             return {
               role,
-              parts: [
-                { text: "（用户发送了一张图片）" }, // 可选：给个文字提示
-                {
-                  inlineData: {
-                    mimeType: mimeType,
-                    data: base64Data
-                  }
-                }
-              ]
+              parts: [{ inlineData: { mimeType, data: base64Data } }]
             };
           } catch (e) {
-            console.error("图片解析失败", e);
-            return { role, parts: [{ text: "[图片上传失败]" }] };
+            return { role, parts: [{ text: "[图片解析错误]" }] };
           }
         }
-
-        // 普通文字消息
+        
+        // 处理文本
         return {
           role,
           parts: [{ text: m.content }]
         };
       });
 
-      const result = await geminiModel.generateContent({ contents: formatted });
-      return result.response.text() || '(无回复)';
+      const result = await geminiModel.generateContent({ contents: history });
+      return result.response.text();
+
     } catch (e: any) {
-      return `(Gemini Error: ${e.message || '未知错误'})`;
+      console.error("Gemini Error:", e);
+      return `(Gemini 官方报错: ${e.message || '网络或Key错误'})`;
     }
   }
 
-  // ==================== OpenAI 兼容模式（反代） ====================
+  // ==================== OpenAI / 反代模式 ====================
   if (!baseUrl) {
     throw new Error('OpenAI 模式必须填写 Base URL');
   }
 
-  // ★★★ 修改点3：OpenAI 的图片处理逻辑 (Vision 格式) ★★★
+  // 转换消息格式
   const apiMessages = messages.map(m => {
-    // 1. 如果是图片，构造多模态 content 数组
+    // 处理图片 (Vision 格式)
     if (m.type === 'image') {
       return {
         role: m.role,
         content: [
-          { type: "text", text: "（用户发送了一张图片）" },
-          {
-            type: "image_url",
-            image_url: {
-              url: m.content // OpenAI 兼容接口通常直接吃 Data URL
-            }
-          }
+          { type: "text", text: "Please look at this image." },
+          { type: "image_url", image_url: { url: m.content } }
         ]
       };
     }
-    
-    // 2. 普通文字，保持原样
-    return {
-      role: m.role,
-      content: m.content
-    };
+    // 处理文本
+    return { role: m.role, content: m.content };
   });
 
   try {
-    const res = await fetch(`${baseUrl.replace(/\/$/, '')}/chat/completions`, {
+    const cleanBaseUrl = baseUrl.replace(/\/$/, '');
+    const url = cleanBaseUrl.endsWith('/v1') 
+      ? `${cleanBaseUrl}/chat/completions` 
+      : `${cleanBaseUrl}/v1/chat/completions`;
+
+    const res = await fetch(url, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${apiKey}`
+        'Authorization': `Bearer ${apiKey}`
       },
       body: JSON.stringify({
         model,
-        messages: apiMessages, // 使用处理过包含图片的 messages
+        messages: apiMessages,
         temperature,
         max_tokens: maxTokens,
-        top_p: topP
+        top_p: topP,
+        stream: false 
       })
     });
 
     if (!res.ok) {
       const errText = await res.text();
-      throw new Error(`HTTP ${res.status}: ${errText || '未知错误'}`);
+      throw new Error(`HTTP ${res.status}: ${errText}`);
     }
 
     const data = await res.json();
 
-// ==================== 这是一组代码：【修复版】API 返回值解析逻辑 ====================
-    // 作用：更宽容地提取 AI 的回复，防止因为格式问题报错“空内容”
-    
-    // 1. OpenAI / 兼容接口的返回格式
+    // ==================== ★★★ 恢复你的万能解析逻辑 (兼容 DeepSeek) ★★★ ====================
+    // 1. 标准 OpenAI 格式 & DeepSeek 思考过程
     if (data.choices && data.choices.length > 0) {
       const msg = data.choices[0].message;
       const content = msg.content;
-      const reasoning = msg.reasoning_content; // 兼容深度思考模型(DeepSeek等)
+      const reasoning = msg.reasoning_content; // 兼容深度思考模型
 
       // 优先返回正式内容
       if (content && content.length > 0) return content;
@@ -199,16 +205,15 @@ export const generateResponse = async (
       // 如果正式内容为空，但有思考过程，也算成功（防止报错）
       if (reasoning && reasoning.length > 0) return JSON.stringify([{ type: "text", content: "(AI正在深度思考中...)" }]);
 
-      // 如果真的什么都没有，才返回空字符串，交给外面处理，而不是直接报错
       return ""; 
     }
 
-    // 2. Gemini / Google 接口的返回格式
+    // 2. Gemini / Google 接口的返回格式 (兼容部分反代)
     if (data.candidates && data.candidates[0]?.content?.parts?.[0]?.text) {
       return data.candidates[0].content.parts[0].text;
     }
 
-    // 3. 其他非标准格式的兜底
+    // 3. 其他非标准格式的兜底 (OneAPI / NewAPI 等)
     if (data.text) return data.text;
     if (data.content) return data.content;
     if (data.response) return data.response;
@@ -216,20 +221,8 @@ export const generateResponse = async (
     // 实在没办法了，返回原始数据让 ChatApp 自己去猜，不要直接报错
     return JSON.stringify(data);
 
-
-    
-
-    if (data.candidates && data.candidates[0]?.content?.parts?.[0]?.text) {
-      return data.candidates[0].content.parts[0].text;
-    }
-
-    if (data.text) return data.text;
-    if (data.content) return data.content;
-    if (data.response) return data.response;
-
-    // 兜底返回原始数据
-    return `(未知格式回复: ${JSON.stringify(data)})`;
   } catch (e: any) {
-    return `(网络错误: ${e.message || '未知错误'})`;
+    console.error("OpenAI/Proxy Error:", e);
+    return `(API 请求失败: ${e.message})`;
   }
 };

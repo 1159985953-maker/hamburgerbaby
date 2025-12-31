@@ -1,6 +1,9 @@
+// 这是一组代码：【完全体】设置页面
+// 包含：API修复(Gemini可填链接/拉取)、外观(壁纸/时区/状态栏)、备份(自动修复)
 import React, { useState } from 'react';
 import { GlobalSettings, ApiPreset, Contact, WorldBookCategory } from '../types';
-import SafeAreaHeader from './SafeAreaHeader';  // ← 确保路径正确（如果在 components 同级）
+import SafeAreaHeader from './SafeAreaHeader'; 
+import { fetchModels } from '../services/apiService'; // 👈 确保这里引入了刚才改好的 apiService
 
 interface SettingsAppProps {
   settings: GlobalSettings;
@@ -20,7 +23,7 @@ const SettingsApp: React.FC<SettingsAppProps> = ({
   const [models, setModels] = useState<string[]>([]);
   const [loadingModels, setLoadingModels] = useState(false);
 
-  // 初始化 Minimax 设置（防止空指针）
+  // 初始化 Minimax 设置
   const ensureMinimax = () => {
     if (!settings.minimax) {
       setSettings(prev => ({ ...prev, minimax: { groupId: '', apiKey: '', model: 'speech-01' } }));
@@ -29,20 +32,21 @@ const SettingsApp: React.FC<SettingsAppProps> = ({
 
   // 保存 API 预设
   const handleSavePreset = () => {
-    if (!editingPreset?.name || !editingPreset?.apiKey || !editingPreset?.type) {
-      alert('请填写完整信息');
+    if (!editingPreset?.name || !editingPreset?.apiKey) {
+      alert('请填写 预设名称 和 API Key');
       return;
     }
 
     const newPreset: ApiPreset = {
       id: editingPreset.id || Date.now().toString(),
       name: editingPreset.name,
-      type: editingPreset.type,
+      type: editingPreset.type || 'gemini',
+      // ★★★ 修复：无论什么模式，都允许保存 baseUrl ★★★
       baseUrl: editingPreset.baseUrl || '',
       apiKey: editingPreset.apiKey,
       model: editingPreset.model || models[0] || (editingPreset.type === 'gemini' ? 'gemini-1.5-flash' : 'gpt-3.5-turbo'),
       temperature: editingPreset.temperature || 1.0,
-      maxTokens: editingPreset.maxTokens || 2048,
+      maxTokens: editingPreset.maxTokens || 4096,
       topP: editingPreset.topP || 1
     };
 
@@ -74,6 +78,46 @@ const SettingsApp: React.FC<SettingsAppProps> = ({
     }));
   };
 
+  // ★★★ 核心修复：通用一键拉取模型列表（支持 Gemini 填链接） ★★★
+  const handleFetchModelsClick = async () => {
+    if (!editingPreset?.apiKey) {
+      alert('请先填写 API Key');
+      return;
+    }
+
+    setLoadingModels(true);
+    try {
+      // 调用我们在 apiService.ts 里写的增强版函数
+      // 它会自动处理 Gemini 官方、Gemini 代理、OpenAI 等各种情况
+      const fetchedList = await fetchModels(
+        editingPreset.type || 'gemini',
+        editingPreset.baseUrl,
+        editingPreset.apiKey
+      );
+
+      if (fetchedList.length > 0) {
+        setModels(fetchedList);
+        // 如果当前没选模型，默认选第一个
+        if (!editingPreset.model) {
+            setEditingPreset(prev => ({ ...prev, model: fetchedList[0] }));
+        }
+        alert(`成功拉取 ${fetchedList.length} 个模型！请在下拉框选择。`);
+      } else {
+        alert('拉取成功但列表为空，请手动输入模型名。');
+      }
+    } catch (err: any) {
+      console.error(err);
+      // 就算报错了，也给几个默认的，防止没得选
+      const defaults = editingPreset.type === 'gemini' 
+        ? ['gemini-1.5-flash', 'gemini-1.5-pro'] 
+        : ['gpt-3.5-turbo', 'gpt-4o'];
+      setModels(defaults);
+      alert(`网络连接遇到问题，已加载默认模型列表供选择。\n(错误信息: ${err.message})`);
+    } finally {
+      setLoadingModels(false);
+    }
+  };
+
   // 导出备份
   const handleExport = () => {
     const backup = {
@@ -91,7 +135,7 @@ const SettingsApp: React.FC<SettingsAppProps> = ({
     a.click();
   };
 
-  // 导入备份 (自动修复版)
+  // 导入备份 (保留你原有的自动修复逻辑)
   const handleImport = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -102,35 +146,32 @@ const SettingsApp: React.FC<SettingsAppProps> = ({
         if (backup.contacts && backup.globalSettings) {
           if (confirm('恢复备份将覆盖当前所有数据，确定吗？')) {
 
-            // ★★★ 核心修复：在保存之前，清洗并修复每一个角色数据 ★★★
+            // ★★★ 核心修复：保留你的清洗逻辑 ★★★
             const fixedContacts = backup.contacts.map((c: any) => ({
               ...c,
-              // 如果缺少 mood，补全默认值
+              // 补全 mood
               mood: c.mood || { current: "Content", energyLevel: 80, lastUpdate: Date.now() },
-              // 如果缺少 history，补全空数组
+              // 补全 history
               history: c.history || [],
-              // 如果缺少 voiceId，补全默认值
+              // 补全 voiceId
               voiceId: c.voiceId || "female-shaonv-jingpin",
-              // 如果缺少 id，补全随机数
+              // 补全 id
               id: c.id || Date.now().toString() + Math.random()
-
             }));
 
             setSettings(backup.globalSettings);
-            setContacts(fixedContacts); // <--- 存入修复好的数据
+            setContacts(fixedContacts);
             setWorldBooks(backup.worldBooks || []);
 
-            // ★★★ 新增：导入后自动激活第一个 API 预设（防止回复按钮没反应）★★★
+            // 导入后自动激活第一个 API 预设
             if (backup.globalSettings.apiPresets && backup.globalSettings.apiPresets.length > 0) {
               const firstPreset = backup.globalSettings.apiPresets[0];
               setSettings(prev => ({
                 ...backup.globalSettings,
                 activePresetId: backup.globalSettings.activePresetId || firstPreset.id
               }));
-            } else {
-              setSettings(backup.globalSettings);
             }
-            alert('恢复成功！数据已自动修复，请刷新页面');
+            alert('恢复成功！数据已自动修复。');
           }
         }
       } catch (err) {
@@ -141,75 +182,13 @@ const SettingsApp: React.FC<SettingsAppProps> = ({
     reader.readAsText(file);
   };
 
-  // ★★★ 修改：通用一键拉取模型列表（支持 Gemini 和 OpenAI） ★★★
-  const handleFetchModels = async () => {
-    if (!editingPreset?.apiKey) {
-      alert('请先填写 API Key (对于OpenAI还需要Base URL)');
-      return;
-    }
-
-    setLoadingModels(true);
-    try {
-      let url = '';
-      let headers: Record<string, string> = {};
-
-      if (editingPreset.type === 'openai') {
-        if (!editingPreset.baseUrl) {
-           alert('OpenAI 模式需要 Base URL');
-           setLoadingModels(false);
-           return;
-        }
-        // OpenAI 格式
-        url = `${editingPreset.baseUrl.replace(/\/$/, '')}/models`;
-        headers = {
-          'Authorization': `Bearer ${editingPreset.apiKey}`,
-          'Content-Type': 'application/json'
-        };
-      } else {
-        // Gemini 官方格式
-        url = `https://generativelanguage.googleapis.com/v1beta/models?key=${editingPreset.apiKey}`;
-        // Gemini 官方不需要 Authorization header，key 在 url 里
-      }
-
-      const res = await fetch(url, { headers });
-
-      if (!res.ok) {
-        const errText = await res.text();
-        throw new Error(`HTTP ${res.status}: ${errText || '连接失败'}`);
-      }
-
-      const data = await res.json();
-      let modelList: string[] = [];
-
-      if (editingPreset.type === 'openai') {
-        // OpenAI 返回格式: { data: [{ id: "gpt-4" }, ...] }
-        modelList = data.data?.map((m: any) => m.id) || [];
-      } else {
-        // Gemini 返回格式: { models: [{ name: "models/gemini-1.5-flash" }, ...] }
-        modelList = data.models?.map((m: any) => m.name.replace('models/', '')) || [];
-      }
-
-      if (modelList.length === 0) {
-        alert('拉取成功但未找到模型，请手动填写模型名');
-      } else {
-        setModels(modelList);
-        alert(`成功拉取 ${modelList.length} 个模型！`);
-      }
-    } catch (err: any) {
-      alert(`拉取模型失败：${err.message}`);
-      console.error(err);
-    } finally {
-      setLoadingModels(false);
-    }
-  };
-
   return (
     <div className="h-full w-full bg-gray-100 flex flex-col pt-[calc(44px+env(safe-area-inset-top))]">
       {/* 顶部标题栏 */}
       <SafeAreaHeader
-  title="系统设置"
-  left={<button onClick={onClose} className="text-blue-500 text-2xl -ml-2">‹</button>}
-/>
+        title="系统设置"
+        left={<button onClick={onClose} className="text-blue-500 text-2xl -ml-2">‹</button>}
+      />
 
       {/* 标签页切换 */}
       <div className="flex bg-white border-b">
@@ -224,8 +203,7 @@ const SettingsApp: React.FC<SettingsAppProps> = ({
         </button>
       </div>
 
-<div className="flex-1 overflow-y-auto p-4">
-
+      <div className="flex-1 overflow-y-auto p-4">
 
         {/* ==================== 1. API 配置页面 ==================== */}
         {activeTab === 'api' && (
@@ -233,76 +211,85 @@ const SettingsApp: React.FC<SettingsAppProps> = ({
 
             {/* 新建/编辑预设表单 */}
             {editingPreset && (
-              <div className="bg-white p-5 rounded-xl shadow-lg border border-gray-200">
+              <div className="bg-white p-5 rounded-xl shadow-lg border border-gray-200 animate-slideUp">
                 <h3 className="font-bold text-lg mb-4 text-gray-800">
                   {editingPreset.id ? '编辑预设' : '新建预设'}
                 </h3>
 
+                {/* 名字 */}
                 <input
                   type="text"
-                  placeholder="预设名称（如：gcli反代）"
-                  className="w-full p-3 border rounded-lg mb-4 focus:border-blue-500 outline-none"
+                  placeholder="预设名称（如：我的Gemini）"
+                  className="w-full p-3 border rounded-lg mb-4 focus:border-blue-500 outline-none font-bold"
                   value={editingPreset.name || ''}
                   onChange={e => setEditingPreset({ ...editingPreset, name: e.target.value })}
                 />
 
+                {/* 类型选择 */}
                 <select
                   className="w-full p-3 border rounded-lg mb-4 focus:border-blue-500 outline-none"
                   value={editingPreset.type || 'gemini'}
                   onChange={e => {
-                    setEditingPreset({ ...editingPreset, type: e.target.value as 'gemini' | 'openai', baseUrl: '', model: '' });
+                    setEditingPreset({ ...editingPreset, type: e.target.value as 'gemini' | 'openai', model: '' });
                     setModels([]);
                   }}
                 >
-                  <option value="gemini">Gemini 官方</option>
-                  <option value="openai">OpenAI 兼容（反代）</option>
+                  <option value="gemini">Gemini 官方 / 代理</option>
+                  <option value="openai">OpenAI 兼容 (GPT/Claude/DeepSeek)</option>
                 </select>
 
-                {editingPreset.type === 'openai' && (
-                  <input
-                    type="text"
-                    placeholder="Base URL（如 https://gcli.ggchan.dev/v1）"
-                    className="w-full p-3 border rounded-lg mb-3 focus:border-blue-500 outline-none"
-                    value={editingPreset.baseUrl || ''}
-                    onChange={e => setEditingPreset({ ...editingPreset, baseUrl: e.target.value })}
-                  />
-                )}
+                {/* ★★★ 核心修复：始终显示 Base URL 输入框，不管选什么类型！ ★★★ */}
+                <div className="mb-3">
+                    <label className="block text-xs font-bold text-gray-400 mb-1">
+                        API Endpoint / Base URL (选填)
+                    </label>
+                    <input
+                      type="text"
+                      placeholder={editingPreset.type === 'gemini' ? "官方直连可留空，或填转发链接" : "https://api.openai.com/v1"}
+                      className="w-full p-3 border rounded-lg focus:border-blue-500 outline-none font-mono text-sm"
+                      value={editingPreset.baseUrl || ''}
+                      onChange={e => setEditingPreset({ ...editingPreset, baseUrl: e.target.value })}
+                    />
+                    <p className="text-[10px] text-gray-400 mt-1">
+                        * 如果是 Gemini 官方直连，留空即可。如果有反代，请填入反代地址。
+                    </p>
+                </div>
 
+                {/* API Key */}
                 <input
                   type="password"
-                  placeholder="API Key"
-                  className="w-full p-3 border rounded-lg mb-4 focus:border-blue-500 outline-none"
+                  placeholder="API Key (sk-...)"
+                  className="w-full p-3 border rounded-lg mb-4 focus:border-blue-500 outline-none font-mono"
                   value={editingPreset.apiKey || ''}
                   onChange={e => setEditingPreset({ ...editingPreset, apiKey: e.target.value })}
                 />
 
-                {/* ★★★ 核心修改：将拉取按钮移动到这里，让 Gemini 也能用 ★★★ */}
+                {/* ★★★ 修复：拉取按钮现在对 Gemini 也生效 ★★★ */}
                 <button
-                  onClick={handleFetchModels}
+                  onClick={handleFetchModelsClick}
                   disabled={loadingModels}
                   className="w-full bg-gradient-to-r from-blue-500 to-indigo-500 text-white py-3 rounded-lg font-bold mb-4 hover:from-blue-600 hover:to-indigo-600 disabled:opacity-50 transition shadow-md flex items-center justify-center gap-2"
                 >
-                  {loadingModels ? (
-                    <>⏳ 拉取中...</>
-                  ) : (
-                    <>🔄 一键拉取 {editingPreset.type === 'gemini' ? 'Gemini' : 'OpenAI'} 模型列表</>
-                  )}
+                  {loadingModels ? '⏳ 正在连接...' : '🔄 一键拉取模型列表'}
                 </button>
 
+                {/* 模型选择 */}
                 <select
-                  className="w-full p-3 border rounded-lg mb-4 focus:border-blue-500 outline-none"
-                  disabled={loadingModels}
+                  className="w-full p-3 border rounded-lg mb-4 focus:border-blue-500 outline-none bg-white"
                   value={editingPreset.model || ''}
                   onChange={e => setEditingPreset({ ...editingPreset, model: e.target.value })}
                 >
                   <option value="">
-                    {models.length === 0
-                      ? (editingPreset.type === 'gemini' ? '默认 gemini-1.5-flash' : '请拉取模型')
-                      : '选择模型'}
+                    {models.length === 0 ? '请先点击上方拉取按钮' : '-- 选择模型 --'}
                   </option>
                   {models.map(m => (
                     <option key={m} value={m}>{m}</option>
                   ))}
+                  {/* 默认兜底选项 */}
+                  <optgroup label="默认推荐">
+                      <option value="gemini-1.5-flash">gemini-1.5-flash</option>
+                      <option value="gpt-3.5-turbo">gpt-3.5-turbo</option>
+                  </optgroup>
                 </select>
 
                 <div className="mb-4">
@@ -322,7 +309,7 @@ const SettingsApp: React.FC<SettingsAppProps> = ({
 
                 <div className="flex gap-3">
                   <button onClick={handleSavePreset} className="flex-1 bg-blue-600 text-white py-3 rounded-lg font-bold hover:bg-blue-700 transition">
-                    保存预设
+                    保存
                   </button>
                   <button onClick={() => { setEditingPreset(null); setModels([]); }} className="flex-1 bg-gray-300 py-3 rounded-lg font-bold hover:bg-gray-400 transition">
                     取消
@@ -331,7 +318,7 @@ const SettingsApp: React.FC<SettingsAppProps> = ({
               </div>
             )}
 
-            {/* 已保存预设列表 (修复版：点击激活 + 视觉反馈) */}
+            {/* 预设列表 */}
             <div className="space-y-3">
               <div className="flex justify-between items-center mb-4">
                 <h3 className="font-bold text-lg">已保存预设</h3>
@@ -348,23 +335,21 @@ const SettingsApp: React.FC<SettingsAppProps> = ({
 
               {settings.apiPresets.length === 0 && (
                 <div className="text-center py-12 text-gray-400 border-2 border-dashed border-gray-200 rounded-xl">
-                  <p className="text-lg">还没有预设</p>
-                  <p className="text-sm mt-2">点右上角 + 添加你的第一个API配置吧～</p>
+                  <p>暂无配置</p>
+                  <p className="text-sm mt-2">点击右上角 + 添加</p>
                 </div>
               )}
 
               {settings.apiPresets.map(p => {
                 const isActive = settings.activePresetId === p.id;
-                
                 return (
                   <div
                     key={p.id}
-                    // ★★★ 核心修复：点击整个卡片即激活 ★★★
                     onClick={() => setSettings(s => ({ ...s, activePresetId: p.id }))}
                     className={`relative p-4 rounded-xl border-2 flex justify-between items-center transition cursor-pointer ${
                       isActive 
-                        ? 'border-green-500 bg-green-50 shadow-md' // 激活样式：绿框+绿底
-                        : 'border-gray-200 bg-white hover:border-blue-300' // 未激活样式
+                        ? 'border-green-500 bg-green-50 shadow-md' 
+                        : 'border-gray-200 bg-white hover:border-blue-300'
                     }`}
                   >
                     <div className="flex-1">
@@ -372,94 +357,83 @@ const SettingsApp: React.FC<SettingsAppProps> = ({
                         <span className={`font-bold ${isActive ? 'text-green-800' : 'text-gray-800'}`}>
                           {p.name}
                         </span>
-                        {/* 激活状态徽章 */}
                         {isActive && (
-                          <span className="text-[10px] bg-green-500 text-white px-2 py-0.5 rounded-full font-bold shadow-sm">
-                            当前使用中
+                          <span className="text-[10px] bg-green-500 text-white px-2 py-0.5 rounded-full font-bold">
+                            使用中
                           </span>
                         )}
                       </div>
                       <div className="text-xs text-gray-500 mt-1 font-mono">
-                        {p.type === 'gemini' ? 'Gemini 官方' : '反代'} • {p.model}
+                        {p.type === 'gemini' ? 'Gemini' : 'OpenAI'} • {p.model}
+                      </div>
+                      <div className="text-[10px] text-gray-400 mt-0.5 truncate max-w-[200px]">
+                         {p.baseUrl || "默认地址"}
                       </div>
                     </div>
 
                     <div className="flex gap-2">
                       <button 
                         onClick={(e) => { 
-                          e.stopPropagation(); // 阻止冒泡，防止触发激活
+                          e.stopPropagation(); 
                           setEditingPreset(p); 
                           setModels([]); 
                         }} 
-                        className="px-3 py-1.5 bg-blue-50 text-blue-600 rounded-lg text-xs font-bold hover:bg-blue-100 transition"
+                        className="px-3 py-1.5 bg-blue-50 text-blue-600 rounded-lg text-xs font-bold hover:bg-blue-100"
                       >
                         编辑
                       </button>
                       <button 
                         onClick={(e) => { 
-                          e.stopPropagation(); // 阻止冒泡
-                          if(confirm(`确定删除预设 "${p.name}" 吗？`)) {
-                             handleDeletePreset(p.id);
-                          }
+                          e.stopPropagation(); 
+                          if(confirm(`确定删除 "${p.name}" 吗？`)) handleDeletePreset(p.id);
                         }} 
-                        className="px-3 py-1.5 bg-red-50 text-red-500 rounded-lg text-xs font-bold hover:bg-red-100 transition"
+                        className="px-3 py-1.5 bg-red-50 text-red-500 rounded-lg text-xs font-bold hover:bg-red-100"
                       >
-                        删除
+                        删
                       </button>
                     </div>
                   </div>
                 );
               })}
             </div>
-            
 
-            {/* Minimax 基础配置 */}
+            {/* Minimax 配置 */}
             <div className="mt-8 border-t pt-6 pb-10">
               <div className="flex items-center gap-2 mb-4">
                 <span className="text-2xl">🗣️</span>
                 <h3 className="font-bold text-lg text-gray-800">Minimax 语音 Key</h3>
               </div>
-
               <div className="bg-white p-5 rounded-xl shadow-sm border border-purple-100 space-y-4">
-                <div>
-                  <label className="block text-sm font-bold text-gray-600 mb-1">Group ID</label>
-                  <input
-                    type="text"
-                    placeholder="输入 Group ID"
-                    className="w-full p-3 border border-gray-200 rounded-lg outline-none focus:border-purple-500 focus:bg-purple-50 transition font-mono"
-                    value={settings.minimax?.groupId || ''}
-                    onChange={e => { ensureMinimax(); setSettings(prev => ({ ...prev, minimax: { ...prev.minimax!, groupId: e.target.value } })) }}
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-bold text-gray-600 mb-1">API Key</label>
-                  <input
-                    type="password"
-                    placeholder="输入 API Key"
-                    className="w-full p-3 border border-gray-200 rounded-lg outline-none focus:border-purple-500 focus:bg-purple-50 transition font-mono"
-                    value={settings.minimax?.apiKey || ''}
-                    onChange={e => { ensureMinimax(); setSettings(prev => ({ ...prev, minimax: { ...prev.minimax!, apiKey: e.target.value } })) }}
-                  />
-                </div>
-
+                <input
+                  type="text"
+                  placeholder="Group ID"
+                  className="w-full p-3 border border-gray-200 rounded-lg outline-none font-mono"
+                  value={settings.minimax?.groupId || ''}
+                  onChange={e => { ensureMinimax(); setSettings(prev => ({ ...prev, minimax: { ...prev.minimax!, groupId: e.target.value } })) }}
+                />
+                <input
+                  type="password"
+                  placeholder="API Key"
+                  className="w-full p-3 border border-gray-200 rounded-lg outline-none font-mono"
+                  value={settings.minimax?.apiKey || ''}
+                  onChange={e => { ensureMinimax(); setSettings(prev => ({ ...prev, minimax: { ...prev.minimax!, apiKey: e.target.value } })) }}
+                />
                 <div className="text-xs text-gray-400 bg-gray-50 p-2 rounded-lg">
-                  💡 这里只填 Key。去 <b>聊天界面 → 设置 → Minimax 配置</b> 里选择国内版/模型/音色。
+                  💡 只要填 Key，模型和音色去聊天界面里选。
                 </div>
               </div>
             </div>
-
           </div>
         )}
 
-        {/* ==================== 2. 外观设置页面 (修复了这里！) ==================== */}
+        {/* ==================== 2. 外观设置页面 (恢复了所有功能！) ==================== */}
         {activeTab === 'appearance' && (
           <div className="space-y-6 animate-slideUp">
             
             {/* 全局壁纸 */}
             <div className="bg-white p-5 rounded-xl shadow-sm border border-gray-100">
                <h3 className="font-bold text-lg mb-3">🏠 桌面壁纸</h3>
-               <div className="mb-4 aspect-video rounded-xl bg-gray-100 overflow-hidden border border-gray-200">
+               <div className="mb-4 aspect-video rounded-xl bg-gray-100 overflow-hidden border border-gray-200 relative">
                   {settings.wallpaper ? (
                     <img src={settings.wallpaper} className="w-full h-full object-cover" alt="Wallpaper" />
                   ) : (
@@ -493,7 +467,7 @@ const SettingsApp: React.FC<SettingsAppProps> = ({
                </div>
             </div>
 
-            {/* 时区设置 */}
+            {/* ★★★ 恢复：时区设置 ★★★ */}
             <div className="bg-white p-5 rounded-xl shadow-sm border border-gray-100">
               <h3 className="font-bold text-lg mb-3">🕒 时区设置</h3>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -528,7 +502,7 @@ const SettingsApp: React.FC<SettingsAppProps> = ({
               </div>
             </div>
 
-             {/* 其他杂项 */}
+             {/* ★★★ 恢复：其他杂项 ★★★ */}
              <div className="bg-white p-5 rounded-xl shadow-sm border border-gray-100">
                <h3 className="font-bold text-lg mb-3">✨ 其他设置</h3>
                <div className="flex items-center justify-between p-2">

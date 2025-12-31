@@ -6041,24 +6041,29 @@ ${interactionGuide}
 
 
 
-
-// ==================== ⏰ [最强时间感知模块] ⏰ ====================
-    // 1. 获取当下绝对精确的时间
+// ==================== ⏰ [原子钟级·时空感知模块 V3.0] ⏰ ====================
+    // 1. 获取当下绝对精确的时间 (基于 AI 的时区)
     const nowTimeObj = new Date();
-    const currentYear = nowTimeObj.getFullYear();
-    const currentMonth = nowTimeObj.getMonth() + 1; // 月份是从0开始的
-    const currentDate = nowTimeObj.getDate();
-    const weekDays = ["周日", "周一", "周二", "周三", "周四", "周五", "周六"];
-    const currentWeekDay = weekDays[nowTimeObj.getDay()];
-    
-    // 格式化为：2025年1月1日 (周三) 14:30
-    const strictTimeStr = `${currentYear}年${currentMonth}月${currentDate}日 (${currentWeekDay}) ${nowTimeObj.getHours().toString().padStart(2,'0')}:${nowTimeObj.getMinutes().toString().padStart(2,'0')}`;
+    // 使用 AI 设定的时区来获取时间对象
+    const aiTimeString = nowTimeObj.toLocaleString('en-US', { timeZone: activeContact.timezone || "Asia/Shanghai" });
+    const aiDate = new Date(aiTimeString);
 
-    // 2. 计算与上一条消息的“时间断层” (Time Gap)
+    const currentYear = aiDate.getFullYear();
+    const currentMonth = aiDate.getMonth() + 1; // 月份是从0开始的，必须+1
+    const currentDate = aiDate.getDate();
+    const currentHour = aiDate.getHours();
+    const currentMinute = aiDate.getMinutes();
+    
+    const weekDays = ["周日", "周一", "周二", "周三", "周四", "周五", "周六"];
+    const currentWeekDay = weekDays[aiDate.getDay()];
+    
+    // ★★★ 格式化为人类直觉时间 (例如：2025年1月1日 周三 14:30) ★★★
+    const strictTimeStr = `${currentYear}年${currentMonth}月${currentDate}日 (${currentWeekDay}) ${currentHour.toString().padStart(2,'0')}:${currentMinute.toString().padStart(2,'0')}`;
+
+    // 2. 计算与上一条消息的“时间断层” (Time Gap) - 精确到分钟
     let timeGapDesc = "这是我们的第一次对话";
     let isLongGap = false; // 是否是很久的断层
     
-    // 获取历史记录里最后一条消息（不管是谁发的）
     const lastHistoryMsg = currentHistory[currentHistory.length - 1];
     
     if (lastHistoryMsg) {
@@ -6080,18 +6085,27 @@ ${interactionGuide}
         }
     }
 
-    // 3. 特殊节日强制补丁 (治好它的新年健忘症)
+    // 3. 📅 节日与作息强制补丁 (节日特供)
     let holidayPatch = "";
+    
+    // 元旦 (1月1日 - 1月3日)
     if (currentMonth === 1 && currentDate <= 3) {
-        holidayPatch = `【⚠️ 节日强制覆盖】现在是${currentYear}年元旦新年期间！如果用户说新年快乐，你必须回应新年快乐，绝对不许反驳说现在不是新年！`;
-    } else if (currentMonth === 2 && (currentDate >= 9 && currentDate <= 15)) { // 粗略的春节范围，可自己改
-        holidayPatch = `【⚠️ 节日强制覆盖】现在是春节期间！`;
-    } else if (nowTimeObj.getHours() >= 23 || nowTimeObj.getHours() <= 4) {
-        holidayPatch = `【⚠️ 生理钟强制】现在是深夜/凌晨，你应该表现出困意或惊讶为什么还没睡。`;
+        holidayPatch = `【🎉 节日强制覆盖】现在是${currentYear}年元旦新年期间！如果用户说新年快乐，你必须回应新年快乐，绝对不许反驳说现在不是新年！`;
+    } 
+    // 情人节 (2月14日)
+    else if (currentMonth === 2 && currentDate === 14) {
+        holidayPatch = `【❤️ 节日强制覆盖】今天是情人节！`;
     }
+    // 深夜作息 (23点 - 5点)
+    else if (currentHour >= 23 || currentHour <= 4) {
+        holidayPatch = `【💤 生理钟强制】现在是深夜 ${currentHour}点${currentMinute}分，你应该表现出困意，或者惊讶为什么用户还没睡。不要像白天一样精神！`;
+    }
+    // 早晨 (6点 - 9点)
+    else if (currentHour >= 6 && currentHour <= 9) {
+        holidayPatch = `【☀️ 早晨状态】现在是早上，刚睡醒或正在吃早餐的状态。`;
+    }
+
     // ==================== ⏰ [模块结束] ⏰ ====================
-
-
 
 
 
@@ -6140,20 +6154,19 @@ ${interactionGuide}
 
 
 
-
-# 【⚠️ 绝对时空法则 (违反即系统崩溃) ⚠️】
+# 【⚠️ 绝对时空锚点 (违反即系统崩溃) ⚠️】
 你必须时刻保持对时间的极度敏感！你的大脑中植入了一个原子钟。
 
 **1. 当下绝对时间**: 【 ${strictTimeStr} 】
-   - 现在的年份是 **${currentYear}** 年！
+   - 现在的年份是 **${currentYear}** 年！不是2023，不是2024，是 **${currentYear}**！
    - 现在的月份是 **${currentMonth}** 月！
-   - 只要用户提到时间、日期、节日，你必须以这个时间为准。
-   - ${holidayPatch}
+   - 具体时间是 **${currentHour}:${currentMinute.toString().padStart(2,'0')}**。
+   - ${holidayPatch} (如果有节日或深夜指令，必须优先执行！)
 
 **2. 距离上一句过去**: 【 ${timeGapDesc} 】
-   - 如果是“刚刚/几分钟前”：对话是连贯的，不要打招呼，直接接话。
-   - 如果是“几小时/几天前”：说明对话中断过，你可以视情况问候“去哪了”或“刚忙完”。
-
+   - 必须基于这个时间间隔来调整开场白。
+   - 如果是“刚刚”，严禁打招呼（如“你好”），直接接话。
+   - 如果是“几天前”，可以问候“好久不见”。
 
 
 
