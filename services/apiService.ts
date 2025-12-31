@@ -184,22 +184,40 @@ export const generateResponse = async (
 
     const data = await res.json();
 
-    // 智能解析多种返回格式（保持你原来的逻辑完全不变）
-   // ★★★ 增强版解析逻辑 ★★★
+// ==================== 这是一组代码：【修复版】API 返回值解析逻辑 ====================
+    // 作用：更宽容地提取 AI 的回复，防止因为格式问题报错“空内容”
+    
+    // 1. OpenAI / 兼容接口的返回格式
     if (data.choices && data.choices.length > 0) {
       const msg = data.choices[0].message;
       const content = msg.content;
-      const reasoning = msg.reasoning_content; // 兼容深度思考模型
+      const reasoning = msg.reasoning_content; // 兼容深度思考模型(DeepSeek等)
 
-      // 1. 如果有内容，直接返回
+      // 优先返回正式内容
       if (content && content.length > 0) return content;
       
-      // 2. 如果只有思考过程（针对某些深度思考模型）
-      if (reasoning && reasoning.length > 0) return `(思考中...)\n${reasoning}`;
+      // 如果正式内容为空，但有思考过程，也算成功（防止报错）
+      if (reasoning && reasoning.length > 0) return JSON.stringify([{ type: "text", content: "(AI正在深度思考中...)" }]);
 
-      // 3. 如果内容是空字符串，且 token 为 0 (这就是你遇到的情况)
-      return "(AI 返回了空内容，请重roll)";
+      // 如果真的什么都没有，才返回空字符串，交给外面处理，而不是直接报错
+      return ""; 
     }
+
+    // 2. Gemini / Google 接口的返回格式
+    if (data.candidates && data.candidates[0]?.content?.parts?.[0]?.text) {
+      return data.candidates[0].content.parts[0].text;
+    }
+
+    // 3. 其他非标准格式的兜底
+    if (data.text) return data.text;
+    if (data.content) return data.content;
+    if (data.response) return data.response;
+
+    // 实在没办法了，返回原始数据让 ChatApp 自己去猜，不要直接报错
+    return JSON.stringify(data);
+
+
+    
 
     if (data.candidates && data.candidates[0]?.content?.parts?.[0]?.text) {
       return data.candidates[0].content.parts[0].text;
