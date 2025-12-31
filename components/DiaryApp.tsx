@@ -894,41 +894,6 @@ const AIAdminChat: React.FC<{
 
 
 
-// 这是一组什么代码：【稳健版】历史记录追踪
-    // 作用：自动记录你的浏览足迹。修复了“按钮没用”的 Bug。
-    useEffect(() => {
-        if (!currentFileId) return;
-
-        // 1. 如果是点击“PREV/NEXT”按钮触发的，不要重复记录
-        if (isNavigatingHistory.current) {
-            isNavigatingHistory.current = false; // 重置标记
-            return;
-        }
-
-        // 2. 正常的点击跳转：把“未来”的历史剪掉，压入新历史
-        setHistoryStack(prev => {
-            const newStack = prev.slice(0, historyIndex + 1);
-            // 只有当这篇和上一篇不一样时才记录 (去重)
-            if (newStack[newStack.length - 1] !== currentFileId) {
-                newStack.push(currentFileId);
-            }
-            return newStack;
-        });
-
-        // 3. 更新指针到最新位置
-        setHistoryIndex(prev => {
-             // 这里有个小逻辑：因为 setHistoryStack 是异步的，我们直接计算新的 index
-             // 如果是第一次加载，index 设为 0
-             if (historyStack.length === 0) return 0;
-             return historyIndex + 1;
-        });
-
-    }, [currentFileId]); // 监听当前文件变化
-
-
-
-
-
 
 
 
@@ -1106,6 +1071,40 @@ const searchResults = useMemo(() => {
     }, [searchKeyword, diaries]);
 
 
+
+
+
+
+// 这是一组什么代码：【稳健版】历史记录追踪
+    // 作用：自动记录你的浏览足迹。修复了“按钮没用”的 Bug。
+    useEffect(() => {
+        if (!currentFileId) return;
+
+        // 1. 如果是点击“PREV/NEXT”按钮触发的，不要重复记录
+        if (isNavigatingHistory.current) {
+            isNavigatingHistory.current = false; // 重置标记
+            return;
+        }
+
+        // 2. 正常的点击跳转：把“未来”的历史剪掉，压入新历史
+        setHistoryStack(prev => {
+            const newStack = prev.slice(0, historyIndex + 1);
+            // 只有当这篇和上一篇不一样时才记录 (去重)
+            if (newStack[newStack.length - 1] !== currentFileId) {
+                newStack.push(currentFileId);
+            }
+            return newStack;
+        });
+
+        // 3. 更新指针到最新位置
+        setHistoryIndex(prev => {
+             // 这里有个小逻辑：因为 setHistoryStack 是异步的，我们直接计算新的 index
+             // 如果是第一次加载，index 设为 0
+             if (historyStack.length === 0) return 0;
+             return historyIndex + 1;
+        });
+
+    }, [currentFileId]); // 监听当前文件变化
 
 
 

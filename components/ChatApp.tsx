@@ -4674,41 +4674,34 @@ ${historyText}
 
 
 
-// 这是一组代码：【ChatApp.tsx】修复版印象更新引擎 (含强力去重+防复读机制)
-const updateUserProfile = async (currentContact: Contact, historySlice: any[], nextThreshold: number) => {
-  console.log(`[人格档案引擎 V-FINAL FIX] 启动【一体化】模式！`);
+const updateUserProfile = async (currentContact: Contact, historySlice: any[], nextThreshold: number, isPaidRefresh = false) => {
+  console.log(`[人格档案引擎] 启动！付费模式: ${isPaidRefresh}`);
 
   const activePreset = globalSettings.apiPresets.find((p: any) => p.id === globalSettings.activePresetId);
   if (!activePreset) {
     throw new Error("API 预设未找到，请检查设置！");
   }
 
-  // ★★★ 1. 定义强力指纹生成器 (去标点、去空格、转小写) ★★★
+  // 指纹生成器 (防复读)
   const generateFingerprint = (text: string): string => {
     if (typeof text !== 'string' || !text) return ''; 
-    // 把 "可爱!!" 变成 "可爱"，把 "Very Good" 变成 "verygood"
     return text.toLowerCase().replace(/[^\p{L}\p{N}]/gu, '');
   };
 
   try {
-    // ★★★ 2. 提取所有旧标签，准备传给 AI (防复读核心) ★★★
     const existingAiTags = currentContact.aiTagsForUser || [];
-    // 提取所有标签的内容，用逗号拼接，告诉AI这些是“禁词”
     const allExistingTagsText = existingAiTags.map(t => t.content).join(', ');
-    
     const currentProfile = currentContact.userProfile || {};
     const profileText = JSON.stringify(currentProfile, null, 2);
-    
-    // 过滤掉已经归档（分析过）的消息
     const unarchivedMessages = historySlice.filter(m => !m.isArchived);
 
-    if (unarchivedMessages.length < 3) {
-      console.log(`[记忆归档] 新消息不足 (${unarchivedMessages.length}条)，跳过本次印象生成。`);
+    // 如果不是付费刷新，且消息太少，就跳过
+    if (!isPaidRefresh && unarchivedMessages.length < 3) {
+      console.log(`[记忆归档] 新消息不足，跳过。`);
       return Promise.resolve();
     }
     
     const chatLog = unarchivedMessages.map(m => `${m.role === 'user' ? '用户' : '我'}: ${m.content}`).join('\n');
-    
     // ★★★ 3. 升级版 Prompt：加入【禁止重复列表】 ★★★
     const systemPrompt = `
 # 你的身份
@@ -4767,9 +4760,9 @@ ${chatLog}
 --- 示例结束 ---
 `;
 
-    let rawResponse = await generateResponse([{ role: 'user', content: systemPrompt }], activePreset);
+   let rawResponse = await generateResponse([{ role: 'user', content: systemPrompt }], activePreset);
     
-    // 解析器函数
+    // --- 解析器 ---
     const parseTKV = (text: string) => {
         const result = {
             userProfile: { personality_traits: [] as any[], preferences: { likes: [] as any[], dislikes: [] as any[] }, habits: [] as any[] },
@@ -4792,14 +4785,12 @@ ${chatLog}
                 }
             }
             const newTrait = { value: entryData.content, quote: entryData.quote, timestamp: Date.now() };
-
             if (entryData.content) {
                 if (type === '人格特征') result.userProfile.personality_traits.push(newTrait);
                 else if (type === '喜好') result.userProfile.preferences.likes.push(newTrait);
                 else if (type === '雷区') result.userProfile.preferences.dislikes.push(newTrait);
                 else if (type === '规律' || type === '习惯') result.userProfile.habits.push(newTrait);
             }
-            
             if (type === '印象标签' && entryData.content) {
                 result.new_tags.push({ content: entryData.content, ai_reason: entryData.reason || "..." });
             }
@@ -4808,54 +4799,27 @@ ${chatLog}
     };
     
     let parsedResult = parseTKV(rawResponse);
-
-    // 简单的错误重试机制
-    if (parsedResult.new_tags.length === 0 && parsedResult.userProfile.personality_traits.length === 0) {
-        console.warn("【第一轮解析为空】尝试简单的自我纠错...");
-        // 这里可以做一次简单的 retry，或者直接跳过，避免死循环
-    }
-
     const processedMessageIds = unarchivedMessages.map(m => m.id);
 
+    // ★★★ 状态更新与扣费逻辑 ★★★
     setContacts(prev => prev.map(contactItem => {
         if (contactItem.id === currentContact.id) {
             
-            // ==================== ★★★ 4. 强力去重逻辑 (Fingerprint Ban) ★★★ ====================
+            // 1. 标签去重逻辑
             let currentAiTags = [...(contactItem.aiTagsForUser || [])];
-            
-            // A. 建立已存在标签的指纹库 (Set 用于 O(1) 查找)
             const existingTagPrints = new Set(currentAiTags.map((tag: any) => generateFingerprint(tag.content)));
-            
-            // B. 建立本次新增标签的指纹库 (防止本次生成的 3 个标签里自己和自己重复)
             const newBatchPrints = new Set();
 
             const approvedTags = parsedResult.new_tags.filter((newTag: any) => {
                 const content = newTag.content?.trim();
                 if (!content) return false;
-
-                // 生成指纹
                 const newFingerprint = generateFingerprint(content);
-
-                // 1. 检查是否撞了旧标签
-                if (existingTagPrints.has(newFingerprint)) {
-                    console.log(`[暴力查重] ⛔️ 拦截到历史重复标签: "${content}"`);
-                    return false;
-                }
-                
-                // 2. 检查是否撞了本次批次里的标签
-                if (newBatchPrints.has(newFingerprint)) {
-                    console.log(`[暴力查重] ⛔️ 拦截到批次内重复标签: "${content}"`);
-                    return false;
-                }
-
-                // 通过检查，加入通过名单
+                if (existingTagPrints.has(newFingerprint) || newBatchPrints.has(newFingerprint)) return false;
                 newBatchPrints.add(newFingerprint);
                 return true;
             });
 
-            console.log(`[最终结果] AI生成 ${parsedResult.new_tags.length} 个 -> 去重后剩余 ${approvedTags.length} 个`);
-            
-            // 将通过的标签加入列表
+            // 2. 添加新标签
             approvedTags.forEach((tagData: any) => {
                 currentAiTags.push({
                     id: Date.now().toString() + Math.random(),
@@ -4863,20 +4827,19 @@ ${chatLog}
                     timestamp: Date.now(),
                     style: Math.random() * 10 - 5,
                     aiReasoning: tagData.ai_reason,
-                    note: tagData.ai_reason, // 把理由也作为备注
+                    note: tagData.ai_reason,
                     author: 'ai',
                     isPublic: false,
-                    isUnlocked: Math.random() < (Math.max(0, (contactItem.affectionScore || 50) - 60) / 100), 
+                    isUnlocked: Math.random() < 0.2, // 20%概率自动解锁
                     unlockCost: 1,
                     aiRequestPending: false
                 });
             });
 
-            // ==================== 档案查重 (同样逻辑) ====================
+            // 3. 档案合并
             const deduplicateTraits = (existingTraits: any[] = [], newTraits: any[] = []) => {
                 if (!newTraits.length) return existingTraits || [];
                 const existingPrints = new Set((existingTraits || []).map(t => generateFingerprint(t.value)));
-                
                 const uniqueNewTraits = newTraits.filter(newTrait => {
                     if (!newTrait.value) return false;
                     const fp = generateFingerprint(newTrait.value);
@@ -4897,25 +4860,30 @@ ${chatLog}
               habits: deduplicateTraits(contactItem.userProfile?.habits, parsedResult.userProfile.habits)
             };
 
-            // ★★★ 5. 核心：给消息打上“已归档”邮戳 ★★★
             const updatedHistory = contactItem.history.map(msg => 
                 processedMessageIds.includes(msg.id) ? { ...msg, isArchived: true } : msg
             );
 
+            // ★★★ 核心修复：在这里执行扣费！ ★★★
+            // 如果 isPaidRefresh 为 true，就让点数 -1，否则保持不变
+            const currentPoints = contactItem.interventionPoints || 0;
+            const finalPoints = isPaidRefresh ? Math.max(0, currentPoints - 1) : currentPoints;
+
             return { 
                 ...contactItem,
-                history: updatedHistory, // 保存打过戳的历史记录
+                history: updatedHistory,
                 userProfile: updatedUserProfile,
                 aiTagsForUser: currentAiTags,
                 impressionCount: 0,
-                impressionThreshold: nextThreshold
+                impressionThreshold: nextThreshold,
+                interventionPoints: finalPoints // <--- 钱就是在这里扣的！
             };
         } 
         return contactItem;
     }));
 
   } catch (e) {
-    console.error("印象刷新失败 (updateUserProfile)", e);
+    console.error("印象刷新失败", e);
     throw e;
   }
 };
@@ -10597,25 +10565,38 @@ return (
                 }
 // 这是一组代码：【ChatApp.tsx】渲染循环中的邀请函 (已修复跳转传参)
                 // 搜索关键词：[LoverInvitation]
+// ==================== [修复版] 智能邀请函分流逻辑 ====================
+                // 搜索关键词：[LoverInvitation]
                 if (msg.content.includes('[LoverInvitation]')) {
+                    
+                    // ★★★ 核心修复：判断到底是谁发的？ ★★★
+                    // 如果 role 是 'assistant' (AI)，或者内容里包含 '向你发起' (兼容旧数据)，那就是 AI 邀请你。
+                    // 否则，就是 'user' (你) 邀请 AI。
+                    const isAiInvite = msg.role === 'assistant' || msg.content.includes('向你发起了情侣邀请');
+
                     return (
                         <div key={msg.id} className="w-full flex justify-center my-4 animate-slideUp">
-                            <InteractiveLoverInvitation
-                                msg={msg}
-                                contactName={activeContact.name}
-                                // 处理同意/拒绝
-                                onRespond={(msgId, decision) => handleInvitationResponse(msgId, decision)}
-                                
-                                // ★★★ 核心修复：这里就是那根断掉的电线！★★★
-                                // 把父组件传下来的 onNavigateToSpace，传递给卡片的 onNavigate
-                                onNavigate={() => {
-                                    if (onNavigateToSpace) {
-                                        onNavigateToSpace(activeContact.id);
-                                    } else {
-                                        alert("错误：ChatApp 没有接收到跳转函数，请检查 App.tsx");
-                                    }
-                                }}
-                            />
+                            {isAiInvite ? (
+                                // A. 如果是 AI 发的 -> 显示【同意/拒绝】按钮卡片
+                                <InteractiveLoverInvitation
+                                    msg={msg}
+                                    contactName={activeContact.name}
+                                    // 处理同意/拒绝
+                                    onRespond={(msgId, decision) => handleInvitationResponse(msgId, decision)}
+                                    // 跳转功能
+                                    onNavigate={() => {
+                                        if (onNavigateToSpace) {
+                                            onNavigateToSpace(activeContact.id);
+                                        }
+                                    }}
+                                />
+                            ) : (
+                                // B. 如果是 你 发的 -> 显示【等待回应】静态卡片
+                                <StaticLoverInvitation 
+                                    msg={msg} 
+                                    contactName={activeContact.name}
+                                />
+                            )}
                         </div>
                     );
                 }
