@@ -7382,6 +7382,16 @@ if (extractedThought.new_agreement && Object.keys(extractedThought.new_agreement
         });
     }
 
+
+
+
+
+
+
+
+
+
+    
 // 这是一组代码：请用这段新代码覆盖掉旧的“深度印象总结器”
 // 4. [防刷分系统] 动态阈值印象总结器
 
@@ -7618,6 +7628,13 @@ const newStatus = newRelationshipState.status; // 只把状态名存起来
     }
     
 // ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲ 解析逻辑结束 ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲
+
+
+
+
+
+
+
 
 
   // ==================== [ChatApp.tsx] 修复版 Catch 块 (防二次爆炸) ====================
