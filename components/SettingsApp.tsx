@@ -140,21 +140,38 @@ const SettingsApp: React.FC<SettingsAppProps> = ({
     };
     reader.readAsText(file);
   };
-  // 一键拉取模型列表
+
+  // ★★★ 修改：通用一键拉取模型列表（支持 Gemini 和 OpenAI） ★★★
   const handleFetchModels = async () => {
-    if (!editingPreset?.baseUrl || !editingPreset?.apiKey) {
-      alert('请先填写 Base URL 和 API Key');
+    if (!editingPreset?.apiKey) {
+      alert('请先填写 API Key (对于OpenAI还需要Base URL)');
       return;
     }
 
     setLoadingModels(true);
     try {
-      const res = await fetch(`${editingPreset.baseUrl.replace(/\/$/, '')}/models`, {
-        headers: {
+      let url = '';
+      let headers: Record<string, string> = {};
+
+      if (editingPreset.type === 'openai') {
+        if (!editingPreset.baseUrl) {
+           alert('OpenAI 模式需要 Base URL');
+           setLoadingModels(false);
+           return;
+        }
+        // OpenAI 格式
+        url = `${editingPreset.baseUrl.replace(/\/$/, '')}/models`;
+        headers = {
           'Authorization': `Bearer ${editingPreset.apiKey}`,
           'Content-Type': 'application/json'
-        }
-      });
+        };
+      } else {
+        // Gemini 官方格式
+        url = `https://generativelanguage.googleapis.com/v1beta/models?key=${editingPreset.apiKey}`;
+        // Gemini 官方不需要 Authorization header，key 在 url 里
+      }
+
+      const res = await fetch(url, { headers });
 
       if (!res.ok) {
         const errText = await res.text();
@@ -162,7 +179,15 @@ const SettingsApp: React.FC<SettingsAppProps> = ({
       }
 
       const data = await res.json();
-      const modelList = data.data?.map((m: any) => m.id) || [];
+      let modelList: string[] = [];
+
+      if (editingPreset.type === 'openai') {
+        // OpenAI 返回格式: { data: [{ id: "gpt-4" }, ...] }
+        modelList = data.data?.map((m: any) => m.id) || [];
+      } else {
+        // Gemini 返回格式: { models: [{ name: "models/gemini-1.5-flash" }, ...] }
+        modelList = data.models?.map((m: any) => m.name.replace('models/', '')) || [];
+      }
 
       if (modelList.length === 0) {
         alert('拉取成功但未找到模型，请手动填写模型名');
@@ -234,24 +259,13 @@ const SettingsApp: React.FC<SettingsAppProps> = ({
                 </select>
 
                 {editingPreset.type === 'openai' && (
-                  <>
-                    <input
-                      type="text"
-                      placeholder="Base URL（如 https://gcli.ggchan.dev/v1）"
-                      className="w-full p-3 border rounded-lg mb-3 focus:border-blue-500 outline-none"
-                      value={editingPreset.baseUrl || ''}
-                      onChange={e => setEditingPreset({ ...editingPreset, baseUrl: e.target.value })}
-                    />
-
-                    {/* 一键拉取模型按钮 */}
-                    <button
-                      onClick={handleFetchModels}
-                      disabled={loadingModels}
-                      className="w-full bg-gradient-to-r from-purple-500 to-pink-500 text-white py-3 rounded-lg font-bold mb-4 hover:from-purple-600 hover:to-pink-600 disabled:opacity-50 transition shadow-md"
-                    >
-                      {loadingModels ? '拉取中...' : '🔄 一键拉取模型列表'}
-                    </button>
-                  </>
+                  <input
+                    type="text"
+                    placeholder="Base URL（如 https://gcli.ggchan.dev/v1）"
+                    className="w-full p-3 border rounded-lg mb-3 focus:border-blue-500 outline-none"
+                    value={editingPreset.baseUrl || ''}
+                    onChange={e => setEditingPreset({ ...editingPreset, baseUrl: e.target.value })}
+                  />
                 )}
 
                 <input
@@ -261,6 +275,19 @@ const SettingsApp: React.FC<SettingsAppProps> = ({
                   value={editingPreset.apiKey || ''}
                   onChange={e => setEditingPreset({ ...editingPreset, apiKey: e.target.value })}
                 />
+
+                {/* ★★★ 核心修改：将拉取按钮移动到这里，让 Gemini 也能用 ★★★ */}
+                <button
+                  onClick={handleFetchModels}
+                  disabled={loadingModels}
+                  className="w-full bg-gradient-to-r from-blue-500 to-indigo-500 text-white py-3 rounded-lg font-bold mb-4 hover:from-blue-600 hover:to-indigo-600 disabled:opacity-50 transition shadow-md flex items-center justify-center gap-2"
+                >
+                  {loadingModels ? (
+                    <>⏳ 拉取中...</>
+                  ) : (
+                    <>🔄 一键拉取 {editingPreset.type === 'gemini' ? 'Gemini' : 'OpenAI'} 模型列表</>
+                  )}
+                </button>
 
                 <select
                   className="w-full p-3 border rounded-lg mb-4 focus:border-blue-500 outline-none"
@@ -304,54 +331,87 @@ const SettingsApp: React.FC<SettingsAppProps> = ({
               </div>
             )}
 
-            {/* 已保存预设列表 */}
+            {/* 已保存预设列表 (修复版：点击激活 + 视觉反馈) */}
             <div className="space-y-3">
               <div className="flex justify-between items-center mb-4">
                 <h3 className="font-bold text-lg">已保存预设</h3>
                 <button
-                  onClick={() => setEditingPreset({ type: 'openai' })}
-                  className="bg-blue-500 text-white w-10 h-10 rounded-full text-2xl shadow-lg hover:bg-blue-600 transition"
+                  onClick={() => {
+                    setEditingPreset({ type: 'openai' });
+                    setModels([]);
+                  }}
+                  className="bg-blue-500 text-white w-10 h-10 rounded-full text-2xl shadow-lg hover:bg-blue-600 transition flex items-center justify-center"
                 >
                   +
                 </button>
               </div>
 
               {settings.apiPresets.length === 0 && (
-                <div className="text-center py-12 text-gray-400">
+                <div className="text-center py-12 text-gray-400 border-2 border-dashed border-gray-200 rounded-xl">
                   <p className="text-lg">还没有预设</p>
                   <p className="text-sm mt-2">点右上角 + 添加你的第一个API配置吧～</p>
                 </div>
               )}
 
-              {settings.apiPresets.map(p => (
-                <div
-                  key={p.id}
-                  className={`bg-white p-4 rounded-xl border-2 flex justify-between items-center transition ${settings.activePresetId === p.id ? 'border-green-500 shadow-green-100' : 'border-gray-200'
+              {settings.apiPresets.map(p => {
+                const isActive = settings.activePresetId === p.id;
+                
+                return (
+                  <div
+                    key={p.id}
+                    // ★★★ 核心修复：点击整个卡片即激活 ★★★
+                    onClick={() => setSettings(s => ({ ...s, activePresetId: p.id }))}
+                    className={`relative p-4 rounded-xl border-2 flex justify-between items-center transition cursor-pointer ${
+                      isActive 
+                        ? 'border-green-500 bg-green-50 shadow-md' // 激活样式：绿框+绿底
+                        : 'border-gray-200 bg-white hover:border-blue-300' // 未激活样式
                     }`}
-                  onClick={() => setSettings(s => ({ ...s, activePresetId: p.id }))}
-                >
-                  <div className="flex-1 cursor-pointer">
-                    <div className="flex items-center gap-2">
-                      <span className="font-bold text-gray-800">{p.name}</span>
-                      {settings.activePresetId === p.id && (
-                        <span className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded-full">激活</span>
-                      )}
+                  >
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2">
+                        <span className={`font-bold ${isActive ? 'text-green-800' : 'text-gray-800'}`}>
+                          {p.name}
+                        </span>
+                        {/* 激活状态徽章 */}
+                        {isActive && (
+                          <span className="text-[10px] bg-green-500 text-white px-2 py-0.5 rounded-full font-bold shadow-sm">
+                            当前使用中
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-xs text-gray-500 mt-1 font-mono">
+                        {p.type === 'gemini' ? 'Gemini 官方' : '反代'} • {p.model}
+                      </div>
                     </div>
-                    <div className="text-sm text-gray-500 mt-1">
-                      {p.type === 'gemini' ? 'Gemini 官方' : '反代'} • {p.model}
+
+                    <div className="flex gap-2">
+                      <button 
+                        onClick={(e) => { 
+                          e.stopPropagation(); // 阻止冒泡，防止触发激活
+                          setEditingPreset(p); 
+                          setModels([]); 
+                        }} 
+                        className="px-3 py-1.5 bg-blue-50 text-blue-600 rounded-lg text-xs font-bold hover:bg-blue-100 transition"
+                      >
+                        编辑
+                      </button>
+                      <button 
+                        onClick={(e) => { 
+                          e.stopPropagation(); // 阻止冒泡
+                          if(confirm(`确定删除预设 "${p.name}" 吗？`)) {
+                             handleDeletePreset(p.id);
+                          }
+                        }} 
+                        className="px-3 py-1.5 bg-red-50 text-red-500 rounded-lg text-xs font-bold hover:bg-red-100 transition"
+                      >
+                        删除
+                      </button>
                     </div>
                   </div>
-                  <div className="flex gap-2">
-                    <button onClick={(e) => { e.stopPropagation(); setEditingPreset(p); setModels([]); }} className="text-blue-500 text-sm font-medium">
-                      编辑
-                    </button>
-                    <button onClick={(e) => { e.stopPropagation(); handleDeletePreset(p.id); }} className="text-red-500 text-sm font-medium">
-                      删除
-                    </button>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
+            
 
             {/* Minimax 基础配置 */}
             <div className="mt-8 border-t pt-6 pb-10">

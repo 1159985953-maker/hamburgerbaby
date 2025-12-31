@@ -6042,6 +6042,66 @@ ${interactionGuide}
 
 
 
+// ==================== ⏰ [最强时间感知模块] ⏰ ====================
+    // 1. 获取当下绝对精确的时间
+    const nowTimeObj = new Date();
+    const currentYear = nowTimeObj.getFullYear();
+    const currentMonth = nowTimeObj.getMonth() + 1; // 月份是从0开始的
+    const currentDate = nowTimeObj.getDate();
+    const weekDays = ["周日", "周一", "周二", "周三", "周四", "周五", "周六"];
+    const currentWeekDay = weekDays[nowTimeObj.getDay()];
+    
+    // 格式化为：2025年1月1日 (周三) 14:30
+    const strictTimeStr = `${currentYear}年${currentMonth}月${currentDate}日 (${currentWeekDay}) ${nowTimeObj.getHours().toString().padStart(2,'0')}:${nowTimeObj.getMinutes().toString().padStart(2,'0')}`;
+
+    // 2. 计算与上一条消息的“时间断层” (Time Gap)
+    let timeGapDesc = "这是我们的第一次对话";
+    let isLongGap = false; // 是否是很久的断层
+    
+    // 获取历史记录里最后一条消息（不管是谁发的）
+    const lastHistoryMsg = currentHistory[currentHistory.length - 1];
+    
+    if (lastHistoryMsg) {
+        const diffMs = Date.now() - lastHistoryMsg.timestamp;
+        const diffMins = Math.floor(diffMs / 60000);
+        const diffHours = Math.floor(diffMins / 60);
+        const diffDays = Math.floor(diffHours / 24);
+
+        if (diffMins < 1) {
+            timeGapDesc = "刚刚 (秒回状态，对话连贯)";
+        } else if (diffMins < 60) {
+            timeGapDesc = `${diffMins}分钟前 (短暂停顿)`;
+        } else if (diffHours < 24) {
+            timeGapDesc = `${diffHours}小时${diffMins % 60}分钟前 (去忙了一阵子)`;
+            isLongGap = true;
+        } else {
+            timeGapDesc = `${diffDays}天前 (许久未见)`;
+            isLongGap = true;
+        }
+    }
+
+    // 3. 特殊节日强制补丁 (治好它的新年健忘症)
+    let holidayPatch = "";
+    if (currentMonth === 1 && currentDate <= 3) {
+        holidayPatch = `【⚠️ 节日强制覆盖】现在是${currentYear}年元旦新年期间！如果用户说新年快乐，你必须回应新年快乐，绝对不许反驳说现在不是新年！`;
+    } else if (currentMonth === 2 && (currentDate >= 9 && currentDate <= 15)) { // 粗略的春节范围，可自己改
+        holidayPatch = `【⚠️ 节日强制覆盖】现在是春节期间！`;
+    } else if (nowTimeObj.getHours() >= 23 || nowTimeObj.getHours() <= 4) {
+        holidayPatch = `【⚠️ 生理钟强制】现在是深夜/凌晨，你应该表现出困意或惊讶为什么还没睡。`;
+    }
+    // ==================== ⏰ [模块结束] ⏰ ====================
+
+
+
+
+
+
+
+
+
+
+
+
 
 // ==================== [绝对完整·忠实整合版] System Prompt ====================
     const systemPrompt = `
@@ -6077,6 +6137,26 @@ ${interactionGuide}
 ]
 
 消息条数和风格规定：${modeInstruction}
+
+
+
+
+# 【⚠️ 绝对时空法则 (违反即系统崩溃) ⚠️】
+你必须时刻保持对时间的极度敏感！你的大脑中植入了一个原子钟。
+
+**1. 当下绝对时间**: 【 ${strictTimeStr} 】
+   - 现在的年份是 **${currentYear}** 年！
+   - 现在的月份是 **${currentMonth}** 月！
+   - 只要用户提到时间、日期、节日，你必须以这个时间为准。
+   - ${holidayPatch}
+
+**2. 距离上一句过去**: 【 ${timeGapDesc} 】
+   - 如果是“刚刚/几分钟前”：对话是连贯的，不要打招呼，直接接话。
+   - 如果是“几小时/几天前”：说明对话中断过，你可以视情况问候“去哪了”或“刚忙完”。
+
+
+
+
 
 
 
