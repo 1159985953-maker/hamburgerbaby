@@ -24,15 +24,12 @@ import DiaryApp from './components/DiaryApp'; // <--- ➕ 加上这一行！
 // ==================== [插入代码 1] 账号名单与高颜值登录组件 ====================
 // 1. 在这里改账号密码和【身份牌 role】
 const ALLOWED_USERS = [
-  // 这是一个普通用户，role 是 'user'
-  { id: "1", user: "sumo", pass: "zst424779474", name: "sumo", role: "user" },
+
 
 
   // 这是一个管理员，role 是 'admin'，拥有所有权限
   { id: "0", user: "hannie",  pass: "hanniehanbaobao", name: "hannie", role: "admin" },
-  
-  // 你可以再加一个 VIP 用户
-  { id: "00", user: "heety", pass: "zhangyue051110", name: "heety", role: "vip" },
+
 ];
 
 // 2. 这是你提供的豹纹汉堡图片URL链接
