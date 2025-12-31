@@ -4674,6 +4674,7 @@ ${historyText}
 
 
 
+// ==================== [ChatApp.tsx] 修复版印象更新引擎 (疯狗级去重+扣费) ====================
 const updateUserProfile = async (currentContact: Contact, historySlice: any[], nextThreshold: number, isPaidRefresh = false) => {
   console.log(`[人格档案引擎] 启动！付费模式: ${isPaidRefresh}`);
 
@@ -4682,87 +4683,83 @@ const updateUserProfile = async (currentContact: Contact, historySlice: any[], n
     throw new Error("API 预设未找到，请检查设置！");
   }
 
-  // 指纹生成器 (防复读)
+  // 1. 强力指纹生成器 (去标点、去空格、转小写，防止 "Vintage" 和 "vintage." 被当成两个)
   const generateFingerprint = (text: string): string => {
     if (typeof text !== 'string' || !text) return ''; 
     return text.toLowerCase().replace(/[^\p{L}\p{N}]/gu, '');
   };
 
   try {
-    const existingAiTags = currentContact.aiTagsForUser || [];
-    const allExistingTagsText = existingAiTags.map(t => t.content).join(', ');
+    // ★★★ 2. 构建【全量去重指纹库】(核心修改) ★★★
+    // 我们不仅要防标签重复，还要防“档案”和“标签”重复，以及“档案”内部重复
     const currentProfile = currentContact.userProfile || {};
+    const existingAiTags = currentContact.aiTagsForUser || [];
+    
+    // 收集所有已存在的文本内容 (标签 + 特征 + 喜好 + 习惯)
+    const allExistingConcepts = [
+        ...existingAiTags.map(t => t.content),
+        ...(currentProfile.personality_traits || []).map((t:any) => t.value),
+        ...(currentProfile.preferences?.likes || []).map((t:any) => t.value),
+        ...(currentProfile.preferences?.dislikes || []).map((t:any) => t.value),
+        ...(currentProfile.habits || []).map((t:any) => t.value)
+    ].filter(Boolean);
+
+    // 生成指纹集合 (Set 用于 O(1) 快速查重)
+    const globalFingerprints = new Set(allExistingConcepts.map(txt => generateFingerprint(txt)));
+    
+    // 生成给 AI 看的“禁词表” (告诉它这些绝对别再写了)
+    const banListText = allExistingConcepts.join(', ');
+
     const profileText = JSON.stringify(currentProfile, null, 2);
     const unarchivedMessages = historySlice.filter(m => !m.isArchived);
 
-    // 如果不是付费刷新，且消息太少，就跳过
+    // 非付费且消息不足时跳过
     if (!isPaidRefresh && unarchivedMessages.length < 3) {
       console.log(`[记忆归档] 新消息不足，跳过。`);
       return Promise.resolve();
     }
     
     const chatLog = unarchivedMessages.map(m => `${m.role === 'user' ? '用户' : '我'}: ${m.content}`).join('\n');
-    // ★★★ 3. 升级版 Prompt：加入【禁止重复列表】 ★★★
+    
+    // ★★★ 3. 升级版 Prompt：引入语义查重指令 ★★★
     const systemPrompt = `
 # 你的身份
-你就是 "${currentContact.name}"。现在是【秘密复盘时间】，你正在偷偷写印象日记，记录你对用户 "${currentContact.userName}" 的真实看法。
+你就是 "${currentContact.name}"。现在是【秘密复盘时间】，你正在偷偷写印象日记。
 
-# 你的“灵魂”数据 (必须严格代入)
-- **核心人设**: ${currentContact.persona}
-- **当前情感**: ${JSON.stringify({ joy: currentContact.hef?.joy, sadness: currentContact.hef?.sadness, anger: currentContact.hef?.anger })}
-- **我们的关系**: ${currentContact.relationshipStatus} (爱意值: ${currentContact.affectionScore})
-- **你的性格DNA**: ${getPersonalityDescription(currentContact.hef?.INDIVIDUAL_VARIATION?.personality_big5 || {})}
+# 核心任务
+1. **更新手账档案**: 记录用户的客观事实(喜好/雷区/习惯)。
+2. **贴印象标签**: 生成 1-2 个全新的印象标签。
 
-# 语言格式
-- **必须使用角色母语**。如果是外语角色，必须一定绝对以【母语（中文翻译）】格式输出。
+# ⛔️【绝对查重铁律】(违反即死机)
+请仔细阅读下方的【已存在内容列表】。
+**绝对禁止**生成与列表中内容**意思相近、重复、或包含关系**的新条目！
+例如：如果列表中已有“喜欢猫”，你绝对不能再生成“爱猫”、“猫奴”、“养猫”。
+必须挖掘**全新**的角度！如果发现全是重复的，就什么都不要写！
 
-# ★★★ 核心任务 (双重任务) ★★★
-1.  **【更新手账档案】**: 记录用户的【客观事实】(喜好、雷区、习惯)。
-2.  **【贴印象标签】**: 记录你对用户的【主观看法】。生成 **1 到 2 个** 全新的印象标签。
+【已存在内容列表】: 
+${banListText || "暂无"}
 
+# 风格要求
+- **客观分析**: 不要恋爱脑，像真人一样在心里碎碎念。
+- **简练**: 不要写长句，提取关键词。
 
-# ★★★ 风格铁律 (ABSOLUTE HIGHEST PRIORITY) ★★★
-你的“理由”部分，必须严格遵守以下风格：
-- **【客观分析】**： 尊重用户的个体性，是情侣的话不要用恋爱脑来评判用户，是朋友的话不能贬低用户，时刻要尊重彼此。
-- **【禁止咯噔文学】**：绝对不要写“我的心湖泛起涟漪”、“空气中弥漫着甜腻”这种尴尬的句子。
-- **【口语化 & 碎碎念】**：就像真人在心里碎碎念一样，多标点表现产生这个印象的心路过程，比如“……”“kk”（笑声，这个只可以给韩国人用）。少用“这家伙”、“居然”、“真是的”、“哼”这类词。
-- **【展现深层欲望】**：如果是情侣的话可以展现你内心深处的占有欲、保护欲、或者小小的坏心思，但这些必须是私密的、需要用户解锁才能看到的想法！
-- **【举例】**：
-    - (好的风格): "是很独立的人，能对自己负责。"
-    - (好的风格): "像笨蛋一样不会照顾自己，虽然犯傻的样子也可爱。"
-    - (坏的风格): "哼，又在对别人笑，不许对别人那么好！"
-    - (坏的风格): "他的笑容如春风般温暖了我的心房。"
-    - (坏的风格): "通过观察，我发现他具备乐于助人的品质。"
-
-
-
-# ⛔️【绝对禁止重复列表】⛔️
-以下标签是你之前已经贴过的，**绝对不允许**再次生成意思相近的词！请挖掘新的角度！
-【已存在标签】: ${allExistingTagsText || "暂无"}
 # 输入数据
-【现有档案】: ${profileText}
-【以下是需要你分析的全新对话】:
+【待分析对话】:
 ${chatLog}
 
-
-
-# 输出格式铁律 (TKV格式)
-使用 "关键词: 值" 的格式，条目间用 "%%" 分隔。禁止JSON。
-
---- 格式示例 ---
-类型: 喜好
-内容: 好像很喜欢猫
-证据: “我家猫又在拆家了，不过还是很可爱”
-%%
+# 输出格式 (TKV)
 类型: 印象标签
-内容: 笨蛋 (바보)
-理由: 总是问一些很可爱又很傻的问题。
---- 示例结束 ---
+内容: 笨蛋
+理由: 总是问傻问题
+%%
+类型: 喜好
+内容: 喜欢吃辣
+证据: "今晚去吃火锅"
 `;
 
-   let rawResponse = await generateResponse([{ role: 'user', content: systemPrompt }], activePreset);
+    let rawResponse = await generateResponse([{ role: 'user', content: systemPrompt }], activePreset);
     
-    // --- 解析器 ---
+    // --- 解析器 (保持不变) ---
     const parseTKV = (text: string) => {
         const result = {
             userProfile: { personality_traits: [] as any[], preferences: { likes: [] as any[], dislikes: [] as any[] }, habits: [] as any[] },
@@ -4801,25 +4798,28 @@ ${chatLog}
     let parsedResult = parseTKV(rawResponse);
     const processedMessageIds = unarchivedMessages.map(m => m.id);
 
-    // ★★★ 状态更新与扣费逻辑 ★★★
     setContacts(prev => prev.map(contactItem => {
         if (contactItem.id === currentContact.id) {
             
-            // 1. 标签去重逻辑
-            let currentAiTags = [...(contactItem.aiTagsForUser || [])];
-            const existingTagPrints = new Set(currentAiTags.map((tag: any) => generateFingerprint(tag.content)));
-            const newBatchPrints = new Set();
-
+            // ★★★ 4. 代码层强力拦截 (Double Check) ★★★
+            // 哪怕 AI 不听话生成了重复的，我们用指纹库把它过滤掉
+            
+            // 过滤标签
             const approvedTags = parsedResult.new_tags.filter((newTag: any) => {
                 const content = newTag.content?.trim();
                 if (!content) return false;
-                const newFingerprint = generateFingerprint(content);
-                if (existingTagPrints.has(newFingerprint) || newBatchPrints.has(newFingerprint)) return false;
-                newBatchPrints.add(newFingerprint);
+                const fp = generateFingerprint(content);
+                // 如果指纹库里已经有了，直接丢弃
+                if (globalFingerprints.has(fp)) {
+                    console.log(`[查重拦截] 标签重复: ${content}`);
+                    return false;
+                }
+                globalFingerprints.add(fp); // 加入指纹库，防止本次批次内自我重复
                 return true;
             });
 
-            // 2. 添加新标签
+            // 构造新标签数组
+            let currentAiTags = [...(contactItem.aiTagsForUser || [])];
             approvedTags.forEach((tagData: any) => {
                 currentAiTags.push({
                     id: Date.now().toString() + Math.random(),
@@ -4830,42 +4830,44 @@ ${chatLog}
                     note: tagData.ai_reason,
                     author: 'ai',
                     isPublic: false,
-                    isUnlocked: Math.random() < 0.2, // 20%概率自动解锁
+                    isUnlocked: Math.random() < 0.2, 
                     unlockCost: 1,
                     aiRequestPending: false
                 });
             });
 
-            // 3. 档案合并
-            const deduplicateTraits = (existingTraits: any[] = [], newTraits: any[] = []) => {
-                if (!newTraits.length) return existingTraits || [];
-                const existingPrints = new Set((existingTraits || []).map(t => generateFingerprint(t.value)));
-                const uniqueNewTraits = newTraits.filter(newTrait => {
-                    if (!newTrait.value) return false;
-                    const fp = generateFingerprint(newTrait.value);
-                    if (existingPrints.has(fp)) return false;
-                    existingPrints.add(fp);
+            // 过滤档案 (通用去重函数)
+            const deduplicateAndMerge = (existing: any[] = [], incoming: any[] = []) => {
+                const cleanExisting = existing || [];
+                // 筛选出指纹库里没有的新条目
+                const uniqueIncoming = incoming.filter(item => {
+                    if(!item.value) return false;
+                    const fp = generateFingerprint(item.value);
+                    if (globalFingerprints.has(fp)) {
+                        console.log(`[查重拦截] 档案重复: ${item.value}`);
+                        return false;
+                    }
+                    globalFingerprints.add(fp);
                     return true;
                 });
-                return [...(existingTraits || []), ...uniqueNewTraits];
+                return [...cleanExisting, ...uniqueIncoming];
             };
             
             const updatedUserProfile = { 
               ...contactItem.userProfile, 
-              personality_traits: deduplicateTraits(contactItem.userProfile?.personality_traits, parsedResult.userProfile.personality_traits),
+              personality_traits: deduplicateAndMerge(contactItem.userProfile?.personality_traits, parsedResult.userProfile.personality_traits),
               preferences: {
-                likes: deduplicateTraits(contactItem.userProfile?.preferences?.likes, parsedResult.userProfile.preferences.likes),
-                dislikes: deduplicateTraits(contactItem.userProfile?.preferences?.dislikes, parsedResult.userProfile.preferences.dislikes)
+                likes: deduplicateAndMerge(contactItem.userProfile?.preferences?.likes, parsedResult.userProfile.preferences.likes),
+                dislikes: deduplicateAndMerge(contactItem.userProfile?.preferences?.dislikes, parsedResult.userProfile.preferences.dislikes)
               },
-              habits: deduplicateTraits(contactItem.userProfile?.habits, parsedResult.userProfile.habits)
+              habits: deduplicateAndMerge(contactItem.userProfile?.habits, parsedResult.userProfile.habits)
             };
 
             const updatedHistory = contactItem.history.map(msg => 
                 processedMessageIds.includes(msg.id) ? { ...msg, isArchived: true } : msg
             );
 
-            // ★★★ 核心修复：在这里执行扣费！ ★★★
-            // 如果 isPaidRefresh 为 true，就让点数 -1，否则保持不变
+            // 扣费逻辑
             const currentPoints = contactItem.interventionPoints || 0;
             const finalPoints = isPaidRefresh ? Math.max(0, currentPoints - 1) : currentPoints;
 
@@ -4876,7 +4878,7 @@ ${chatLog}
                 aiTagsForUser: currentAiTags,
                 impressionCount: 0,
                 impressionThreshold: nextThreshold,
-                interventionPoints: finalPoints // <--- 钱就是在这里扣的！
+                interventionPoints: finalPoints
             };
         } 
         return contactItem;
@@ -4887,6 +4889,7 @@ ${chatLog}
     throw e;
   }
 };
+
 
 
 
