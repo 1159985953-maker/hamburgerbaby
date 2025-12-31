@@ -2795,7 +2795,7 @@ const PointRuleModal: React.FC<{
                 汉堡包温馨提醒：“ AI 会随机不定时产生新印象，请注意查看哦～ ”
              </p>
              <p className="text-[10px] text-gray-400 font-bold bg-gray-100 px-2 py-0.5 rounded inline-block">
-                Psst... 聊满 <b className="text-green-600">100</b> 句就会增加 <b className="text-green-600">1</b> 个点数！
+                Psst... 聊满 <b className="text-green-600">70～150（随机）</b> 句就会增加 <b className="text-green-600">1</b> 个点数！
              </p>
            </div>
         </div>
@@ -11652,22 +11652,26 @@ onNavigateToSettings={onOpenSettings}
                 setMemoryTab={setMemoryTab}
                 sampleText={panelSampleText}
                 setSampleText={setPanelSampleText} 
-                onForceUpdate={async () => {
+onForceUpdate={async () => {
                     try {
                         const currentContact = contacts.find(c => c.id === activeContact.id);
+                        
+                        // 1. 检查钱够不够
                         if (!currentContact || (currentContact.interventionPoints || 0) < 1) {
-                            throw new Error("点数不足！");
+                            throw new Error("点数不足！请多聊几句赚取点数吧~");
                         }
-                        const contactAfterDeduction = {
-                            ...currentContact,
-                            interventionPoints: currentContact.interventionPoints - 1,
-                        };
-                        const historySlice = currentContact.history.slice(-30);
-                         const nextThreshold = Math.floor(Math.random() * 71) + 70; // 
-                        await updateUserProfile(contactAfterDeduction, historySlice, nextThreshold);
-                        alert("✅ 刷新成功！\n\nAI 的新印象已在后台生成，请在“印象集”里查看！");
+
+                        // 2. 准备数据
+                        // 哪怕只聊了一句，只要付费了，就强制分析最近30条，不看未归档标记
+                        const historySlice = currentContact.history.slice(-30); 
+                        const nextThreshold = Math.floor(Math.random() * 71) + 70;
+
+                        // 3. ★★★ 核心修复：传入 true (代表这是付费刷新！) ★★★
+                        await updateUserProfile(currentContact, historySlice, nextThreshold, true);
+                        
+                        alert("✅ 刷新成功！\n\n消耗 1 点数。\nAI 的新印象已生成，请在“印象集”里查看！");
                     } catch (e: any) {
-                        alert(`❌ 刷新失败！\n\n错误信息: ${e.message}\n\n(你的点数没有被扣除)`);
+                        alert(`❌ 刷新失败！\n\n错误信息: ${e.message}\n\n(点数未扣除)`);
                         throw e;
                     }
                 }}
