@@ -25,13 +25,14 @@ import DiaryApp from './components/DiaryApp'; // <--- ➕ 加上这一行！
 // 1. 在这里改账号密码和【身份牌 role】
 const ALLOWED_USERS = [
   // 这是一个普通用户，role 是 'user'
-  { id: "1", user: "friend", pass: "123456", name: "好朋友", role: "user" },
+  { id: "1", user: "sumo", pass: "zst424779474", name: "sumo", role: "user" },
+  { id: "2", user: "sumo", pass: "zst424779474", name: "sumo", role: "user" },
 
   // 这是一个管理员，role 是 'admin'，拥有所有权限
   { id: "0", user: "hannie",  pass: "hanniehanbaobao", name: "hannie", role: "admin" },
   
   // 你可以再加一个 VIP 用户
-  { id: "3", user: "vip_user", pass: "vip666", name: "moon", role: "moon" },
+  { id: "00", user: "heety", pass: "zhangyue05110", name: "heety", role: "vip" },
 ];
 
 // 2. 这是你提供的豹纹汉堡图片URL链接
@@ -1514,50 +1515,47 @@ TA的人设：${targetMember.persona.slice(0, 50)}...
 
 
 
-// --- 4. 修复版全局主动消息监视器（立即生成 + 约定优先）---
+// --- 4. 修复版全局主动消息监视器（只负责触发，不负责弹窗）---
 useEffect(() => {
   const checkAndSendProactive = async () => {
+    // 1. 基础检查：没加载完、没角色、或者正在聊天界面(防打扰)时不触发
     if (!isLoaded || contacts.length === 0 || currentApp !== 'home') return;
 
     for (const c of contacts) {
-      // 严格检查开关
       const config = c.proactiveConfig || { enabled: false };
       if (!config.enabled) continue;
 
-      // 有约定到期 > 普通主动（优先级最高）
+      // A. 约定到期 (优先级最高)
       const dueAgreement = c.agreements?.find(a => a.id === c.dueAgreementId);
       if (dueAgreement) {
-        console.log(`[全局监视器] 检测到约定到期，强制发送主动消息给 ${c.name}`);
-        await scheduleProactiveMessage(c); // 直接调用ChatApp里的生成函数
-        continue; // 一个角色一次只处理一个
+        console.log(`[全局监视器] 检测到约定到期，触发 ${c.name}`);
+        await scheduleProactiveMessage(c); 
+        continue; 
       }
 
-      // 普通主动逻辑（保持你原来的间隔和每日上限判断）
+      // B. 普通主动逻辑 (检查时间间隔)
       if (c.aiDND?.enabled || (c.affectionScore || 50) < 60) continue;
+      
       const lastMsg = c.history[c.history.length - 1];
       const now = Date.now();
       const gapMinutes = lastMsg ? Math.floor((now - lastMsg.timestamp) / (1000 * 60)) : 99999;
+      
       if (gapMinutes < config.minGapMinutes) continue;
+      
       const today = new Date().toISOString().slice(0, 10);
       const sentToday = c.proactiveLastSent?.[today] || 0;
       if (sentToday >= config.maxDaily) continue;
 
-      console.log(`[全局监视器] 普通主动触发: ${c.name}`);
-      // 发通知（用户在首页会看到“正在输入...”）
-      setGlobalNotification({
-        type: 'proactive_thinking',
-        contactId: c.id,
-        name: c.name,
-        avatar: c.avatar
-      });
-      // 立即生成消息（不在用户点击后再生成）
+      console.log(`[全局监视器] 时间条件满足，尝试触发: ${c.name}`);
+      
+      // ★★★ 关键：这里直接调用，不弹窗！让 scheduleProactiveMessage 自己决定要不要弹！ ★★★
       await scheduleProactiveMessage(c);
     }
   };
 
   const intervalId = setInterval(checkAndSendProactive, 15000); // 每15秒检查一次
   return () => clearInterval(intervalId);
-}, [contacts, isLoaded, currentApp, globalNotification]);
+}, [contacts, isLoaded, currentApp]); // 移除了 globalNotification 依赖
 
 
 

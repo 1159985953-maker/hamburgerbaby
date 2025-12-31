@@ -5032,62 +5032,60 @@ ${chatLog}
 
 
 
-
-// 这是一组代码：【智能动机版】主动消息调度器 (修复了机械式发言，加入概率判定)
-  const scheduleProactiveMessage = async (contact: Contact) => {
+// ==================== [App.tsx] 修复版主动消息调度器 (保留所有规则 + 修复空弹窗) ====================
+const scheduleProactiveMessage = async (contact: Contact) => {
     // 0. 全局开关检查
     const config = contact.proactiveConfig || { enabled: false, minGapMinutes: 60, maxDaily: 5 };
-    if (!config.enabled) {
-      return;
-    }
+    if (!config.enabled) return;
 
     // 1. 识别是否是“闹钟/约定”唤醒的 (这种必须发，不能跳过！)
-    // 如果 pendingProactive 为 true 且有 dueAgreementId，说明是时间到了的约定
     const isAlarmTriggered = contact.pendingProactive && !!contact.dueAgreementId;
-
     const today = new Date().toISOString().slice(0, 10);
     const sentToday = contact.proactiveLastSent?.[today] || 0;
     
     // 2. 每日上限检查 (闹钟触发的不占额度，必须发)
     if (!isAlarmTriggered && sentToday >= config.maxDaily) {
-        console.log(`[主动消息] ⛔️ 今日限额已满 (${sentToday}/${config.maxDaily})，停止发送。`);
         return;
     }
 
     // =================================================
-    // ★★★ 核心新增：智能动机判定 (不想聊就不聊) ★★★
+    // ★★★ 核心修复：智能动机判定 (在弹窗之前先判定！) ★★★
     // =================================================
     if (!isAlarmTriggered) {
-        // A. 基础概率：时间到了也不一定发，默认只有 35% 的概率发起对话
-        // 这样就避免了“一到点就说话”的机械感
+        // A. 基础概率
         let speakProbability = 0.35; 
-
-        // B. 关系加成：关系越好(Affection)，越粘人
-        // 爱意值 100 时，概率增加 30% -> 总共 65%
-        // 爱意值 0 时，概率增加 0%
-        // 仇恨值 -50 时，概率减少
+        // B. 关系加成
         const affectionScore = contact.affectionScore || 50;
         const affectionBonus = Math.max(-0.2, (affectionScore / 100) * 0.3);
-        
         speakProbability += affectionBonus;
 
         // C. 掷骰子
         const diceRoll = Math.random();
-        console.log(`[主动消息判定] 🎲 骰子:${diceRoll.toFixed(2)} vs 阈值:${speakProbability.toFixed(2)} (爱意:${affectionScore})`);
-
+        
+        // ❌ 如果骰子没过，直接静默退出！这时候用户什么都不会看到，不会有假弹窗！
         if (diceRoll > speakProbability) {
-            console.log(`[主动消息] 😶 AI 决定保持沉默 (模拟真人不想说话的时刻)`);
-            return; // <--- 关键：直接结束，不发消息了！
+            console.log(`[主动消息] 😶 ${contact.name} 决定保持沉默 (骰子:${diceRoll.toFixed(2)} > 阈值:${speakProbability.toFixed(2)})`);
+            return; 
         }
     }
+
+    // ✅✅✅ 只有代码跑到这里，说明 AI 真的要说话了！ ✅✅✅
+    // 此时再弹窗，就不会是假的了！
+    setGlobalNotification({
+        type: 'proactive_thinking',
+        contactId: contact.id,
+        name: contact.name,
+        avatar: contact.avatar,
+        userName: globalSettings.userName || "User",
+        userSignature: globalSettings.userSignature || ""
+    });
 
     console.log(`[ChatApp] 准备生成主动消息: ${contact.name}`);
 
     // =================================================
-    // 3. 准备环境数据 (时间 + 约定)
+    // 3. 准备环境数据 (保留你的原逻辑)
     // =================================================
     const dueAgreement = contact.agreements?.find(a => a.id === contact.dueAgreementId);
-    
     const nowTime = new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', hour12: false });
     const timeContext = `现在的时间是：${nowTime}。请务必根据这个时间点决定你在做什么。`;
 
@@ -5100,20 +5098,19 @@ ${chatLog}
     const isContinuingChat = minutesSinceLastMsg < 60;
 
     // =================================================
-    // 4. 构建精准指令 (Target Instruction)
+    // 4. 构建精准指令 (保留你的原逻辑)
     // =================================================
     let systemInstruction = "";
 
     if (dueAgreement) {
-        // --- 情况 A: 约定到期 (最优先) ---
-        console.log(`[主动消息] 命中约定: ${dueAgreement.content}`);
+        // --- 情况 A: 约定到期 ---
         const actor = dueAgreement.actor === 'user' ? '用户' : '你(AI)';
         systemInstruction = `
 【⚠️ 紧急任务：履行/监督约定】
 约定内容："${dueAgreement.content}"。承诺人：${actor}。
 指令：
 1. 如果是用户的承诺：发消息询问用户是否做到了，或者提醒ta。
-2. 如果是你的承诺：请根据约定内容履行（比如发一张图，或者汇报进度）。
+2. 如果是你的承诺：请根据约定内容履行。
 3. 语气要自然，不要像个闹钟。
 `;
     } else if (isContinuingChat) {
@@ -5121,25 +5118,23 @@ ${chatLog}
         systemInstruction = `
 【⚠️ 任务：延续当前话题】
 距离上一条消息才过 ${Math.floor(minutesSinceLastMsg)} 分钟。
-指令：
-1. 不要开启新话题！
-2. 针对上一条消息补充一句，或追问细节，或者发个表情包。
+指令：不要开启新话题！针对上一条消息补充一句，或追问细节，或者发个表情包。
 `;
     } else {
-        // --- 情况 C: 发起新话题 (随机闲聊) ---
+        // --- 情况 C: 发起新话题 ---
         systemInstruction = `
 【⚠️ 任务：发起新对话】
 ${timeContext}
 指令：
-1. 不要总是问“你在干嘛”，这很烦人。
-2. 分享你此时此刻正在做的一件具体的小事（比如看到了一朵云、正在发呆、想吃夜宵）。
+1. 不要总是问“你在干嘛”。
+2. 分享你此时此刻正在做的一件具体的小事。
 3. 或者发一张【FakeImage】给你看到的东西。
-4. 保持简短，像真人在发微信一样。
+4. 保持简短。
 `;
     }
 
     // =================================================
-    // 5. 组装 Prompt
+    // 5. 组装 Prompt (保留你的原逻辑)
     // =================================================
     const proactivePrompt = `
 # Roleplay Instructions
@@ -5164,19 +5159,29 @@ ${systemInstruction}
 
     try {
         const activePreset = globalSettings.apiPresets.find(p => p.id === globalSettings.activePresetId);
-        if (!activePreset) throw new Error("API preset not found");
+        if (!activePreset) {
+             setGlobalNotification(null); // 如果没配置API，关掉弹窗
+             return;
+        }
 
         const generatedBody = await generateResponse([{ role: 'user', content: proactivePrompt }], activePreset);
         
         if (generatedBody && generatedBody.trim()) {
             body = generatedBody.trim().replace(/^["“'‘]|["”'’]$/g, '');
+        } else {
+            setGlobalNotification(null); // 如果生成失败，关掉弹窗
+            return;
         }
     } catch (error) {
         console.error("主动消息生成失败:", error);
+        setGlobalNotification(null); // 出错关掉弹窗
         return;
     }
     
-    if (!body) return;
+    if (!body) {
+        setGlobalNotification(null);
+        return;
+    }
 
     // 6. 切割消息
     const parts = body.split('|||'); 
@@ -5195,13 +5200,11 @@ ${systemInstruction}
     setContacts(prev => prev.map(c => {
       if (c.id === contact.id) {
           let updatedAgreements = c.agreements;
-          // 如果是闹钟触发的，要把约定标记为“已达成”或“已触发”
           if (dueAgreement) {
               updatedAgreements = (c.agreements || []).map(a => 
                   a.id === dueAgreement.id ? { ...a, status: 'fulfilled' } : a
               );
           }
-
           const newSentCount = isAlarmTriggered ? sentToday : sentToday + 1;
 
           return { 
@@ -5217,9 +5220,22 @@ ${systemInstruction}
       return c;
     }));
 
-    // 触发通知
-    onNewMessage(contact.id, contact.name, contact.avatar, newMessages[0].content, activeContactId || "");
-  };
+    // ★★★ 生成成功，把弹窗改成“新消息通知” ★★★
+    // 这样你就知道它是真的发出来了
+    setGlobalNotification({
+        type: 'new_message',
+        contactId: contact.id,
+        name: contact.name,
+        avatar: contact.avatar,
+        content: newMessages[0].content, // 显示第一条内容
+        userName: globalSettings.userName || "User",
+        userSignature: globalSettings.userSignature || ""
+    });
+    
+    // 5秒后自动消失
+    setTimeout(() => setGlobalNotification(null), 5000);
+};
+
 
 
 
@@ -6176,6 +6192,9 @@ ${(() => {
 
 **输出要求**: 将判定结果填入 score_updates 中。
 
+
+
+
 # 【⚠️ 强制时空坐标 ⚠️】
 系统检测到：距离上一条消息已过去：>>> ${gapDescription} <<<
 >>> 责任判定指令：${blameInstruction} <<<
@@ -6189,6 +6208,20 @@ ${(() => {
 - 🔴 爱意值: ${activeContact.affectionScore}
 - 用户名字：${currentUserName}
 - **用户设定/特征**: ${currentUserPersona}
+
+
+# ⌚️ [分钟级·绝对时间感知] (High Precision Time)
+**当下精确时间**: 【 ${aiTime} 】 (请精确感知到分钟！)
+**距离上一句过去**: 【 ${gapDescription} 】
+
+**【时间感知指令 - 必须执行】**:
+1. **拒绝模糊**: 不要只知道是“下午”，你要知道现在是“${aiTime.split(':')[1]}分”。
+2. **深夜敏感**: 如果时间是 23:00 ~ 04:00，每一分钟的流逝都会增加你的困意。如果是 03:15 还在回消息，你必须表现出“熬夜的疲惫”或“被吵醒的迷糊”。
+3. **饭点敏感**: 如果时间在 11:30~12:30 或 17:30~18:30，请潜意识里关注“吃饭”这件事。
+4. **间隔体感**: 
+   - 间隔 < 2分钟：这是“秒回”，对话是连贯的，不要打招呼，直接接下一句。
+   - 间隔 5~20分钟：这是“去忙了一小会儿”，可以顺滑地接下去，不用大惊小怪。
+   - 间隔 > 60分钟：话题可能稍微冷却了，需要重新加热。
 
 
 
