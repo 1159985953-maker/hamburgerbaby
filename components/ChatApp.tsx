@@ -1046,6 +1046,88 @@ const displayName = contact.memo?.trim() || contact.name;
 
 // 3. 各种漂亮的卡片 (记忆卡/邀请函/成功卡)
 
+
+
+
+// ==================== 💾 群聊专用组件：记忆挂载器 (V2.0 紧凑版) ====================
+interface MemoryMountProps {
+  contacts: Contact[]; // ★ 这里现在接收的是【已经过滤好的】成员列表
+  mountedConfig: { [contactId: string]: number }; 
+  onUpdateConfig: (contactId: string, count: number) => void;
+  onClose: () => void;
+}
+
+const MemoryMountPanel: React.FC<MemoryMountProps> = ({ contacts, mountedConfig, onUpdateConfig, onClose }) => {
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm animate-fadeIn" onClick={onClose}>
+      <div className="bg-white w-[90%] max-w-sm rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[80%]" onClick={e => e.stopPropagation()}>
+        
+        {/* 头部 (保持不变) */}
+        <div className="bg-indigo-600 p-4 shrink-0 flex justify-between items-center">
+          <div>
+            <h3 className="text-white font-bold text-lg">💾 记忆挂载舱</h3>
+            <p className="text-indigo-200 text-xs">选择要将多少私聊记忆同步到群聊</p>
+          </div>
+          <button onClick={onClose} className="text-white font-bold text-xl">×</button>
+        </div>
+
+        {/* 列表 (★ 核心改造区域) */}
+        <div className="flex-1 overflow-y-auto p-4 space-y-1">
+          {contacts.map(contact => {
+            const mountCount = mountedConfig[contact.id] || 0;
+            const maxHistory = Math.min(200, contact.history.length); // 最多只允许挂200条
+
+            return (
+              // ★ 改动1：不再用厚重的卡片，而是用简单的flex布局行
+              <div key={contact.id} className="flex items-center gap-3 py-3 border-b border-gray-100 last:border-b-0">
+                <img src={contact.avatar} className="w-10 h-10 rounded-full border border-gray-200 flex-shrink-0" />
+                
+                <div className="flex-1 min-w-0">
+                  <div className="font-bold text-sm text-gray-800 truncate">{contact.name}</div>
+                  {/* ★ 改动2：滑块变得更细，更精致 */}
+                  <input 
+                    type="range" 
+                    min="0" 
+                    max={maxHistory}
+                    step="10"
+                    value={mountCount}
+                    onChange={(e) => onUpdateConfig(contact.id, parseInt(e.target.value))}
+                    className="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-indigo-500 mt-1"
+                  />
+                </div>
+                
+                {/* ★ 改动3：用一个简洁的数字输入框显示和控制数量 */}
+                <input
+                  type="number"
+                  value={mountCount}
+                  onChange={(e) => {
+                      const val = parseInt(e.target.value) || 0;
+                      onUpdateConfig(contact.id, Math.min(maxHistory, Math.max(0, val)));
+                  }}
+                  className="w-16 text-center font-bold text-indigo-600 bg-indigo-50 rounded-lg py-1.5 outline-none focus:ring-2 focus:ring-indigo-200 transition-all text-sm border border-indigo-100"
+                />
+              </div>
+            );
+          })}
+        </div>
+
+        {/* 底部 (保持不变) */}
+        <div className="p-4 border-t bg-gray-50">
+          <button onClick={onClose} className="w-full bg-indigo-600 text-white py-3 rounded-xl font-bold shadow-lg active:scale-95 transition">
+            确认生效
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+
+
+
+
+
+
 // 聊天记录切片卡
 const SharedMemoryCard: React.FC<{ data: any }> = ({ data }) => {
   return (
@@ -3551,6 +3633,9 @@ const ChatApp: React.FC<ChatAppProps> = ({
 // =========================================================================================
   // 🧱 第 0 区：公共基础 (The Foundation) - 必须放在最上面！
   // =========================================================================================
+ // ★★★ 新增：单聊专用的记忆挂载状态 ★★★
+  const [showMountPanel, setShowMountPanel] = useState(false); // 控制面板开关
+  const [mountedMemoryConfig, setMountedMemoryConfig] = useState<{ [id: string]: number }>({}); // 存储配置 { "group_id_123": 50 }
 
 
 
@@ -5373,6 +5458,35 @@ Lore: ${loreText || "无"}
 图书馆管理员：${retrievedMemoriesText}
 感情路线：
 ${liquidRelationshipPrompt}
+
+# 🔗 [跨频道记忆：群聊挂载]
+(指令：以下是你参与的群聊中最近发生的事，这会影响你此刻的心情和话题选择。)
+${(() => {
+    // 1. 找出所有群聊
+    const groups = contacts.filter(c => c.isGroup);
+    if (groups.length === 0) return "你还没有加入任何群聊。";
+
+    // 2. 根据挂载配置，生成每个群的记忆片段
+    const groupContexts = groups.map(group => {
+        const mountCount = mountedMemoryConfig[group.id] || 0;
+        if (mountCount === 0) return null; // 如果没挂载，就跳过
+
+        // 提取群聊的最新N条消息
+        const historySlice = group.history.slice(-mountCount);
+        if (historySlice.length === 0) return null;
+
+        const chatLog = historySlice.map(msg => {
+            // 在群聊历史里找到发言人
+            const sender = contacts.find(c => c.id === (msg as any).senderId);
+            const senderName = sender ? sender.name : (msg.role === 'user' ? '用户' : '未知');
+            return `[${senderName}]: ${msg.content}`;
+        }).join(' | ');
+
+        return ` - 在群【${group.name}】中: "${chatLog}"`;
+    }).filter(Boolean); // 过滤掉 null 的项
+
+    return groupContexts.length > 0 ? groupContexts.join('\n') : "当前没有挂载任何群聊记忆。";
+})()}
 
 
 
@@ -9518,6 +9632,7 @@ onClick={() => {
 
 
 
+
 {/* 点击显示 Context Token 统计 (实时响应输入框版) */}
              <button 
                onClick={() => setShowTokenModal(true)} 
@@ -9622,6 +9737,27 @@ onClick={() => {
 
 
 
+        {/* ★★★ 新增：单聊的记忆挂载控制台入口 ★★★ */}
+        <section className="bg-white rounded-2xl p-4 shadow-sm border border-gray-200">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <span className="text-xl">🔗</span>
+              <div>
+                <h3 className="text-xs font-bold text-gray-400 uppercase">群聊记忆挂载</h3>
+                <p className="text-[10px] text-gray-400">
+                  已同步 <span className="text-indigo-600 font-bold">{Object.values(mountedMemoryConfig).filter(v => v > 0).length}</span> 个群聊
+                </p>
+              </div>
+            </div>
+            
+            <button
+              onClick={() => setShowMountPanel(true)}
+              className="px-4 py-2 bg-indigo-50 text-indigo-600 rounded-xl font-bold text-xs shadow-sm border border-indigo-100 hover:bg-indigo-100 active:scale-95 transition"
+            >
+              ⚙️ 配置挂载
+            </button>
+          </div>
+        </section>
 
 
 
@@ -9980,9 +10116,20 @@ onClick={() => {
 
 
 
+        {/* ★★★ 核心修复：把记忆挂载面板的渲染逻辑也在这里放一份 ★★★ */}
+        {showMountPanel && (() => {
+          // ★ 核心修复：只筛选出【群聊】，让单聊角色可以挂载群聊记忆
+          const groupsToDisplay = contacts.filter(c => c.isGroup);
 
-
-
+          return (
+            <MemoryMountPanel 
+              contacts={groupsToDisplay} // <--- 只把群聊传进去
+              mountedConfig={mountedMemoryConfig}
+              onUpdateConfig={(id, count) => setMountedMemoryConfig(prev => ({ ...prev, [id]: count }))}
+              onClose={() => setShowMountPanel(false)}
+            />
+          );
+        })()}
 
 
 

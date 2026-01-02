@@ -1381,10 +1381,14 @@ const MemoryNote: React.FC<{
 
 
 
-// ==================== 💾 群聊专用组件：记忆挂载器 ====================
+// ############################################################################
+// ★★★【片段 1：请用这段代码替换旧的 MemoryMountPanel 组件】★★★
+// ############################################################################
+
+// ==================== 💾 群聊专用组件：记忆挂载器 (V2.0 紧凑版) ====================
 interface MemoryMountProps {
-  contacts: Contact[]; // 所有联系人
-  mountedConfig: { [contactId: string]: number }; // 当前挂载配置 { "felix_id": 50 } 代表挂载50条
+  contacts: Contact[]; // ★ 这里现在接收的是【已经过滤好的】成员列表
+  mountedConfig: { [contactId: string]: number }; 
   onUpdateConfig: (contactId: string, count: number) => void;
   onClose: () => void;
 }
@@ -1394,7 +1398,7 @@ const MemoryMountPanel: React.FC<MemoryMountProps> = ({ contacts, mountedConfig,
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm animate-fadeIn" onClick={onClose}>
       <div className="bg-white w-[90%] max-w-sm rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[80%]" onClick={e => e.stopPropagation()}>
         
-        {/* 头部 */}
+        {/* 头部 (保持不变) */}
         <div className="bg-indigo-600 p-4 shrink-0 flex justify-between items-center">
           <div>
             <h3 className="text-white font-bold text-lg">💾 记忆挂载舱</h3>
@@ -1403,47 +1407,47 @@ const MemoryMountPanel: React.FC<MemoryMountProps> = ({ contacts, mountedConfig,
           <button onClick={onClose} className="text-white font-bold text-xl">×</button>
         </div>
 
-        {/* 列表 */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-4">
+        {/* 列表 (★ 核心改造区域) */}
+        <div className="flex-1 overflow-y-auto p-4 space-y-1">
           {contacts.map(contact => {
             const mountCount = mountedConfig[contact.id] || 0;
-            const maxHistory = contact.history.length;
+            const maxHistory = Math.min(200, contact.history.length); // 最多只允许挂200条
 
             return (
-              <div key={contact.id} className={`border rounded-xl p-3 transition-all ${mountCount > 0 ? 'border-indigo-500 bg-indigo-50' : 'border-gray-200 bg-white'}`}>
-                <div className="flex justify-between items-center mb-2">
-                  <div className="flex items-center gap-2">
-                    <img src={contact.avatar} className="w-8 h-8 rounded-full border border-white shadow-sm" />
-                    <span className="font-bold text-sm text-gray-800">{contact.name}</span>
-                  </div>
-                  <span className={`text-xs font-bold px-2 py-1 rounded ${mountCount > 0 ? 'bg-indigo-100 text-indigo-600' : 'bg-gray-100 text-gray-400'}`}>
-                    {mountCount > 0 ? `已挂载 ${mountCount} 条` : '未挂载'}
-                  </span>
-                </div>
-
-                {/* 滑块控制 */}
-                <div className="flex items-center gap-3">
-                  <span className="text-[10px] text-gray-400 w-8">0</span>
+              // ★ 改动1：不再用厚重的卡片，而是用简单的flex布局行
+              <div key={contact.id} className="flex items-center gap-3 py-3 border-b border-gray-100 last:border-b-0">
+                <img src={contact.avatar} className="w-10 h-10 rounded-full border border-gray-200 flex-shrink-0" />
+                
+                <div className="flex-1 min-w-0">
+                  <div className="font-bold text-sm text-gray-800 truncate">{contact.name}</div>
+                  {/* ★ 改动2：滑块变得更细，更精致 */}
                   <input 
                     type="range" 
                     min="0" 
-                    max={Math.min(200, maxHistory)} // 最多允许挂载200条，或者全部历史
+                    max={maxHistory}
                     step="10"
                     value={mountCount}
                     onChange={(e) => onUpdateConfig(contact.id, parseInt(e.target.value))}
-                    className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-indigo-500"
+                    className="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-indigo-500 mt-1"
                   />
-                  <span className="text-[10px] text-gray-400 w-8">{Math.min(200, maxHistory)}</span>
                 </div>
-                <p className="text-[9px] text-gray-400 mt-1 text-center">
-                  拖动滑块选择挂载的记忆条数 (私聊历史: {maxHistory}条)
-                </p>
+                
+                {/* ★ 改动3：用一个简洁的数字输入框显示和控制数量 */}
+                <input
+                  type="number"
+                  value={mountCount}
+                  onChange={(e) => {
+                      const val = parseInt(e.target.value) || 0;
+                      onUpdateConfig(contact.id, Math.min(maxHistory, Math.max(0, val)));
+                  }}
+                  className="w-16 text-center font-bold text-indigo-600 bg-indigo-50 rounded-lg py-1.5 outline-none focus:ring-2 focus:ring-indigo-200 transition-all text-sm border border-indigo-100"
+                />
               </div>
             );
           })}
         </div>
 
-        {/* 底部 */}
+        {/* 底部 (保持不变) */}
         <div className="p-4 border-t bg-gray-50">
           <button onClick={onClose} className="w-full bg-indigo-600 text-white py-3 rounded-xl font-bold shadow-lg active:scale-95 transition">
             确认生效
@@ -5054,43 +5058,80 @@ ${interactionGuide}
 `;
   }).join('\n\n----------------\n\n');
 
+// ############################################################################
+// ★★★【最终代码片段：请完整复制并替换】★★★
+// ############################################################################
+// ############################################################################
+// ★★★【最终修复片段：请完整复制并替换】★★★
+// ############################################################################
 
- // ==================== 🎬 群聊总导演：System Prompt (严格短句版) ====================
+// ==================== 🎬 群聊总导演：System Prompt (V4.0 语言铁律版) ====================
+
+  // 1. 为每个成员生成包含【语言铁律】的独立指令
+  const memberInstructions = fullMembersData.map(member => {
+    const dynamicStyle = getDynamicStyleInstruction(member);
+    const modeInstruction = getModeInstruction(member.dialogueMode);
+
+    return `
+### 🎭 角色: 【${member.name}】
+- **📜 核心人设**: 
+  ${member.persona || "无设定"}
+
+- **🗣️【语言铁律 - 最高优先级】**: 
+  请立刻仔细检查上方“核心人设”中是否有关于【语言】的强制规定（例如：必须使用中文、必须使用 English (中文) 格式、括号文学等）。
+  【必须100%严格遵守】该语言设定！绝不允许使用错误的语言！
+  
+- **💬 对话模式**: 【${member.dialogueMode || 'normal'} 模式】
+  ${modeInstruction}
+  
+- **🎭 动态人格面具 (说话风格)**:
+${dynamicStyle}
+`;
+  }).join('\n\n----------------\n\n');
+
+
+  // 2. 构建最终的 System Prompt
   const systemPrompt = `
 # 核心任务：全息群聊模拟
-你是一个群聊模拟引擎，负责扮演名为“${group.name}”的群聊中的成员。
+你是一个群聊模拟引擎，负责扮演名为“${group.name}”的群聊中的所有成员。
 
 # 🚫 禁忌事项 (违反即死机)
-1. **【严禁扮演群组本身】**：你绝对**不能**使用“${group.name}”作为发送者名字！只能扮演下列具体成员。
-2. **【拒绝长篇大论】**：这是手机群聊！**每一句话都要短！** 就像微信/QQ聊天一样，不要写小作文。如果是长内容，请拆分成多条短消息发送。
+1.  **【严禁扮演群组本身】**：你绝对**不能**使用“${group.name}”作为发送者名字！只能扮演下列具体成员。
+2.  **【格式铁律】**: 你的回复内容 "content" **绝对不能包含** \`{{\` 或 \`}}\` 这样的占位符！必须直接使用标点符号，如 \`。\` \`？\` \`！\`。
+3.  **【纯净输出】**: 你的 content 必须是【纯粹的口语】。**严禁**出现任何 ()、（）、[]、【】 包含的动作描写、心理活动、补充说明或旁白！
 
-# 👥 【成员档案与状态】
-${castProfiles}
+# 👥 【成员档案与动态指令】
+${memberInstructions}
 
-# ⚠️ 输出格式
-回复必须是严格的 **JSON 数组**。
+# ⏰ 【时空感知模块 - 全员共享】
+- **当前精确时间**: ${aiTime}
+- **距离上一条消息**: ${gapDescription}
+- **责任判定指令**: ${blameInstruction}
+(指令: 所有成员都必须遵守时间规则。例如，如果是深夜，所有人都要表现出困意；如果隔了很久，所有人都要表现出惊讶。)
+
+# ⚠️ 输出格式（必须严格遵守！）
+回复必须是严格的 JSON 数组，每个对象都包含 "name" 字段，表示是谁在说话。
+"name" 值必须从群成员中选：${fullMembersData.map(m => m.name).join('、')}。
+
+例子：
 [
-  {"type": "text", "name": "角色A", "content": "哈哈哈笑死我了"}, 
-  {"type": "text", "name": "角色A", "content": "我也看到了！(AI应把一件事拆成两句发)"},
-  {"type": "text", "name": "角色B", "content": "确实。"}
+  {"type": "text", "name": "Mia", "content": "哈哈好开心～"},
+  {"type": "text", "name": "Elio", "content": "That is a rare and beautiful state of mind. (那是一种罕见而美妙的心境。)"}
 ]
 
-# 🕹️ 互动逻辑
-1. **多方会谈**: 角色之间互相对话，气氛要从容自然。
-2. **碎片化**: 模仿真实人类，多用短句，多用表情。
-3. **功能指令**: 发图片填 \`[FakeImage] 描述\`。
+# 重要规则：
+-   每条消息都必须写 "name": "成员真实名字"。
+-   **【最重要】** 必须根据每个角色的【语言铁律】来决定ta说话的语言和格式！
+-   根据每个角色的【对话模式】和【动态人格面具】来决定ta说话的风格、长度和频率。
+-   不能让一个人说所有话，必须交替使用不同成员，模拟真实群聊。
+-   绝对不能用群名 "${group.name}" 或编造不在列表中的名字。
 
-# 当前环境
-- 群名: ${group.name}
-- 时间: ${aiTime}
-- 距离上一条消息: ${gapDescription}
-
-现在，请完全沉浸在角色中，开始群聊！
+现在，请完全沉浸在每个角色的独立人格中，特别是他们的语言习惯，开始群聊！
 `;
-    
 
-
-
+// ############################################################################
+// ★★★【片段复制到这里结束】★★★
+// ############################################################################
 
 
 
@@ -5830,69 +5871,51 @@ if (extractedThought.new_agreement && Object.keys(extractedThought.new_agreement
                 if (extractedThought.energy_status) newEnergyStatus = extractedThought.energy_status;
             }
 
-            // --- B. 关键修复：严格只提取 text/voice，绝对丢弃 thought_chain ---
-            // 我们不再假设第一项是思考链，而是直接过滤
-           // --- B. 群聊专用解析：提取内容 + 识别发送者 ---
-       // --- B. 群聊专用解析：提取内容 + 智能识别发送者 (修复版) ---
-            parts = parsed
-                .filter((item: any) => (item.type === 'text' || item.type === 'voice' || item.type === 'sticker' || item.type === 'ai_image') && (item.content || item.description))
-                .map((item: any) => {
-                    const aiReturnedName = item.name || "";
-                    
-                    // 1. 第一轮：精确匹配
-                    let sender = allContacts.find(c => c.name === aiReturnedName);
-                    
-                    // 2. 第二轮：模糊匹配 (忽略大小写、首尾空格)
-                    if (!sender) {
-                        sender = allContacts.find(c => 
-                            c.name.trim().toLowerCase() === aiReturnedName.trim().toLowerCase()
-                        );
-                    }
+// ############################################################################
+// ★★★【片段 1：请复制这里的所有代码】★★★
+// ############################################################################
 
-                    // 3. 第三轮：包含匹配 (防止 AI 加了后缀，如 "Mia (Happy)")
-                    if (!sender) {
-                        sender = allContacts.find(c => 
-                            aiReturnedName.includes(c.name) || c.name.includes(aiReturnedName)
-                        );
-                    }
+         // ############################################################################
+// ★★★【最终修复代码：请用这段代码完整替换旧的解析逻辑】★★★
+// ############################################################################
 
-                    // 4. ★★★ 终极兜底：绝对不要用群组ID！ ★★★
-                    // 如果实在找不到这个人（比如 AI 瞎编了一个名字），
-                    // 我们优先从“群成员列表”里随便抓一个【真实存在的成员】来顶替。
-                    // 这样至少显示的是个人头，而不是群组头像。
-                    if (!sender) {
-                        console.warn(`[群聊解析] 无法匹配名字 "${aiReturnedName}"，启用紧急替身...`);
-                        
-                        // 获取所有真实成员 (排除群组自己)
-                        const realMemberIds = (group.members || []).filter(id => id !== group.id);
-                        
-                        if (realMemberIds.length > 0) {
-                            // 暂时抓第一个成员顶包 (或者你可以改为随机 Math.floor)
-                            const fallbackId = realMemberIds[0];
-                            sender = allContacts.find(c => c.id === fallbackId);
-                        }
-                    }
+    // --- B. 群聊专用解析：提取内容 + 智能识别发送者 (V3.0 防AI犯傻版) ---
+    parts = parsed
+        .filter((item: any) => (item.type === 'text' || item.type === 'voice' || item.type === 'sticker' || item.type === 'ai_image') && (item.content || item.description))
+        .map((item: any) => {
+            const aiReturnedName = item.name || "";
+            let sender = null;
 
-                    // 5. 确定最终 ID
-                    // 如果 sender 找到了，就用 sender.id。
-                    // 如果连替身都找不到（群里没人？），那只能用 group.id 了（虽然这几乎不可能发生）
-                    const senderId = sender ? sender.id : group.id;
-                    
-                    // 处理图片类型的兼容性
-                    let finalContent = item.content;
-                    if (item.type === 'ai_image') finalContent = `[FakeImage] ${item.description}`;
-                    
-                    return { 
-                        type: item.type === 'voice' ? 'voice' : 'text', 
-                        content: finalContent, 
-                        senderId: senderId, // 写入修正后的 ID
-                        thought_chain: extractedThought 
-                    };
-                });
+            // ★★★ 核心修复：增加“安检程序” ★★★
+            // 如果AI不听话，用了群聊的名字，我们就当它没说名字，强制走下面的“替身”逻辑。
+            if (aiReturnedName && aiReturnedName !== group.name) {
+                // 只有当AI用的不是群名时，我们才尝试正常匹配
+                sender = allContacts.find(c => c.name.trim().toLowerCase() === aiReturnedName.trim().toLowerCase());
+            }
 
-        } else {
-            throw new Error("No JSON array found");
-        }
+            // 如果没找到对应的成员 (包括AI用了群名的情况)
+            if (!sender) {
+                console.warn(`[AI行为纠正] AI指定的名字 "${aiReturnedName}" 无效或为群名，已自动分配给第一个成员。`);
+                // 自动选择群里的第一个真实成员作为“替身”
+                const firstMember = allContacts.find(c => group.members.includes(c.id) && c.id !== group.id);
+                sender = firstMember || null;
+            }
+            
+            const senderId = sender ? sender.id : group.id; // 最后的保险
+            
+            return { 
+                type: item.type === 'voice' ? 'voice' : 'text', 
+                content: item.content || `[FakeImage] ${item.description}`, 
+                senderId: senderId,
+                thought_chain: extractedThought 
+            };
+        });
+
+} else {
+    throw new Error("No JSON array found");
+}
+
+
 
 // ==================== 找到 } catch (error) { ... } 替换成下面这段 ====================
 
@@ -5955,14 +5978,19 @@ if (extractedThought.new_agreement && Object.keys(extractedThought.new_agreement
     await new Promise(resolve => setTimeout(resolve, totalDelay));
 
 
-    
-// [修复代码] 智能分句系统 V5.0 (强制气泡版：把大段话切碎)
+   // ############################################################################
+// ★★★【最终修复片段：请复制这里的所有代码】★★★
+// ############################################################################
+
+// [修复代码] 温柔分句 V9.6 (彻底杜绝语音/伪图拆分)
         const newMessages: Message[] = [];
         
         parts.forEach((part, partIndex) => {
             if (!part.content) return; 
 
-            // 1. 特殊格式（语音/图片/伪图）保持原样，不切分
+            // ★★★ 核心修复：把 senderId 从 part 传递到最终的 message 对象里！★★★
+            const senderId = (part as any).senderId; 
+
             const isSpecialFormat = part.type === 'voice' || 
                                   part.content.trim().startsWith('[Voice Message]') ||
                                   part.content.trim().startsWith('[FakeImage]');
@@ -5972,44 +6000,31 @@ if (extractedThought.new_agreement && Object.keys(extractedThought.new_agreement
                     id: Date.now().toString() + partIndex,
                     role: 'assistant',
                     content: part.content,
-                    timestamp: Date.now() + (partIndex * 1000),
+                    timestamp: Date.now() + (partIndex * 800),
                     type: part.type === 'voice' ? 'voice' : 'text',
-                    senderId: part.senderId
+                    senderId: senderId, // <--- 把“身份证”加到这里！
                 });
             } else {
-                let textToSplit = part.content;
-
-                // --- ★★★ V5.0 核心魔法：暴力切分气泡 ★★★ ---
-                // 1. 先把所有“中文标点”和“英文标点”后面，都强行加上换行符 \n
-                // 这样 "你好。我是小明！" 就会变成 "你好。\n我是小明！\n"
-                textToSplit = textToSplit
-                    .replace(/([。？！.?!])\s*/g, "$1\n")  // 遇到标点就换行
-                    .replace(/(\n\s*){2,}/g, "\n");       // 去掉多余的空行
-
-                // 2. 处理显式的换行符
-                textToSplit = textToSplit.replace(/\\n/g, "\n");
-
-                // 3. 核心拆分：按换行符拆分成数组
-                let rawSentences = textToSplit.split(/\n+/);
-
+                const rawSentences = part.content.split(/\n+/);
                 rawSentences
                     .map(s => s.trim())
-                    .filter(s => s.length > 0) // 过滤掉空话
+                    .filter(s => s.length > 0)
                     .forEach((sentence, sentenceIndex) => {
-                        // 如果一句话太长（超过50字），为了美观，不强制切断，保持长气泡
-                        // 但如果是短句，就作为一个独立气泡
                         newMessages.push({
                             id: Date.now().toString() + partIndex + "_" + sentenceIndex,
                             role: 'assistant',
                             content: sentence,
-                            // ★★★ 关键：设置时间间隔，让气泡一个接一个蹦出来，而不是同时出现
-                            timestamp: Date.now() + (partIndex * 1000) + (sentenceIndex * 800),
+                            timestamp: Date.now() + (partIndex * 800) + (sentenceIndex * 200),
                             type: 'text',
-                            senderId: part.senderId
+                            senderId: senderId, // <--- 每一句拆分出来的消息，都要带上“身份证”！
                         });
                     });
             }
         });
+
+// ############################################################################
+// ★★★【片段复制到这里结束】★★★
+// ############################################################################
 
 
 
@@ -7900,6 +7915,15 @@ const readTavernPng = async (file: File): Promise<any | null> => {
 
 
 
+
+
+
+
+
+  
+
+
+
   
 if (view === 'settings' && activeContact) {
 
@@ -8502,28 +8526,6 @@ if (view === 'settings' && activeContact) {
 
 
 
-{/* ★★★ 新增：记忆挂载控制台 ★★★ */}
-        <section className="bg-white rounded-2xl p-4 shadow-sm border border-gray-200 mb-6">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <span className="text-xl">💾</span>
-              <div>
-                <h3 className="text-xs font-bold text-gray-400 uppercase">记忆挂载舱</h3>
-                <p className="text-[10px] text-gray-400">
-                  当前已同步: <span className="text-indigo-600 font-bold">{Object.keys(mountedMemoryConfig).length}</span> 人
-                </p>
-              </div>
-            </div>
-            
-            <button
-              onClick={() => setShowMountPanel(true)}
-              className="px-4 py-2 bg-indigo-50 text-indigo-600 rounded-xl font-bold text-xs shadow-sm border border-indigo-100 hover:bg-indigo-100 active:scale-95 transition"
-            >
-              ⚙️ 配置挂载
-            </button>
-          </div>
-        </section>
-
 
 
 
@@ -8545,6 +8547,38 @@ if (view === 'settings' && activeContact) {
     </button>
   </div>
 </section>
+
+
+
+
+
+
+
+        {/* ★★★ 新增：记忆挂载控制台入口 ★★★ */}
+        <section className="bg-white rounded-2xl p-4 shadow-sm border border-gray-200">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <span className="text-xl">💾</span>
+              <div>
+                <h3 className="text-xs font-bold text-gray-400 uppercase">记忆挂载舱</h3>
+                <p className="text-[10px] text-gray-400">
+                  已同步 <span className="text-indigo-600 font-bold">{Object.values(mountedMemoryConfig).filter(v => v > 0).length}</span> 人的私聊记忆
+                </p>
+              </div>
+            </div>
+            
+            <button
+              onClick={() => setShowMountPanel(true)}
+              className="px-4 py-2 bg-indigo-50 text-indigo-600 rounded-xl font-bold text-xs shadow-sm border border-indigo-100 hover:bg-indigo-100 active:scale-95 transition"
+            >
+              ⚙️ 配置挂载
+            </button>
+          </div>
+        </section>
+
+
+
+
 
 
 
@@ -8886,7 +8920,22 @@ onClick={() => {
 
 
 
+     {/* ★★★ 核心修复：把记忆挂载面板的渲染逻辑也在这里放一份 ★★★ */}
+        {showMountPanel && (() => {
+          // 逻辑和聊天页面那边完全一样，确保只显示其他成员
+          const membersToDisplay = allContacts.filter(
+            c => group.members.includes(c.id) && c.id !== group.id
+          );
 
+          return (
+            <MemoryMountPanel 
+              contacts={membersToDisplay}
+              mountedConfig={mountedMemoryConfig}
+              onUpdateConfig={(id, count) => setMountedMemoryConfig(prev => ({ ...prev, [id]: count }))}
+              onClose={() => setShowMountPanel(false)}
+            />
+          );
+        })()}
 
 
 
@@ -9224,6 +9273,7 @@ const activePreset = globalSettings.apiPresets.find(p => p.id === globalSettings
     
   );
   
+
 } // <--- 这里是 if (view === 'settings') 的结束大括号
 
 
@@ -9444,8 +9494,7 @@ return (
 
 
 
-
-{activeContact.history
+ {activeContact.history
               .slice(-historyLimit)
               .map((msg, index, arr) => {
                 
@@ -9458,30 +9507,42 @@ return (
                   if (intervalMinutes > 20) showInterval = true; 
                 }
 
+                // ★ 核心修复 1：声明变量，准备存放正确的发送者信息
                 let senderName = "";
                 let senderAvatar = "";
-                let senderId = msg.senderId;
+                let senderId = ""; // 用来判断连续发言
 
                 if (msg.role === 'user') {
-                    senderName = activeContact.userName || "我";
-                    senderAvatar = activeContact.userAvatar;
+                  // 如果是用户自己，信息不变
+                  senderName = activeContact.userName || "我";
+                  senderAvatar = activeContact.userAvatar;
+                  senderId = 'user'; // 给用户一个固定的ID
                 } else {
-                    const foundMember = allContacts.find(c => c.id === senderId);
-                    if (foundMember) {
-                        senderName = foundMember.name;
-                        senderAvatar = foundMember.avatar;
-                    } else {
-                        senderName = activeContact.name;
-                        senderAvatar = activeContact.avatar;
-                    }
-                }
+                  // ★ 核心修复 2：如果是AI消息，从消息自带的 senderId 去找人！
+                  const messageSenderId = (msg as any).senderId;
+                  const sender = allContacts.find(c => c.id === messageSenderId);
 
-                // 连续发言判断
-                const isConsecutive = index > 0 && 
-                                      arr[index - 1].role === msg.role && 
-                                      !showInterval &&
-                                      (msg.role === 'user' ? true : arr[index - 1].senderId === msg.senderId);
+                  if (sender) {
+                    // 找到了！用这个人的信息
+                    senderName = sender.name;
+                    senderAvatar = sender.avatar;
+                    senderId = sender.id;
+                  } else {
+                    // 如果因为某些原因没找到（比如角色被删了），用群信息做保底
+                    senderName = activeContact.name; // 用群名
+                    senderAvatar = activeContact.avatar; // 用群头像
+                    senderId = activeContact.id;
+                  }
+                }
                 
+                // ★ 核心修复 3：用正确的 senderId 来判断是否连续发言
+                const prevMsgSenderId = index > 0 ? ((arr[index-1] as any).senderId || (arr[index-1].role === 'user' ? 'user' : '')) : '';
+                const isConsecutive = index > 0 && 
+                                      !showInterval &&
+                                      senderId === prevMsgSenderId;
+
+                const showName = !isConsecutive;
+
                 const isSelected = selectedIds.includes(msg.id);
                 const duration = msg.voiceDuration || 10;
                 const timeStr = new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
@@ -9534,9 +9595,6 @@ return (
                     else { quoteText = msg.content.replace(/^> ?/, '').trim(); replyText = ""; }
                 }
 
-                // 只要不是连续发言，就显示名字（无论用户还是AI）
-                const showName = !isConsecutive; 
-
                 return (
                   <React.Fragment key={msg.id}>
                     {/* 时间分割线 */}
@@ -9564,11 +9622,8 @@ return (
                       {/* --- 头像区域 --- */}
                       <div 
                          className={`flex-none flex flex-col ${msg.role === 'user' ? 'order-3 items-end' : 'order-1 items-start'}`}
-                         // ★★★ 核心修复：头像下移控制区 ★★★
                          style={{ 
                              width: `${currentAvatarSize}px`,
-                             // 如果显示名字 (showName为真)，paddingTop 就设为 22px，强制下移！
-                             // 这样头像就会对齐气泡，而不是对齐名字
                              paddingTop: showName ? '17px' : '0px'
                          }}
                       >
@@ -9580,7 +9635,6 @@ return (
                               alt="avatar" 
                             />
                         ) : (
-                            // 连续发言时占位，保持对齐
                             <div style={{ width: `${currentAvatarSize}px` }}></div>
                         )}
                       </div>
@@ -9649,6 +9703,7 @@ return (
                   </React.Fragment>
                 );
             })}
+
 
 
 
@@ -9890,16 +9945,7 @@ onForceUpdate={async () => {
 
 
 
-
-{/* ★★★ 记忆挂载面板 (挂在这里！) ★★★ */}
-        {showMountPanel && (
-          <MemoryMountPanel 
-            contacts={contacts} 
-            mountedConfig={mountedMemoryConfig}
-            onUpdateConfig={(id, count) => setMountedMemoryConfig(prev => ({ ...prev, [id]: count }))}
-            onClose={() => setShowMountPanel(false)}
-          />
-        )}
+   
 
 
 
