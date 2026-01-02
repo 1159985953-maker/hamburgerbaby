@@ -702,15 +702,17 @@ const HiddenBracketText: React.FC<{ content: string; fontSize?: string; msgId: s
 
   const regex = /(\([^)]*[\u4e00-\u9fa5]+[^)]*\)|（[^）]*[\u4e00-\u9fa5]+[^）]*）)/g;
   const matches = content.match(regex);
-  if (!matches) {
-    return <span className={fontSize}>{content}</span>;
-  }
+// 修改后
+if (!matches) {
+  // 手动加上 leading-snug
+  return <span className={`${fontSize} leading-snug`}>{content}</span>;
+}
   const mainText = content.replace(regex, '').trim();
   const translationText = matches.map(m => m.replace(/^(\(|（)|(\)|）)$/g, '')).join(' ');
 
   return (
     <div className="cursor-pointer group" onClick={toggleShow}>
-      <div className={`flex items-center ${fontSize} leading-relaxed relative`}>
+      <div className={`flex items-center ${fontSize} leading-snug relative`}>
         <span>{mainText}</span>
         {!show && <span className="w-1.5 h-1.5 bg-red-400 rounded-full ml-1.5 shrink-0 opacity-50"></span>}
       </div>
@@ -11324,7 +11326,7 @@ const isLoverInvitation = msg.content.includes('[LoverInvitation]') || msg.conte
          // ★★★ 必须确保这一行存在！msg_加上时间戳，和上面的代码对应 ★★★
          id={`msg_${msg.timestamp}`} 
         // ★★★ 核心修复：只有最新的一条消息才加动画 (index === arr.length - 1)，旧消息不加！防止加载历史时乱跳 ★★★
-className={`message-wrapper ${msg.role === 'user' ? 'user' : 'ai'} flex gap-3 ${msg.role === 'user' ? 'justify-end' : 'justify-start'} ${index === arr.length - 1 ? 'animate-slideUp' : ''} mb-0`}
+className={`message-wrapper ${msg.role === 'user' ? 'user' : 'ai'} flex gap-3 ${msg.role === 'user' ? 'justify-end' : 'justify-start'} ${index === arr.length - 1 ? 'animate-slideUp' : ''} mb-0.5`}
          style={{ minHeight: `${currentAvatarSize}px` }} 
        >
 
