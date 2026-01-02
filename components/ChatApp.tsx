@@ -9035,97 +9035,12 @@ if (view === 'settings' && activeContact) {
 
 
           {/* 人设编辑框 */}
-          <div>
+         <div>
             <div className="flex justify-between items-end mb-1">
               <label className="text-xs text-gray-500">Persona (详细人设)</label>
               {/* ★★★ AI 分析按钮 ★★★ */}
 {/* 这是一组代码：升级版“AI人设扫描”按钮 (复用了全屏加载 UI) */}
-              <button
-                disabled={isAnalyzing} // 分析期间禁用点击
-                onClick={async () => {
-                   const currentPersona = editForm.persona || form.persona;
-                   if (!currentPersona || currentPersona.length < 5) {
-                       alert("请先填写一些人设描述（Persona）再分析哦！");
-                       return;
-                   }
-                   
-                   const activePreset = globalSettings.apiPresets.find(p => p.id === globalSettings.activePresetId);
-                   if (!activePreset) return alert("请先配置 API！");
-
-                   const confirmAnalysis = confirm("🔮 AI 将读取你的人设文字，并自动生成五维性格数值。要开始吗？");
-                   if (!confirmAnalysis) return;
-
-                   // ★★★ 启动全屏特效 ★★★
-                   setIsAnalyzing(true);
-
-                   try {
-                       // 1. 制造仪式感 (假装很忙)
-                       setLoadingText("正在读取人设文本...");
-                       await new Promise(r => setTimeout(r, 800)); // 等0.8秒
-
-                       setLoadingText("正在构建心理侧写模型...");
-                       await new Promise(r => setTimeout(r, 1200)); // 等1.2秒，显得思考很深
-
-                       setLoadingText("正在量化五维人格数据...");
-                       
-                       // 2. 真正的 API 请求
-                       const prompt = `
-你是一位资深心理侧写师。请分析以下角色人设，并给出“大五人格”数值（0.0-10.0，保留一位小数）。
-人设：
-"${currentPersona}"
-
-要求：
-1. 必须根据人设的字里行间推断（如“傲娇”通常宜人性低、敏感度高）。
-2. 只输出纯 JSON，格式：
-{
-  "openness": 8.5,
-  "conscientiousness": 5.0,
-  "extraversion": 3.2,
-  "agreeableness": 4.5,
-  "neuroticism": 9.0
-}`;
-                       const res = await generateResponse([{ role: 'user', content: prompt }], activePreset);
-                       
-                       setLoadingText("正在同步数据...");
-                       const jsonMatch = res.match(/\{[\s\S]*\}/);
-                       if (jsonMatch) {
-                           const newBig5 = JSON.parse(jsonMatch[0]);
-                           
-                           // 深度合并数据
-                           const currentHef = editForm.hef || form.hef || {};
-                           const currentIV = currentHef.INDIVIDUAL_VARIATION || {};
-                           
-                           setEditForm({
-                               ...editForm,
-                               hef: {
-                                   ...currentHef,
-                                   INDIVIDUAL_VARIATION: {
-                                       ...currentIV,
-                                       personality_big5: newBig5
-                                   }
-                               }
-                           });
-                           
-                           // 稍微停顿展示"完成"状态
-                           await new Promise(r => setTimeout(r, 500));
-                           alert("✅ 分析完成！数值已自动填入下方滑块，你可以继续微调。");
-                       }
-                   } catch (e) {
-                       alert("分析失败，请检查网络");
-                       console.error(e);
-                   } finally {
-                       // ★★★ 关闭全屏特效 ★★★
-                       setIsAnalyzing(false);
-                   }
-                }}
-                className="text-[10px] bg-gradient-to-r from-purple-500 to-blue-500 text-white px-2 py-1 rounded-full font-bold shadow hover:opacity-80 transition flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {isAnalyzing ? (
-                   <>⏳ 分析中...</>
-                ) : (
-                   <><span>🔮</span> AI 一键生成数值</>
-                )}
-              </button>
+             
             </div>
             <textarea
               rows={4}
@@ -10679,7 +10594,7 @@ const isLoverInvitation = msg.content.includes('[LoverInvitation]') || msg.conte
               </div>
             )}
 
-            <div className="my-4 animate-slideUp px-4 w-full">
+          <div className="mb-3 animate-slideUp px-4 w-full">
                 
                 {/* 1. 邀请函 (修复版：准确判断是谁发的) */}
                 {isLoverInvitation ? (
@@ -11233,13 +11148,11 @@ const isLoverInvitation = msg.content.includes('[LoverInvitation]') || msg.conte
         )}
 
 
-<div 
-         // ★★★ 必须确保这一行存在！msg_加上时间戳，和上面的代码对应 ★★★
-         id={`msg_${msg.timestamp}`} 
-        // ★★★ 核心修复：只有最新的一条消息才加动画 (index === arr.length - 1)，旧消息不加！防止加载历史时乱跳 ★★★
-className={`message-wrapper ${msg.role === 'user' ? 'user' : 'ai'} flex gap-3 ${msg.role === 'user' ? 'justify-end' : 'justify-start'} ${index === arr.length - 1 ? 'animate-slideUp' : ''} mb-0.5`}
-         style={{ minHeight: `${currentAvatarSize}px` }} 
-       >
+<div
+    id={`msg_${msg.timestamp}`}
+    className={`message-wrapper flex items-end gap-3 ${msg.role === 'user' ? 'justify-end' : 'justify-start'} ${index === arr.length - 1 ? 'animate-slideUp' : ''} ${isConsecutive ? 'mb-1' : 'mb-3'}`}
+    style={{ minHeight: `${currentAvatarSize}px` }}
+>
 
 
 
@@ -11293,20 +11206,19 @@ className={`message-wrapper ${msg.role === 'user' ? 'user' : 'ai'} flex gap-3 ${
                 </div>
               ) : (
                 <div 
-   className={`content rounded-xl leading-snug relative break-words whitespace-pre-wrap shadow-sm ` + (!activeContact.customCSS && currentText === '#111827' ? 'border border-gray-200/50' : '')}
-   style={{
-       backgroundColor: !activeContact.customCSS ? currentBg : undefined,
-       color: !activeContact.customCSS ? currentText : undefined,
-       fontSize: currentFontSize,
-       paddingTop: currentPaddingY, 
-       paddingBottom: currentPaddingY,
-       paddingLeft: currentPaddingX,
-       paddingRight: currentPaddingX,
-       borderTopRightRadius: (msg.role === 'user' && !isConsecutive) ? '2px' : '16px',
-       borderTopLeftRadius: (msg.role === 'assistant' && !isConsecutive) ? '2px' : '16px',
-       borderBottomLeftRadius: '16px',
-       borderBottomRightRadius: '16px',
-   }}
+
+    className={`content rounded-xl leading-snug relative break-words whitespace-pre-wrap shadow-sm ` + (!activeContact.customCSS && currentText === '#111827' ? 'border border-gray-200/50' : '')}
+    style={{
+        backgroundColor: !activeContact.customCSS ? currentBg : undefined,
+        color: !activeContact.customCSS ? currentText : undefined,
+        fontSize: currentFontSize,
+        // ★★★ 核心修改：使用和群聊一样的 padding 简写方式 ★★★
+        padding: `${currentPaddingY} ${currentPaddingX}`,
+        borderTopRightRadius: (msg.role === 'user' && !isConsecutive) ? '2px' : '16px',
+        borderTopLeftRadius: (msg.role === 'assistant' && !isConsecutive) ? '2px' : '16px',
+        borderBottomLeftRadius: '16px',
+        borderBottomRightRadius: '16px',
+    }}
 >
     {/* 1. 引用块 (保持不变) */}
     {isQuoteMsg && quoteText && (

@@ -8136,7 +8136,7 @@ if (view === 'settings' && activeContact) {
                 {isAnalyzing ? (
                    <>⏳ 分析中...</>
                 ) : (
-                   <><span>🔮</span> AI 一键生成数值</>
+                   <><span></span> </>
                 )}
               </button>
             </div>
