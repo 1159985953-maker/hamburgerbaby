@@ -438,10 +438,9 @@ const getModeInstruction = (mode: string = 'normal'): string => {
       return `
 # 🗣️ 【最高优先级指令：学习模式】
 用户强制开启了“扩写模式”。
-1. **字数铁律**：你的回复必须 **长**！**【4～9条】**多写一点！不要只回一句话！
+1. **字数铁律**：你的回复必须 **长**！**【4～8条】**多写一点！不要只回一句话！但是不可以超过8条！！！！！！！！！！！也要像个人一样好吗！！！
 2. **风格**：发散思维，由一个点聊到另一个点，分享你的碎碎念，表现出强烈的分享欲。
-3. **内容**：多描述细节、心理活动、环境、或者单纯的废话。
-4. **覆盖**：即使你的人格设定是“高冷”，现在也要**多打字**，哪怕是吐槽也要写长一点。
+3. **内容**：多描述细节、解释、或者单纯的废话。
 `;
     case 'normal':
     default:
@@ -10338,6 +10337,8 @@ if (view === 'chat' && activeContact) {
           allContacts={contacts} // 传所有联系人过去，为了做记忆挂载！
           setContacts={setContacts}
           globalSettings={globalSettings}
+          worldBooks={worldBooks}
+          setWorldBooks={setWorldBooks}
           onExit={() => {
              setView('list'); 
              setActiveContactId(null);
@@ -11323,7 +11324,7 @@ const isLoverInvitation = msg.content.includes('[LoverInvitation]') || msg.conte
          // ★★★ 必须确保这一行存在！msg_加上时间戳，和上面的代码对应 ★★★
          id={`msg_${msg.timestamp}`} 
         // ★★★ 核心修复：只有最新的一条消息才加动画 (index === arr.length - 1)，旧消息不加！防止加载历史时乱跳 ★★★
-className={`message-wrapper ${msg.role === 'user' ? 'user' : 'ai'} flex gap-3 ${msg.role === 'user' ? 'justify-end' : 'justify-start'} ${index === arr.length - 1 ? 'animate-slideUp' : ''} mb-1`}
+className={`message-wrapper ${msg.role === 'user' ? 'user' : 'ai'} flex gap-3 ${msg.role === 'user' ? 'justify-end' : 'justify-start'} ${index === arr.length - 1 ? 'animate-slideUp' : ''} mb-0`}
          style={{ minHeight: `${currentAvatarSize}px` }} 
        >
 
@@ -11379,13 +11380,13 @@ className={`message-wrapper ${msg.role === 'user' ? 'user' : 'ai'} flex gap-3 ${
                 </div>
               ) : (
                 <div 
-   className={`content rounded-xl leading-relaxed relative break-words whitespace-pre-wrap shadow-sm ` + (!activeContact.customCSS && currentText === '#111827' ? 'border border-gray-200/50' : '')}
+   className={`content rounded-xl leading-snug relative break-words whitespace-pre-wrap shadow-sm ` + (!activeContact.customCSS && currentText === '#111827' ? 'border border-gray-200/50' : '')}
    style={{
        backgroundColor: !activeContact.customCSS ? currentBg : undefined,
        color: !activeContact.customCSS ? currentText : undefined,
        fontSize: currentFontSize,
-       paddingTop: currentPaddingY, 
-       paddingBottom: currentPaddingY,
+       paddingTop: '3px', 
+       paddingBottom: '3px',
        paddingLeft: currentPaddingX,
        paddingRight: currentPaddingX,
        borderTopRightRadius: (msg.role === 'user' && !isConsecutive) ? '2px' : '16px',
