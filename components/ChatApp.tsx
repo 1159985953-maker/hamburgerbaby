@@ -1864,7 +1864,10 @@ const PersonaPanel = ({
   setMemoryTab,
   sampleText,
   setSampleText,
-  onForceUpdate // <--- 加在这里！
+  onForceUpdate, // <--- 加在这里！
+   isAnalyzing,      // <--- ★ 新增这一行
+  setIsAnalyzing,   // <--- ★ 新增这一行
+  setLoadingText   
 }: any) => {
   // ==================== [状态修复] 把多选相关的状态放回这里！ ====================
   const [isMultiSelect, setIsMultiSelect] = useState(false);
@@ -4461,7 +4464,7 @@ const scheduleProactiveMessage = async (contact: Contact) => {
             
             // 🎲 随机判定：90% 的概率直接拦截（不调 API），10% 的概率 AI 诈尸（或者是被你吵醒）
             // 你可以调整这个 0.9，越高越省钱，AI 睡得越死
-            if (Math.random() < 0.9) {
+            if (Math.random() < 0.8) {
                 console.log("🛑 DND 生效：拦截 API 请求，AI 正在休息。");
                 
                 // 模拟一个极其短暂的延迟，然后直接显示“未送达/离线”状态
@@ -5894,65 +5897,69 @@ try {
     if (extractedThought) {
       console.log("【🧠 AI内心戏】", extractedThought)
 
-// 在 handleAiReplyTrigger 内部, 找到 (A) [读心术模块]
-// 用下面的代码替换掉 if (extractedThought.new_agreement ...) { ... } 整个代码块
 
-// 【ChatApp.tsx 修复：约定系统防疯狗复读版】
+// 【ChatApp.tsx 修复：约定系统 V4.0 - 智能过滤 & 关键词查重版】
 if (extractedThought.new_agreement && Object.keys(extractedThought.new_agreement).length > 0) {
   const newAgreementData = extractedThought.new_agreement;
-  const newContent = newAgreementData.content || "新的约定";
-  
-  // =========================================================
-  // ★★★ 智能拦截：检查是否已经有相似的约定了 ★★★
-  // =========================================================
-  const existingAgreements = activeContact.agreements || [];
-  
-  // 检查逻辑：如果现有约定里，有任何一条的内容包含了新的内容，或者被新的内容包含，就算重复！
-  const isDuplicate = existingAgreements.some((a: any) => {
-      // 1. 只拦截 AI 提出的（用户的可能真的是想吃两顿饭）
-      if (a.actor !== 'ai') return false; 
-      
-      // 2. 状态检查：只有“进行中(pending)”的才拦截。如果上次的已经完成了，这次可以再约。
-      if (a.status !== 'pending') return false;
+  const newContent = newAgreementData.content || "";
 
-      // 3. 文字相似度暴力检测 (防止 "去听歌" 和 "见面去听歌" 被当成两个)
-      const oldTxt = a.content.replace(/[^a-zA-Z\u4e00-\u9fa5]/g, ""); // 去掉标点
-      const newTxt = newContent.replace(/[^a-zA-Z\u4e00-\u9fa5]/g, "");
-      return oldTxt.includes(newTxt) || newTxt.includes(oldTxt);
-  });
-
-  if (isDuplicate) {
-      console.log(`[约定系统] 拦截到重复约定: "${newContent}"，已忽略。`);
-      // 直接 return，不保存，不发通知，当做无事发生
+  // ★ 核心修复 1：建立“无用约定”黑名单 ★
+  // AI将不会记录任何包含这些词的约定
+  const trivialPhrases = ["梦里见", "晚安", "睡觉", "休息", "回头聊", "下次说"];
+  if (!newContent || trivialPhrases.some(phrase => newContent.includes(phrase))) {
+      console.log(`[约定系统] 拦截到无用约定: "${newContent}"，已忽略。`);
+      // 直接跳过，不执行任何操作
   } else {
-      // --- 只有不重复的，才继续往下执行保存 ---
-      console.log("【约定系统 V3.0】AI 识别到一个新约定:", newAgreementData);
-      
-      const triggerTime = interpretRelativeTime(
-          newAgreementData.trigger?.relative_time,
-          newAgreementData.trigger?.original_text
-      );
-
-      const newAgreement: Agreement = {
-        id: `agr_${Date.now()}`,
-        content: newContent,
-        // 修正 AI 视角
-        actor: newContent.includes('我') && newAgreementData.actor !== 'user' ? 'ai' : newAgreementData.actor || 'user', 
-        status: 'pending',
-        importance: newAgreementData.importance || 5,
-        trigger: {
-            type: "time", 
-            value: triggerTime, 
-            original_text: newAgreementData.trigger?.original_text || ""
-        },
-        created_at: Date.now(),
-        termType: newAgreementData.termType || 'short' 
+      // ★ 核心修复 2：升级查重逻辑为“关键词查重” ★
+      const getKeywords = (text: string) => {
+          // 简单地提取名词和动词，去掉虚词
+          return text.replace(/的|了|啊|我们|一起|去|在|要|就|再/g, '').match(/[\u4e00-\u9fa5a-zA-Z]+/g) || [];
       };
+      const newKeywords = new Set(getKeywords(newContent));
 
-      // 存入数据库
-      setContacts(prev => prev.map(c => c.id === activeContact.id ? { ...c, agreements: [...(c.agreements || []), newAgreement] } : c));
+      const existingAgreements = activeContact.agreements || [];
+      const isDuplicate = existingAgreements.some((a: any) => {
+          if (a.actor !== 'ai' || a.status !== 'pending') return false;
+          
+          const oldKeywords = new Set(getKeywords(a.content));
+          // 如果关键词集合完全相同，就判定为重复
+          if (newKeywords.size === oldKeywords.size && [...newKeywords].every(keyword => oldKeywords.has(keyword))) {
+              return true;
+          }
+          return false;
+      });
+
+      if (isDuplicate) {
+          console.log(`[约定系统] 拦截到关键词重复的约定: "${newContent}"，已忽略。`);
+      } else {
+          // --- 只有通过了所有检查的，才是有效约定 ---
+          console.log("【约定系统 V4.0】AI 识别到一个有效新约定:", newAgreementData);
+          
+          const triggerTime = interpretRelativeTime(
+              newAgreementData.trigger?.relative_time,
+              newAgreementData.trigger?.original_text
+          );
+
+          const newAgreement: Agreement = {
+            id: `agr_${Date.now()}`,
+            content: newContent,
+            actor: newContent.includes('我') && newAgreementData.actor !== 'user' ? 'ai' : newAgreementData.actor || 'user', 
+            status: 'pending',
+            importance: newAgreementData.importance || 5,
+            trigger: {
+                type: "time", 
+                value: triggerTime, 
+                original_text: newAgreementData.trigger?.original_text || ""
+            },
+            created_at: Date.now(),
+            termType: newAgreementData.termType || 'short' 
+          };
+
+          setContacts(prev => prev.map(c => c.id === activeContact.id ? { ...c, agreements: [...(c.agreements || []), newAgreement] } : c));
+      }
   }
 }
+
 
 
 
@@ -6407,18 +6414,7 @@ if (extractedThought.new_agreement && Object.keys(extractedThought.new_agreement
         parts = [{ type: 'text', content: "...", thought_chain: null }];
     }
 
-    // 2. 动态打字延迟
-    let typingDelay = 800 + (maskingLevel * 40) + (Math.random() * 500);
-    const totalLength = parts.reduce((acc, p) => acc + p.content.length, 0);
-    typingDelay += Math.min(2000, totalLength * 50);
-    const deliberateDelay = extractedThought?.deliberate_delay_ms || 0;
-    const totalDelay = typingDelay + deliberateDelay;
-
-    if (deliberateDelay > 0) console.log(`[⏱️] AI决定晾你 ${deliberateDelay / 1000} 秒...`);
-    
-    await new Promise(resolve => setTimeout(resolve, totalDelay));
-
-
+   
     
 
 // [修复代码] 温柔分句 V9.6 (彻底杜绝语音/伪图拆分)
@@ -11580,6 +11576,9 @@ style={{ paddingBottom: '12px' }}  // 只留一点内间距，让输入框不紧
 
 {showPersonaPanel && activeContact && (
        <PersonaPanel
+        isAnalyzing={isAnalyzing}           // <--- ★ 新增这一行
+                setIsAnalyzing={setIsAnalyzing}       // <--- ★ 新增这一行
+                setLoadingText={setLoadingText}    
                 contact={activeContact}
                 globalSettings={globalSettings}
                 setContacts={setContacts}
