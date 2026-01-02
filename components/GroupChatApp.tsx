@@ -308,78 +308,6 @@ const getEnergyInstruction = (mood: CharacterMood | undefined): string => {
 };
 
 
-// 动态人格搅拌机
-const getDynamicStyleInstruction = (contact: Contact): string => {
-  const big5 = contact.hef?.INDIVIDUAL_VARIATION?.personality_big5 || { openness: 5, conscientiousness: 5, extraversion: 5, agreeableness: 5, neuroticism: 5 };
-  const romance = contact.affectionScore || 50;
-  const friendship = contact.friendshipScore || 50;
-  const energy = contact.mood?.energy?.current || 80;
-  
-  let traits: string[] = [];
-  let speechStyle: string[] = [];
-
-  // --- A. 说话节奏 (由 外向性 + 神经质 + 精力 决定) ---
-  if (energy < 30) {
-      traits.push("💤 状态: 极度疲惫，不想打字，回复极短，甚至可能只回表情包。");
-  } else if (big5.extraversion > 7) {
-      speechStyle.push("🗣️ 语速: 很快，喜欢连发多条消息，单条消息字数偏多。");
-      speechStyle.push("😄 语气: 充满活力，甚至有点聒噪。");
-  } else if (big5.extraversion < 4) {
-      speechStyle.push("🤐 语速: 慢，被动回应。除非聊到感兴趣的话题，否则不要长篇大论。");
-      speechStyle.push("😐 语气: 收敛，冷静。");
-  } else {
-      // 中间态 (4-7): 看神经质
-      if (big5.neuroticism > 7) {
-          traits.push("🌊 状态: 情绪化。心情好时话多，心情不好时玩消失。");
-      } else {
-          traits.push("🙂 状态: 随和，配合对方的节奏。");
-      }
-  }
-
-  // --- B. 攻击性与防御 (由 宜人性 + 神经质 决定) ---
-  if (big5.agreeableness < 3) {
-      traits.push("🔪 态度: 刻薄、以自我为中心。如果用户观点不合，直接怼回去。");
-      traits.push("🚫 雷区: 极度讨厌被教导或被要求。");
-  } else if (big5.agreeableness > 8) {
-      traits.push("👼 态度: 极度包容，即使被冒犯也会先反思自己，或者是温和地化解。");
-      traits.push("💗 习惯: 喜欢夸奖用户，给予情绪价值。");
-  } else {
-      // 中间态: 看关系
-      if (friendship < 30 && romance < 30) {
-          traits.push("🛡️ 态度: 有礼貌但有距离感，不轻易交心。");
-      } else {
-          traits.push("🤝 态度: 真诚，像正常朋友一样开玩笑。");
-      }
-  }
-
-  // --- C. 标点与表情习惯 (由 尽责性 + 开放性 决定) - 这才是“活人感”的关键！ ---
-  if (big5.conscientiousness > 8) {
-      speechStyle.push("📝 标点: 严格使用标点符号，句号结尾。");
-      speechStyle.push("🧐 逻辑: 条理清晰，不乱用网络用语。");
-  } else if (big5.conscientiousness < 3) {
-      speechStyle.push("👻 标点: 几乎不用标点，用空格或换行代替。");
-      speechStyle.push("🤪 习惯: 经常打错字(模拟)，或者思维跳跃。");
-  } else {
-      speechStyle.push("💬 标点: 只有长句才用标点，短句随意。");
-  }
-
-  // --- D. 情感滤镜 (好感度修正) ---
-  // 高好感会冲淡低宜人性的毒舌，或者让高神经质变得更敏感
-  if (romance > 80) {
-      if (big5.agreeableness < 4) traits.push("💘 特殊: 虽然性格恶劣，但对这个人例外(傲娇/护短)。");
-      if (big5.neuroticism > 7) traits.push("🥺 特殊: 患得患失，极度在意对方回复的速度和语气，容易吃醋。");
-      speechStyle.push("🥰 语气: 明显变软，或者变得粘人。");
-  } else if (friendship > 80) {
-      traits.push("🍻 关系: 铁哥们。可以毫无顾忌地吐槽对方，不用端着。");
-  }
-
-  // --- E. 组合生成指令 ---
-  return `
-【🎭 动态人格面具】
-内在心理: ${traits.join(" ")}
-说话风格: ${speechStyle.join(" ")}
-  `.trim();
-};
 
 
 // 暴力对话模式控制器
@@ -420,77 +348,6 @@ const getModeInstruction = (mode: string = 'normal'): string => {
 
 
 
-// ==================== 💎 [V3.0 渐变色版] 性格数值翻译官 ====================
-// 将冰冷的 Big5 数字，翻译成 AI 能深刻理解的、有力量的性格标签
-const getPersonalityDescription = (big5: any): string => {
-    if (!big5) return "";
-
-    // 这是一个辅助函数，它会根据一个数值（0-10）返回一个描述
-    // 比如：输入 2.5，它会返回一个偏向“低分描述”的词
-    const getTraitDescription = (
-        value: number, 
-        lowDesc: string,    // 0-3 分的核心描述
-        midDesc: string,    // 4-7 分的核心描述
-        highDesc: string    // 8-10 分的核心描述
-    ): string => {
-        // --- 第一步：确定“基础性格” ---
-        let baseDescription = midDesc;
-        if (value >= 7.5) baseDescription = highDesc;
-        else if (value <= 3.5) baseDescription = lowDesc;
-
-        // --- 第二步：添加“倾向性”形容词 (这才是灵魂！) ---
-        let modifier = "";
-        
-        // 7.4 ~ 6.0: 属于中间性格，但明显偏向“高分”
-        if (value >= 6.0 && value < 7.5) modifier = "比较";
-        
-        // 5.9 ~ 4.1: 真正的中间地带
-        else if (value >= 4.1 && value < 6.0) modifier = "总体上";
-        
-        // 4.0 ~ 2.6: 属于中间性格，但明显偏向“低分”
-        else if (value > 3.5 && value < 4.1) modifier = "略微有些";
-
-        return modifier + baseDescription;
-    };
-
-    const descriptions: string[] = [];
-    
-    // 为每个维度定义好“高、中、低”三个描述
-    descriptions.push("开放性: " + getTraitDescription(big5.openness, 
-        "思想传统，相信眼见为实", 
-        "心态开放，能接受新事物", 
-        "充满好奇心与创造力，甚至有些天马行空"
-    ));
-
-    descriptions.push("尽责性: " + getTraitDescription(big5.conscientiousness, 
-        "随性散漫，不喜欢被计划束缚", 
-        "有责任心，能把握好分寸", 
-        "自律和严谨，做事井井有条"
-    ));
-
-    descriptions.push("外向性: " + getTraitDescription(big5.extraversion, 
-        "内向，享受独处，社交会消耗精力", 
-        "是中间性格（慢热），在熟悉的人面前更放得开", 
-        "外向，在人群中如鱼得水，是天生的焦点"
-    ));
-
-    descriptions.push("宜人性: " + getTraitDescription(big5.agreeableness, 
-        "有很强的个人主见，甚至有些尖锐", 
-        "友善且有底线，懂得合作与尊重", 
-        "善良温柔，共情能力极强"
-    ));
-
-    descriptions.push("敏感度: " + getTraitDescription(big5.neuroticism, 
-        "神经大条，内心强大，不怎么在乎外界评价", 
-        "情绪总体稳定，但偶尔也会被特定事情影响", 
-        "内心敏感细腻，很容易共情或感到焦虑"
-    ));
-    
-    if (descriptions.length > 0) {
-        return `\n# 💎 [性格速写板]\n你的核心性格由以下几点构成：\n- ${descriptions.join("\n- ")}\n`;
-    }
-    return "";
-};
 
 
 
@@ -4347,15 +4204,10 @@ ${systemInstruction}
 
     
 
-// ★★★ 补上这一行！没有它，下面就会报错！ ★★★
-    const dynamicStyle = getDynamicStyleInstruction(activeContact);
-
 // 2. ★★★ 计算模式指令 (用户强制覆盖) ★★★
     const modeInstruction = getModeInstruction(activeContact.dialogueMode);
 
 
-
-const personalityDescription = getPersonalityDescription(activeContact.hef?.INDIVIDUAL_VARIATION?.personality_big5 || {});
 
 
 
@@ -5069,7 +4921,7 @@ ${interactionGuide}
 
   // 1. 为每个成员生成包含【语言铁律】的独立指令
   const memberInstructions = fullMembersData.map(member => {
-    const dynamicStyle = getDynamicStyleInstruction(member);
+ 
     const modeInstruction = getModeInstruction(member.dialogueMode);
 
     return `
@@ -5083,9 +4935,7 @@ ${interactionGuide}
   
 - **💬 对话模式**: 【${member.dialogueMode || 'normal'} 模式】
   ${modeInstruction}
-  
-- **🎭 动态人格面具 (说话风格)**:
-${dynamicStyle}
+
 `;
   }).join('\n\n----------------\n\n');
 

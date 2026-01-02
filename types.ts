@@ -286,6 +286,7 @@ export interface PhotoAlbum {
 
 
 export interface Contact {
+  coreTraits?: string[];
   photoAlbums?: PhotoAlbum[]; // 📸 核心新增：相册柜
   garden?: { seed: string; level: number; exp: number; lastWaterDate?: string; lastFertilizeDate?: string; flowerHistory?: { role: 'user' | 'assistant'; content: string; timestamp: number }[]; lastShadowAction?: string; aiWateredToday?: boolean; };
   userTags: UserTag[];

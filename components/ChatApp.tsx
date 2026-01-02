@@ -348,78 +348,6 @@ const getEnergyInstruction = (mood: CharacterMood | undefined): string => {
 };
 
 
-// 动态人格搅拌机
-const getDynamicStyleInstruction = (contact: Contact): string => {
-  const big5 = contact.hef?.INDIVIDUAL_VARIATION?.personality_big5 || { openness: 5, conscientiousness: 5, extraversion: 5, agreeableness: 5, neuroticism: 5 };
-  const romance = contact.affectionScore || 50;
-  const friendship = contact.friendshipScore || 50;
-  const energy = contact.mood?.energy?.current || 80;
-  
-  let traits: string[] = [];
-  let speechStyle: string[] = [];
-
-  // --- A. 说话节奏 (由 外向性 + 神经质 + 精力 决定) ---
-  if (energy < 30) {
-      traits.push("💤 状态: 极度疲惫，不想打字，回复极短，甚至可能只回表情包。");
-  } else if (big5.extraversion > 7) {
-      speechStyle.push("🗣️ 语速: 很快，喜欢连发多条消息，单条消息字数偏多。");
-      speechStyle.push("😄 语气: 充满活力，甚至有点聒噪。");
-  } else if (big5.extraversion < 4) {
-      speechStyle.push("🤐 语速: 慢，被动回应。除非聊到感兴趣的话题，否则不要长篇大论。");
-      speechStyle.push("😐 语气: 收敛，冷静。");
-  } else {
-      // 中间态 (4-7): 看神经质
-      if (big5.neuroticism > 7) {
-          traits.push("🌊 状态: 情绪化。心情好时话多，心情不好时玩消失。");
-      } else {
-          traits.push("🙂 状态: 随和，配合对方的节奏。");
-      }
-  }
-
-  // --- B. 攻击性与防御 (由 宜人性 + 神经质 决定) ---
-  if (big5.agreeableness < 3) {
-      traits.push("🔪 态度: 刻薄、以自我为中心。如果用户观点不合，直接怼回去。");
-      traits.push("🚫 雷区: 极度讨厌被教导或被要求。");
-  } else if (big5.agreeableness > 8) {
-      traits.push("👼 态度: 极度包容，即使被冒犯也会先反思自己，或者是温和地化解。");
-      traits.push("💗 习惯: 喜欢夸奖用户，给予情绪价值。");
-  } else {
-      // 中间态: 看关系
-      if (friendship < 30 && romance < 30) {
-          traits.push("🛡️ 态度: 有礼貌但有距离感，不轻易交心。");
-      } else {
-          traits.push("🤝 态度: 真诚，像正常朋友一样开玩笑。");
-      }
-  }
-
-  // --- C. 标点与表情习惯 (由 尽责性 + 开放性 决定) - 这才是“活人感”的关键！ ---
-  if (big5.conscientiousness > 8) {
-      speechStyle.push("📝 标点: 严格使用标点符号，句号结尾。");
-      speechStyle.push("🧐 逻辑: 条理清晰，不乱用网络用语。");
-  } else if (big5.conscientiousness < 3) {
-      speechStyle.push("👻 标点: 几乎不用标点，用空格或换行代替。");
-      speechStyle.push("🤪 习惯: 经常打错字(模拟)，或者思维跳跃。");
-  } else {
-      speechStyle.push("💬 标点: 只有长句才用标点，短句随意。");
-  }
-
-  // --- D. 情感滤镜 (好感度修正) ---
-  // 高好感会冲淡低宜人性的毒舌，或者让高神经质变得更敏感
-  if (romance > 80) {
-      if (big5.agreeableness < 4) traits.push("💘 特殊: 虽然性格恶劣，但对这个人例外(傲娇/护短)。");
-      if (big5.neuroticism > 7) traits.push("🥺 特殊: 患得患失，极度在意对方回复的速度和语气，容易吃醋。");
-      speechStyle.push("🥰 语气: 明显变软，或者变得粘人。");
-  } else if (friendship > 80) {
-      traits.push("🍻 关系: 铁哥们。可以毫无顾忌地吐槽对方，不用端着。");
-  }
-
-  // --- E. 组合生成指令 ---
-  return `
-【🎭 动态人格面具】
-内在心理: ${traits.join(" ")}
-说话风格: ${speechStyle.join(" ")}
-  `.trim();
-};
 
 
 // 暴力对话模式控制器
@@ -458,79 +386,6 @@ const getModeInstruction = (mode: string = 'normal'): string => {
 };
 
 
-
-
-// ==================== 💎 [V3.0 渐变色版] 性格数值翻译官 ====================
-// 将冰冷的 Big5 数字，翻译成 AI 能深刻理解的、有力量的性格标签
-const getPersonalityDescription = (big5: any): string => {
-    if (!big5) return "";
-
-    // 这是一个辅助函数，它会根据一个数值（0-10）返回一个描述
-    // 比如：输入 2.5，它会返回一个偏向“低分描述”的词
-    const getTraitDescription = (
-        value: number, 
-        lowDesc: string,    // 0-3 分的核心描述
-        midDesc: string,    // 4-7 分的核心描述
-        highDesc: string    // 8-10 分的核心描述
-    ): string => {
-        // --- 第一步：确定“基础性格” ---
-        let baseDescription = midDesc;
-        if (value >= 7.5) baseDescription = highDesc;
-        else if (value <= 3.5) baseDescription = lowDesc;
-
-        // --- 第二步：添加“倾向性”形容词 (这才是灵魂！) ---
-        let modifier = "";
-        
-        // 7.4 ~ 6.0: 属于中间性格，但明显偏向“高分”
-        if (value >= 6.0 && value < 7.5) modifier = "比较";
-        
-        // 5.9 ~ 4.1: 真正的中间地带
-        else if (value >= 4.1 && value < 6.0) modifier = "总体上";
-        
-        // 4.0 ~ 2.6: 属于中间性格，但明显偏向“低分”
-        else if (value > 3.5 && value < 4.1) modifier = "略微有些";
-
-        return modifier + baseDescription;
-    };
-
-    const descriptions: string[] = [];
-    
-    // 为每个维度定义好“高、中、低”三个描述
-    descriptions.push("开放性: " + getTraitDescription(big5.openness, 
-        "思想传统，相信眼见为实", 
-        "心态开放，能接受新事物", 
-        "充满好奇心与创造力，甚至有些天马行空"
-    ));
-
-    descriptions.push("尽责性: " + getTraitDescription(big5.conscientiousness, 
-        "随性散漫，不喜欢被计划束缚", 
-        "有责任心，能把握好分寸", 
-        "自律和严谨，做事井井有条"
-    ));
-
-    descriptions.push("外向性: " + getTraitDescription(big5.extraversion, 
-        "内向，享受独处，社交会消耗精力", 
-        "是中间性格（慢热），在熟悉的人面前更放得开", 
-        "外向，在人群中如鱼得水，是天生的焦点"
-    ));
-
-    descriptions.push("宜人性: " + getTraitDescription(big5.agreeableness, 
-        "有很强的个人主见，甚至有些尖锐", 
-        "友善且有底线，懂得合作与尊重", 
-        "善良温柔，共情能力极强"
-    ));
-
-    descriptions.push("敏感度: " + getTraitDescription(big5.neuroticism, 
-        "神经大条，内心强大，不怎么在乎外界评价", 
-        "情绪总体稳定，但偶尔也会被特定事情影响", 
-        "内心敏感细腻，很容易共情或感到焦虑"
-    ));
-    
-    if (descriptions.length > 0) {
-        return `\n# 💎 [性格速写板]\n你的核心性格由以下几点构成：\n- ${descriptions.join("\n- ")}\n`;
-    }
-    return "";
-};
 
 
 
@@ -2242,45 +2097,58 @@ const PersonaPanel = ({
 
 
 
-  // ==================== [组件修复] 把雷达图函数放回这里！ ====================
+  // ==================== [组件改造] 动态情绪雷达图 ====================
   const renderRadar = () => {
+    // ★ 核心修改 1：数据源从 big5 换成 hef 里的情绪值
     const hef = contact?.hef || {};
-    const iv = hef.INDIVIDUAL_VARIATION || {};
-    const big5 = iv.personality_big5 || { openness: 5, conscientiousness: 5, extraversion: 5, agreeableness: 5, neuroticism: 5 };
+    const joy = hef.joy || 50;
+    const trust = hef.trust || 50;
+    const fear = hef.fear || 0;
+    const sadness = hef.sadness || 0;
+    const anger = hef.anger || 0;
+    
+    // ★ 核心修改 2：把数值从 0-100 范围转换到 0-10 范围，以适应雷达图
+    const scale = (val: number) => (val / 100) * 10;
 
     const getPoint = (value: number, angle: number) => {
-      const val = Math.max(0, Math.min(10, value || 5));
+      const val = Math.max(0, Math.min(10, value || 0)); // 安全处理
       const radius = (val / 10) * 40;
       const x = 50 + radius * Math.cos((angle - 90) * Math.PI / 180);
       const y = 50 + radius * Math.sin((angle - 90) * Math.PI / 180);
       return `${x},${y}`;
     };
 
-    const p1 = getPoint(big5.openness, 0);
-    const p2 = getPoint(big5.extraversion, 72);
-    const p3 = getPoint(big5.agreeableness, 144);
-    const p4 = getPoint(big5.neuroticism, 216);
-    const p5 = getPoint(big5.conscientiousness, 288);
+    // ★ 核心修改 3：每个点对应一个新的情绪维度
+    const p1 = getPoint(scale(joy), 0);       // 顶角 -> 喜
+    const p2 = getPoint(scale(trust), 72);     // 右上 -> 信
+    const p3 = getPoint(scale(fear), 144);     // 右下 -> 惧
+    const p4 = getPoint(scale(sadness), 216);  // 左下 -> 哀
+    const p5 = getPoint(scale(anger), 288);    // 左上 -> 怒
 
     return (
       <div className="relative w-full h-64 flex items-center justify-center my-2 select-none">
-        <div className="absolute top-4 left-1/2 -translate-x-1/2 flex flex-col items-center"><span className="text-[10px] font-bold text-gray-500 bg-white/80 px-1 rounded backdrop-blur">开放性</span><span className="text-[9px] text-blue-400 font-mono">{big5.openness}</span></div>
-        <div className="absolute top-16 right-6 flex flex-col items-center"><span className="text-[10px] font-bold text-gray-500 bg-white/80 px-1 rounded backdrop-blur">外向性</span><span className="text-[9px] text-blue-400 font-mono">{big5.extraversion}</span></div>
-        <div className="absolute bottom-8 right-10 flex flex-col items-center"><span className="text-[10px] font-bold text-gray-500 bg-white/80 px-1 rounded backdrop-blur">宜人性</span><span className="text-[9px] text-blue-400 font-mono">{big5.agreeableness}</span></div>
-        <div className="absolute bottom-8 left-10 flex flex-col items-center"><span className="text-[10px] font-bold text-gray-500 bg-white/80 px-1 rounded backdrop-blur">敏感度</span><span className="text-[9px] text-blue-400 font-mono">{big5.neuroticism}</span></div>
-        <div className="absolute top-16 left-6 flex flex-col items-center"><span className="text-[10px] font-bold text-gray-500 bg-white/80 px-1 rounded backdrop-blur">尽责性</span><span className="text-[9px] text-blue-400 font-mono">{big5.conscientiousness}</span></div>
+        {/* ★ 核心修改 4：更新所有标签和数值显示 */}
+        <div className="absolute top-4 left-1/2 -translate-x-1/2 flex flex-col items-center"><span className="text-[10px] font-bold text-gray-500 bg-white/80 px-1 rounded backdrop-blur">喜悦</span><span className="text-[9px] text-yellow-500 font-mono">{joy.toFixed(0)}</span></div>
+        <div className="absolute top-16 right-6 flex flex-col items-center"><span className="text-[10px] font-bold text-gray-500 bg-white/80 px-1 rounded backdrop-blur">信任</span><span className="text-[9px] text-green-500 font-mono">{trust.toFixed(0)}</span></div>
+        <div className="absolute bottom-8 right-10 flex flex-col items-center"><span className="text-[10px] font-bold text-gray-500 bg-white/80 px-1 rounded backdrop-blur">恐惧</span><span className="text-[9px] text-purple-500 font-mono">{fear.toFixed(0)}</span></div>
+        <div className="absolute bottom-8 left-10 flex flex-col items-center"><span className="text-[10px] font-bold text-gray-500 bg-white/80 px-1 rounded backdrop-blur">悲伤</span><span className="text-[9px] text-blue-500 font-mono">{sadness.toFixed(0)}</span></div>
+        <div className="absolute top-16 left-6 flex flex-col items-center"><span className="text-[10px] font-bold text-gray-500 bg-white/80 px-1 rounded backdrop-blur">愤怒</span><span className="text-[9px] text-red-500 font-mono">{anger.toFixed(0)}</span></div>
         <div className="w-40 h-40 relative">
           <svg className="absolute inset-0 w-full h-full overflow-visible" viewBox="0 0 100 100">
              <polygon points="50,10 88,38 74,82 26,82 12,38" fill="#f3f4f6" stroke="#e5e7eb" strokeWidth="1" />
              <polygon points="50,30 69,44 62,66 38,66 31,44" fill="none" stroke="#e5e7eb" strokeWidth="1" strokeDasharray="2 2" />
              <line x1="50" y1="50" x2="50" y2="10" stroke="#e5e7eb" strokeWidth="0.5" /><line x1="50" y1="50" x2="88" y2="38" stroke="#e5e7eb" strokeWidth="0.5" /><line x1="50" y1="50" x2="74" y2="82" stroke="#e5e7eb" strokeWidth="0.5" /><line x1="50" y1="50" x2="26" y2="82" stroke="#e5e7eb" strokeWidth="0.5" /><line x1="50" y1="50" x2="12" y2="38" stroke="#e5e7eb" strokeWidth="0.5" />
-             <polygon points={`${p1} ${p2} ${p3} ${p4} ${p5}`} fill="rgba(59, 130, 246, 0.4)" stroke="#3b82f6" strokeWidth="2" className="drop-shadow-sm transition-all duration-700 ease-out" />
-             <circle cx={p1.split(',')[0]} cy={p1.split(',')[1]} r="1.5" fill="#2563eb" /><circle cx={p2.split(',')[0]} cy={p2.split(',')[1]} r="1.5" fill="#2563eb" /><circle cx={p3.split(',')[0]} cy={p3.split(',')[1]} r="1.5" fill="#2563eb" /><circle cx={p4.split(',')[0]} cy={p4.split(',')[1]} r="1.5" fill="#2563eb" /><circle cx={p5.split(',')[0]} cy={p5.split(',')[1]} r="1.5" fill="#2563eb" />
+             <polygon points={`${p1} ${p2} ${p3} ${p4} ${p5}`} fill="rgba(251, 191, 36, 0.4)" stroke="#f59e0b" strokeWidth="2" className="drop-shadow-sm transition-all duration-700 ease-out" />
+             <circle cx={p1.split(',')[0]} cy={p1.split(',')[1]} r="1.5" fill="#d97706" /><circle cx={p2.split(',')[0]} cy={p2.split(',')[1]} r="1.5" fill="#d97706" /><circle cx={p3.split(',')[0]} cy={p3.split(',')[1]} r="1.5" fill="#d97706" /><circle cx={p4.split(',')[0]} cy={p4.split(',')[1]} r="1.5" fill="#d97706" /><circle cx={p5.split(',')[0]} cy={p5.split(',')[1]} r="1.5" fill="#d97706" />
           </svg>
         </div>
+        <div className="absolute bottom-1 right-2 text-[9px] text-gray-300 font-mono">EMOTION-METRICS</div>
       </div>
     );
   };
+// ############################################################################
+// ★★★【代码复制到这里结束】★★★
+// ############################################################################
   // ==================== [修复结束] ====================
 
   // --- 辅助函数也放回来 ---
@@ -2516,6 +2384,21 @@ ${memoryContent}
                 </span>
               </div>
 
+
+
+    
+                 {/* 右边：雷达图容器 (保持不变) */}
+                 <div className="col-span-2 bg-white border border-gray-100 rounded-xl p-2 relative overflow-hidden">
+                    <div className="scale-75 -mt-6 -mb-6">
+                        {renderRadar()}
+                    </div>
+                    <div className="absolute bottom-1 right-2 text-[9px] text-gray-300 font-mono">EMOTION-METRICS</div>
+                 </div>
+
+
+
+
+
               <div className="bg-white border border-gray-100 p-5 rounded-2xl space-y-5 shadow-sm">
                 
                 {/* 2. ⚡ 能量条区域 (保留你的旧功能) */}
@@ -2690,31 +2573,127 @@ ${memoryContent}
                  </div>
               </div>
 
-              {/* 2. 核心数据区：MBTI + 雷达图 */}
-              <div className="grid grid-cols-3 gap-3">
-                 {/* 左边：MBTI 芯片 */}
-                 <div className="col-span-1 bg-gray-50 rounded-xl p-3 border border-gray-100 flex flex-col items-center justify-center">
-                    {(() => {
-                        const { openness: O, conscientiousness: C, extraversion: E, agreeableness: A } = big5;
-                        const mbti = `${E>5?'E':'I'}${O>5?'N':'S'}${A>5?'F':'T'}${C>5?'J':'P'}`;
-                        return (
-                           <>
-                             <span className="text-[9px] font-bold text-gray-400 uppercase">Type</span>
-                             <span className="text-lg font-black text-blue-600 mt-1">{mbti}</span>
-                           </>
-                        );
-                    })()}
+
+
+              {/* 2. 核心数据区：MBTI (可编辑版) + AI核心特征 (带加载状态版) */}
+              <div className="grid grid-cols-1 gap-3">
+                 {/* 上方：MBTI 和 AI分析按钮 */}
+                 <div className="flex gap-3">
+                    <div className="w-1/3 bg-gray-50 rounded-xl p-3 border border-gray-100 flex flex-col items-center justify-center">
+                        <label className="text-[9px] font-bold text-gray-400 uppercase">Type</label>
+                        <input
+                          type="text"
+                          defaultValue={contact.mbtiType || "INFP"}
+                          placeholder="MBTI"
+                          maxLength={4}
+                          onBlur={(e) => {
+                            const newType = e.target.value.toUpperCase();
+                            if (newType !== contact.mbtiType) {
+                              setContacts((prev: any[]) => prev.map((c: any) => 
+                                c.id === contact.id 
+                                ? { ...c, mbtiType: newType } 
+                                : c
+                              ));
+                            }
+                          }}
+                          onKeyDown={(e) => { if (e.key === 'Enter') { (e.target as HTMLInputElement).blur(); } }}
+                          className="w-full bg-transparent text-center text-lg font-black text-blue-600 mt-1 p-1 outline-none focus:ring-1 focus:ring-blue-300 rounded"
+                        />
+                    </div>
+                    <div className="w-2/3 bg-gray-50 rounded-xl p-3 border border-gray-100 flex flex-col items-center justify-center">
+                        <h4 className="text-[10px] font-bold text-gray-400 uppercase">AI Core Trait Analysis</h4>
+                        <p className="text-[9px] text-gray-400 text-center mt-1">分析人设和世界书，生成核心特征</p>
+                        <button
+                            // ★ 核心修改 1：在分析期间禁用按钮
+                            disabled={isAnalyzing}
+                            onClick={async () => {
+                                const persona = contact.persona || "";
+                                const enabledBookNames = contact.enabledWorldBooks || [];
+                                const activeBooks = worldBooks.filter(wb => enabledBookNames.includes(wb.name));
+                                const loreText = activeBooks.map(book => 
+                                    book.entries.map(entry => `- ${entry.keys.join(', ')}: ${entry.content}`).join('\n')
+                                ).join('\n\n');
+
+                                if (persona.length < 10 && loreText.length < 10) {
+                                    return alert("请先填写一些人设或启用世界书再进行分析。");
+                                }
+
+                                const activePreset = globalSettings.apiPresets.find(p => p.id === globalSettings.activePresetId);
+                                if (!activePreset) return alert("请先配置 API！");
+                                
+                                // ★ 核心修改 2：不再用 alert，而是启动加载动画！
+                                setIsAnalyzing(true);
+                                setLoadingText("正在分析人格...");
+
+                                try {
+                                    const prompt = `
+你是一位顶级的角色心理侧写师。请深度分析以下提供的【核心人设】和【世界观设定】，然后提炼出这个角色最核心的 3 到 5 个【人格特质标签】。
+要求:
+1.  高度凝练: 每个标签必须是简短的词语或短语，例如“外冷内热”、“科技宅”、“理想主义者”、“猫奴”、“有点毒舌”。
+2.  深度洞察: 不要只看表面，要结合人设和世界书推断出角色的内在动机和性格。
+3.  严格格式: 你的回复必须且只能是一个纯 JSON 数组，里面只包含字符串。
+格式示例:
+["外冷内热", "科技宅", "理想主义者", "猫奴", "有点毒舌"]
+---
+【核心人设】: ${persona}
+---
+【世界观设定】: ${loreText || "无"}
+---
+现在，请输出你的分析结果。`;
+                                    
+                                    setLoadingText("正在请求AI...");
+                                    const res = await generateResponse([{ role: 'user', content: prompt }], activePreset);
+                                    
+                                    setLoadingText("正在解析结果...");
+                                    const jsonMatch = res.match(/\[[\s\S]*\]/);
+                                    if (jsonMatch) {
+                                        const newTraits = JSON.parse(jsonMatch[0]);
+                                        if (Array.isArray(newTraits)) {
+                                            setContacts(prev => prev.map(c => 
+                                                c.id === contact.id ? { ...c, coreTraits: newTraits } : c
+                                            ));
+                                        } else { throw new Error("AI 返回的不是一个数组"); }
+                                    } else { throw new Error("AI 未能返回有效的JSON格式"); }
+                                } catch (e) {
+                                    alert(`分析失败: ${e.message}`);
+                                } finally {
+                                    // ★ 核心修改 3：无论成功失败，最后都关闭加载动画
+                                    setIsAnalyzing(false);
+                                }
+                            }}
+                            className="mt-2 text-[10px] bg-gradient-to-r from-purple-500 to-blue-500 text-white px-3 py-1.5 rounded-full font-bold shadow hover:opacity-80 transition flex items-center gap-1 disabled:opacity-50"
+                        >
+                            {/* ★ 核心修改 4：根据加载状态显示不同文字 */}
+                            {isAnalyzing ? (
+                                <>
+                                    <span className="animate-spin text-xs">⏳</span>
+                                    <span>分析中...</span>
+                                </>
+                            ) : (
+                                <>
+                                    <span>🔮</span>
+                                    <span>开始分析</span>
+                                </>
+                            )}
+                        </button>
+                    </div>
                  </div>
                  
-                 {/* 右边：雷达图容器 */}
-                 <div className="col-span-2 bg-white border border-gray-100 rounded-xl p-2 relative overflow-hidden">
-                    <div className="scale-75 -mt-6 -mb-6">
-                        {renderRadar()}
+                 {/* 下方：AI核心特征墙 */}
+                 <div className="bg-white border border-gray-100 rounded-xl p-4">
+                    <h4 className="text-[10px] font-bold text-gray-400 uppercase mb-3">AI Analyzed Core Traits</h4>
+                    <div className="flex flex-wrap gap-2 min-h-[50px]">
+                        {(contact.coreTraits || []).map((trait: string, index: number) => (
+                            <div key={index} className="bg-blue-50 text-blue-700 text-xs font-semibold px-3 py-1.5 rounded-full">
+                                {trait}
+                            </div>
+                        ))}
+                        {(!contact.coreTraits || contact.coreTraits.length === 0) && (
+                            <p className="text-xs text-gray-300 italic p-2">点击“开始分析”来生成角色的核心特征...</p>
+                        )}
                     </div>
-                    <div className="absolute bottom-1 right-2 text-[9px] text-gray-300 font-mono">PSYCHO-METRICS</div>
                  </div>
               </div>
-
 
 
 
@@ -4399,45 +4378,34 @@ ${memoryContent}
 
 
 
-  // --- 2.4 主动消息调度 ---
+
+  // --- 2.4 主动消息调度 (V3.0 智能版) ---
 const scheduleProactiveMessage = async (contact: Contact) => {
-    // 0. 全局开关检查
+    // 0. 全局开关检查 (保持不变)
     const config = contact.proactiveConfig || { enabled: false, minGapMinutes: 60, maxDaily: 5 };
     if (!config.enabled) return;
 
-    // 1. 识别是否是“闹钟/约定”唤醒的 (这种必须发，不能跳过！)
     const isAlarmTriggered = contact.pendingProactive && !!contact.dueAgreementId;
     const today = new Date().toISOString().slice(0, 10);
     const sentToday = contact.proactiveLastSent?.[today] || 0;
     
-    // 2. 每日上限检查 (闹钟触发的不占额度，必须发)
-    if (!isAlarmTriggered && sentToday >= config.maxDaily) {
-        return;
-    }
-
-    // =================================================
-    // ★★★ 核心修复：智能动机判定 (在弹窗之前先判定！) ★★★
-    // =================================================
+    if (!isAlarmTriggered && sentToday >= config.maxDaily) return;
+    
+    // 1. 智能动机判定 (保持不变)
     if (!isAlarmTriggered) {
-        // A. 基础概率
         let speakProbability = 0.35; 
-        // B. 关系加成
         const affectionScore = contact.affectionScore || 50;
         const affectionBonus = Math.max(-0.2, (affectionScore / 100) * 0.3);
         speakProbability += affectionBonus;
-
-        // C. 掷骰子
         const diceRoll = Math.random();
         
-        // ❌ 如果骰子没过，直接静默退出！这时候用户什么都不会看到，不会有假弹窗！
         if (diceRoll > speakProbability) {
             console.log(`[主动消息] 😶 ${contact.name} 决定保持沉默 (骰子:${diceRoll.toFixed(2)} > 阈值:${speakProbability.toFixed(2)})`);
             return; 
         }
     }
 
-    // ✅✅✅ 只有代码跑到这里，说明 AI 真的要说话了！ ✅✅✅
-    // 此时再弹窗，就不会是假的了！
+    // 2. 显示思考弹窗 (保持不变)
     setGlobalNotification({
         type: 'proactive_thinking',
         contactId: contact.id,
@@ -4447,161 +4415,37 @@ const scheduleProactiveMessage = async (contact: Contact) => {
         userSignature: globalSettings.userSignature || ""
     });
 
-    console.log(`[ChatApp] 准备生成主动消息: ${contact.name}`);
+    console.log(`[ChatApp V3.0] 准备生成【高质量】主动消息: ${contact.name}`);
 
-    // =================================================
-    // 3. 准备环境数据 (保留你的原逻辑)
-    // =================================================
-    const dueAgreement = contact.agreements?.find(a => a.id === contact.dueAgreementId);
-    const nowTime = new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', hour12: false });
-    const timeContext = `现在的时间是：${nowTime}。请务必根据这个时间点决定你在做什么。`;
-
-    const recentHistory = contact.history.slice(-10).map(m => 
-        `${m.role === 'user' ? 'User' : contact.name}: ${m.content}`
-    ).join('\n');
-    
-    const lastMsg = contact.history[contact.history.length - 1];
-    const minutesSinceLastMsg = lastMsg ? (Date.now() - lastMsg.timestamp) / 60000 : 99999;
-    const isContinuingChat = minutesSinceLastMsg < 60;
-
-    // =================================================
-    // 4. 构建精准指令 (保留你的原逻辑)
-    // =================================================
-    let systemInstruction = "";
-
-    if (dueAgreement) {
-        // --- 情况 A: 约定到期 ---
-        const actor = dueAgreement.actor === 'user' ? '用户' : '你(AI)';
-        systemInstruction = `
-【⚠️ 紧急任务：履行/监督约定】
-约定内容："${dueAgreement.content}"。承诺人：${actor}。
-指令：
-1. 如果是用户的承诺：发消息询问用户是否做到了，或者提醒ta。
-2. 如果是你的承诺：请根据约定内容履行。
-3. 语气要自然，不要像个闹钟。
-`;
-    } else if (isContinuingChat) {
-        // --- 情况 B: 延续话题 ---
-        systemInstruction = `
-【⚠️ 任务：延续当前话题】
-距离上一条消息才过 ${Math.floor(minutesSinceLastMsg)} 分钟。
-指令：不要开启新话题！针对上一条消息补充一句，或追问细节，或者发个表情包。
-`;
-    } else {
-        // --- 情况 C: 发起新话题 ---
-        systemInstruction = `
-【⚠️ 任务：发起新对话】
-${timeContext}
-指令：
-1. 不要总是问“你在干嘛”。
-2. 分享你此时此刻正在做的一件具体的小事。
-3. 或者发一张【FakeImage】给你看到的东西。
-4. 保持简短。
-`;
-    }
-
-    // =================================================
-    // 5. 组装 Prompt (保留你的原逻辑)
-    // =================================================
-    const proactivePrompt = `
-# Roleplay Instructions
-You are "${contact.name}".
-**Persona:** ${contact.persona}
-**Time:** ${nowTime} (Very Important!)
-
-**Recent Chat:**
-${recentHistory}
-
-**Target Instruction:**
-${systemInstruction}
-
-# Output Rules (CRITICAL)
-1. **Separation**: If you want to send multiple messages, use "|||" to separate them.
-2. **Images**: To send an image, use format: \`[FakeImage] description of image\`.
-3. **Language**: Mimic the language style in "Recent Chat". Casual, short.
-4. Output **ONLY** the message content string.
-`;
-
-    let body = "";
-
+    // ★★★ 核心改造：不再构建简单的 Prompt，而是直接调用 handleAiReplyTrigger！ ★★★
     try {
-        const activePreset = globalSettings.apiPresets.find(p => p.id === globalSettings.activePresetId);
-        if (!activePreset) {
-             setGlobalNotification(null); // 如果没配置API，关掉弹窗
-             return;
-        }
+        // 3. 准备一个“虚拟”的聊天记录
+        // 我们在聊天记录的最后，插入一条看不见的“系统指令”，告诉AI现在该你主动说话了。
+        const virtualHistory = [
+            ...contact.history, // 先把所有真实历史记录放进去
+            {
+                id: 'proactive_trigger',
+                role: 'system', // 这是一个系统指令
+                content: `【系统指令：主动行动】现在轮到你了。请根据我们的过往回忆、你的人设、以及当前时间，主动发起一段对话或行动（比如写信）。`,
+                timestamp: Date.now(),
+                type: 'text'
+            } as Message
+        ];
 
-        const generatedBody = await generateResponse([{ role: 'user', content: proactivePrompt }], activePreset);
-        
-        if (generatedBody && generatedBody.trim()) {
-            body = generatedBody.trim().replace(/^["“'‘]|["”'’]$/g, '');
-        } else {
-            setGlobalNotification(null); // 如果生成失败，关掉弹窗
-            return;
-        }
+        // 4. 直接调用我们最强大、最完整的核心回复函数！
+        // 传入虚拟的历史记录，让它基于这个“该你说话了”的指令来生成回复。
+        await handleAiReplyTrigger(virtualHistory);
+
+        // 5. 成功后，关闭思考弹窗
+        // (注意：成功后的新消息通知逻辑已经在 handleAiReplyTrigger 内部处理了)
+        setTimeout(() => setGlobalNotification(null), 5000);
+
     } catch (error) {
-        console.error("主动消息生成失败:", error);
-        setGlobalNotification(null); // 出错关掉弹窗
-        return;
+        console.error("【高质量】主动消息生成失败:", error);
+        setGlobalNotification(null); // 出错也要关掉弹窗
     }
-    
-    if (!body) {
-        setGlobalNotification(null);
-        return;
-    }
-
-    // 6. 切割消息
-    const parts = body.split('|||'); 
-    const newMessages: Message[] = parts.map((part, index) => {
-        const cleanContent = part.trim();
-        return {
-            id: Date.now().toString() + index,
-            role: 'assistant',
-            content: cleanContent, 
-            timestamp: Date.now() + (index * 1000), 
-            type: 'text'
-        };
-    });
-
-    // 7. 更新状态
-    setContacts(prev => prev.map(c => {
-      if (c.id === contact.id) {
-          let updatedAgreements = c.agreements;
-          if (dueAgreement) {
-              updatedAgreements = (c.agreements || []).map(a => 
-                  a.id === dueAgreement.id ? { ...a, status: 'fulfilled' } : a
-              );
-          }
-          const newSentCount = isAlarmTriggered ? sentToday : sentToday + 1;
-
-          return { 
-             ...c, 
-             history: [...c.history, ...newMessages], 
-             pendingProactive: false, 
-             dueAgreementId: undefined, 
-             agreements: updatedAgreements,
-             proactiveLastSent: { ...c.proactiveLastSent, [today]: newSentCount }, 
-             unread: (c.unread || 0) + newMessages.length 
-          };
-      }
-      return c;
-    }));
-
-    // ★★★ 生成成功，把弹窗改成“新消息通知” ★★★
-    // 这样你就知道它是真的发出来了
-    setGlobalNotification({
-        type: 'new_message',
-        contactId: contact.id,
-        name: contact.name,
-        avatar: contact.avatar,
-        content: newMessages[0].content, // 显示第一条内容
-        userName: globalSettings.userName || "User",
-        userSignature: globalSettings.userSignature || ""
-    });
-    
-    // 5秒后自动消失
-    setTimeout(() => setGlobalNotification(null), 5000);
 };
+
 
 
 
@@ -4661,17 +4505,10 @@ ${systemInstruction}
 
 
 
-    
-
-// ★★★ 补上这一行！没有它，下面就会报错！ ★★★
-    const dynamicStyle = getDynamicStyleInstruction(activeContact);
-
 // 2. ★★★ 计算模式指令 (用户强制覆盖) ★★★
     const modeInstruction = getModeInstruction(activeContact.dialogueMode);
 
 
-
-const personalityDescription = getPersonalityDescription(activeContact.hef?.INDIVIDUAL_VARIATION?.personality_big5 || {});
 
 
 
@@ -5413,12 +5250,6 @@ const isFriendGroupMember = globalSettings.friendGroups?.some(group =>
   { "type": "text", "content": "笨蛋，我当然愿意啊！" }
 ]
 
-# 🎭 [动态人格引擎 - 核心指令]
-**你现在的行为必须严格遵守以下【混合风格指令】，这是你当下的人格面具：**
->>>
-${dynamicStyle}
-<<<
-
 
 
 
@@ -5512,14 +5343,6 @@ ${(() => {
 2. **感知变化**：观察标签的时间流。
 3. **当下认知**：列表中**最后**的一个标签，是用户此时此刻对你的核心看法。
 
-# 🧬 性格 DNA (Personality Matrix)
-**当前五维数值:** ${JSON.stringify(activeContact.hef?.INDIVIDUAL_VARIATION?.personality_big5 || {}, null, 2)}
-**【演技指导】**: 你必须100%基于上面的当前五维数值调整风格。
-1. **Openness (开放性)**: 高(>7): 脑洞大; 低(<4): 务实。
-2. **Conscientiousness (尽责性)**: 高(>7): 严谨; 低(<4): 随意。
-3. **Extraversion (外向性)**: 高(>7): 热情; 低(<4): 高冷。
-4. **Agreeableness (宜人性)**: 高(>7): 软萌; 低(<4): 毒舌。
-5. **Neuroticism (敏感度)**: 高(>7): 玻璃心; 低(<4): 钝感。
 
 // 这是一组代码：请用这段【情感刹车系统】替换掉旧的情感规则
 # ❤️【绝对铁律】真实系·情感刹车系统 (Hardcore Slow-Burn)
@@ -9321,61 +9144,6 @@ if (view === 'settings' && activeContact) {
 
 
 
-
-
-
-          {/* ★★★ 五维数值编辑器 (Big 5 Sliders) ★★★ */}
-          <div className="mt-4 bg-gray-50 p-3 rounded-xl border border-gray-100 animate-slideDown">
-            <h4 className="text-[10px] font-bold text-gray-400 uppercase mb-3 flex items-center gap-1">
-              🧬 Personality DNA (0-10)
-            </h4>
-            
-            {[
-              { key: 'openness', label: '开放性 (脑洞/艺术)', left: '保守', right: '探索' },
-              { key: 'conscientiousness', label: '尽责性 (自律/严谨)', left: '随意', right: '严谨' },
-              { key: 'extraversion', label: '外向性 (社交/活力)', left: '社恐', right: '社牛' },
-              { key: 'agreeableness', label: '宜人性 (友善/包容)', left: '毒舌', right: '天使' },
-              { key: 'neuroticism', label: '敏感度 (情绪/焦虑)', left: '钝感', right: '敏感' },
-            ].map((trait) => {
-              // 安全获取当前数值
-              const currentHef = editForm.hef || form.hef || {};
-              const iv = currentHef.INDIVIDUAL_VARIATION || {};
-              const big5 = iv.personality_big5 || { openness: 5, conscientiousness: 5, extraversion: 5, agreeableness: 5, neuroticism: 5 };
-              const val = big5[trait.key] ?? 5;
-
-              return (
-                <div key={trait.key} className="mb-3 last:mb-0">
-                  <div className="flex justify-between items-center mb-1">
-                    <span className="text-[10px] font-bold text-gray-600">{trait.label}</span>
-                    <span className="text-[10px] font-mono text-blue-500 font-bold bg-white px-1.5 rounded border border-blue-100">
-                      {Number(val).toFixed(1)}
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-[9px] text-gray-400 w-6 text-right">{trait.left}</span>
-                    <input 
-                       type="range" 
-                       min="0" max="10" step="0.1" 
-                       value={val}
-                       onChange={(e) => {
-                           const newVal = parseFloat(e.target.value);
-                           // 深度更新逻辑
-                           const newHef = { ...currentHef };
-                           if (!newHef.INDIVIDUAL_VARIATION) newHef.INDIVIDUAL_VARIATION = {};
-                           if (!newHef.INDIVIDUAL_VARIATION.personality_big5) newHef.INDIVIDUAL_VARIATION.personality_big5 = { ...big5 };
-                           
-                           newHef.INDIVIDUAL_VARIATION.personality_big5[trait.key] = newVal;
-                           
-                           setEditForm({ ...editForm, hef: newHef });
-                       }}
-                       className="flex-1 h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-500"
-                    />
-                    <span className="text-[9px] text-gray-400 w-6">{trait.right}</span>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
 
 
 
