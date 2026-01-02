@@ -11187,7 +11187,7 @@ const isLoverInvitation = msg.content.includes('[LoverInvitation]') || msg.conte
     const scale = activeContact.chatScale || 1; 
     const currentAvatarSize = 40 * scale; 
     const currentFontSize = `${14 * scale}px`;
-    const currentPaddingY = `${4 * scale}px`; 
+    const currentPaddingY = `${3 * scale}px`; 
     const currentPaddingX = `${12 * scale}px`;
 
     // 4. 颜色与自动反色
@@ -11225,7 +11225,7 @@ const isLoverInvitation = msg.content.includes('[LoverInvitation]') || msg.conte
     return (
       <React.Fragment key={msg.id}>
         {showInterval && (
-          <div className="text-center my-4 animate-fadeIn">
+          <div className="text-center my-2 animate-fadeIn">
             <span className="text-[10px] text-gray-400 bg-gray-100 px-3 py-1 rounded-full">
               {intervalMinutes < 60 ? `相隔 ${intervalMinutes} 分钟` : `相隔 ${Math.floor(intervalMinutes / 60)} 小时`}
             </span>
@@ -11298,8 +11298,8 @@ className={`message-wrapper ${msg.role === 'user' ? 'user' : 'ai'} flex gap-3 ${
        backgroundColor: !activeContact.customCSS ? currentBg : undefined,
        color: !activeContact.customCSS ? currentText : undefined,
        fontSize: currentFontSize,
-       paddingTop: '3px', 
-       paddingBottom: '3px',
+       paddingTop: currentPaddingY, 
+       paddingBottom: currentPaddingY,
        paddingLeft: currentPaddingX,
        paddingRight: currentPaddingX,
        borderTopRightRadius: (msg.role === 'user' && !isConsecutive) ? '2px' : '16px',

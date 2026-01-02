@@ -5730,33 +5730,38 @@ if (extractedThought.new_agreement && Object.keys(extractedThought.new_agreement
 // ############################################################################
 
     // --- B. 群聊专用解析：提取内容 + 智能识别发送者 (V3.0 防AI犯傻版) ---
-    parts = parsed
+   parts = parsed
         .filter((item: any) => (item.type === 'text' || item.type === 'voice' || item.type === 'sticker' || item.type === 'ai_image') && (item.content || item.description))
         .map((item: any) => {
             const aiReturnedName = item.name || "";
             let sender = null;
 
             // ★★★ 核心修复：增加“安检程序” ★★★
-            // 如果AI不听话，用了群聊的名字，我们就当它没说名字，强制走下面的“替身”逻辑。
-            if (aiReturnedName && aiReturnedName !== group.name) {
-                // 只有当AI用的不是群名时，我们才尝试正常匹配
+            // 1. 优先精准匹配
+            if (aiReturnedName) {
                 sender = allContacts.find(c => c.name.trim().toLowerCase() === aiReturnedName.trim().toLowerCase());
             }
 
-            // 如果没找到对应的成员 (包括AI用了群名的情况)
+            // 2. 如果精准匹配失败，尝试模糊匹配 (比如 "hannie元宇宙" 包含 "hannie")
+            if (!sender && aiReturnedName) {
+                sender = allContacts.find(c => group.members.includes(c.id) && aiReturnedName.trim().toLowerCase().includes(c.name.trim().toLowerCase()));
+            }
+
+            // 3. 如果还找不到（AI彻底乱写名字），就用第一个成员作为替身，绝不使用群信息
             if (!sender) {
-                console.warn(`[AI行为纠正] AI指定的名字 "${aiReturnedName}" 无效或为群名，已自动分配给第一个成员。`);
-                // 自动选择群里的第一个真实成员作为“替身”
-                const firstMember = allContacts.find(c => group.members.includes(c.id) && c.id !== group.id);
-                sender = firstMember || null;
+                console.warn(`[AI行为纠正] AI指定的名字 "${aiReturnedName}" 无效，已自动分配给第一个成员。`);
+                sender = allContacts.find(c => group.members.includes(c.id) && c.id !== group.id) || null;
             }
             
-            const senderId = sender ? sender.id : group.id; // 最后的保险
+            // 4. 确保 senderId 是个人ID，而不是群ID
+            const senderId = sender ? sender.id : (allContacts.find(c => group.members.includes(c.id))?.id || group.id); 
             
             return { 
                 type: item.type === 'voice' ? 'voice' : 'text', 
                 content: item.content || `[FakeImage] ${item.description}`, 
-                senderId: senderId,
+                senderId: senderId, // <--- 这里存入的是正确的个人ID
+                // 我们把AI返回的原始名字也存起来，这样就算匹配错了，显示的名字也是对的
+                name: aiReturnedName, 
                 thought_chain: extractedThought 
             };
         });
@@ -5833,13 +5838,14 @@ if (extractedThought.new_agreement && Object.keys(extractedThought.new_agreement
 // ############################################################################
 
 // [修复代码] 温柔分句 V9.6 (彻底杜绝语音/伪图拆分)
-        const newMessages: Message[] = [];
+       const newMessages: Message[] = [];
         
         parts.forEach((part, partIndex) => {
             if (!part.content) return; 
 
-            // ★★★ 核心修复：把 senderId 从 part 传递到最终的 message 对象里！★★★
+            // ★★★ 核心修复：把 senderId 和 name 从 part 传递到最终的 message 对象里！★★★
             const senderId = (part as any).senderId; 
+            const senderName = (part as any).name; 
 
             const isSpecialFormat = part.type === 'voice' || 
                                   part.content.trim().startsWith('[Voice Message]') ||
@@ -5853,6 +5859,7 @@ if (extractedThought.new_agreement && Object.keys(extractedThought.new_agreement
                     timestamp: Date.now() + (partIndex * 800),
                     type: part.type === 'voice' ? 'voice' : 'text',
                     senderId: senderId, // <--- 把“身份证”加到这里！
+                    name: senderName,   // <--- 把“名字”也加到这里！
                 });
             } else {
                 const rawSentences = part.content.split(/\n+/);
@@ -5867,6 +5874,7 @@ if (extractedThought.new_agreement && Object.keys(extractedThought.new_agreement
                             timestamp: Date.now() + (partIndex * 800) + (sentenceIndex * 200),
                             type: 'text',
                             senderId: senderId, // <--- 每一句拆分出来的消息，都要带上“身份证”！
+                            name: senderName,   // <--- 每一句拆分出来的消息，也要带上“名字”！
                         });
                     });
             }
@@ -9342,218 +9350,109 @@ return (
   )}
 
 
+{activeContact.history
+    .slice(-historyLimit)
+    .map((msg, index, arr) => {
+    
+    // --- 1. 计算时间间隔 (不变) ---
+    let showInterval = false;
+    let intervalMinutes = 0;
+    if (index > 0) {
+        const prevMsg = arr[index - 1]; 
+        intervalMinutes = Math.floor((msg.timestamp - prevMsg.timestamp) / 60000);
+        if (intervalMinutes > 20) showInterval = true; 
+    }
 
+    // --- 2. 智能识别发送者 (不变) ---
+    let senderName = "";
+    let senderAvatar = "";
+    let senderIdForCheck = ""; 
+    if (msg.role === 'user') {
+        senderName = activeContact.userName || "我";
+        senderAvatar = activeContact.userAvatar;
+        senderIdForCheck = 'user'; 
+    } else {
+        const messageSenderId = (msg as any).senderId;
+        const sender = allContacts.find(c => c.id === messageSenderId);
+        if (sender) {
+            senderAvatar = sender.avatar;
+            senderIdForCheck = sender.id;
+        } else {
+            senderAvatar = "https://api.dicebear.com/7.x/initials/svg?seed=?";
+            senderIdForCheck = messageSenderId || 'unknown';
+        }
+        senderName = (msg as any).name || (sender ? sender.name : "未知成员");
+    }
+    
+    // --- 3. 判断连续发言 & 显示名字 (不变) ---
+    const prevMsgSenderId = index > 0 ? ((arr[index-1] as any).senderId || (arr[index-1].role === 'user' ? 'user' : '')) : '';
+    const isConsecutive = index > 0 && !showInterval && senderIdForCheck === prevMsgSenderId;
+    const showName = !isConsecutive && msg.role !== 'user'; 
 
- {activeContact.history
-              .slice(-historyLimit)
-              .map((msg, index, arr) => {
+    // --- 4. 准备其他变量 (不变) ---
+    const timeStr = new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    const scale = activeContact.chatScale || 1; 
+    const currentAvatarSize = 40 * scale; 
+    const currentFontSize = `${14 * scale}px`;
+    const userBg = activeContact.bubbleColorUser || '#FBCFE8';
+    const aiBg = activeContact.bubbleColorAI || '#FFFFFF';
+    const currentBg = msg.role === 'user' ? userBg : aiBg;
+    const currentText = getContrastTextColor(currentBg);
+    
+    // --- 5. 系统消息直接跳过 (不变) ---
+    if (msg.role === 'system') return null;
+
+    // --- 6. 开始渲染 (★★★ 核心修复区 ★★★) ---
+    return (
+        <React.Fragment key={msg.id}>
+        {showInterval && <div className="text-center my-6"><span className="text-[10px] text-gray-400 bg-gray-100 px-3 py-1 rounded-full">{intervalMinutes < 60 ? `${intervalMinutes}分钟` : `${Math.floor(intervalMinutes / 60)}小时`}</span></div>}
+
+        <div 
+            id={`msg_${msg.timestamp}`} 
+            className={`flex items-end gap-2 ${msg.role === 'user' ? 'justify-end' : 'justify-start'} ${isConsecutive ? 'mb-1' : 'mb-3'}`}
+        >
+            {/* ★★★ 修复1：用 order-X 来控制左右顺序，不再用 flex-reverse ★★★ */}
+            
+            {/* 时间戳 (用户消息时 order-1，在最左边) */}
+            <div className={`text-[9px] text-gray-300 pb-1 ${msg.role === 'user' ? 'order-1' : 'order-3'}`}>{timeStr}</div>
+
+            {/* 气泡 + 名字 (中间核心区) */}
+            <div className={`flex flex-col max-w-[70%] ${msg.role === 'user' ? 'order-2 items-end' : 'order-2 items-start'}`}>
+                {showName && <div className="text-[10px] text-gray-400 mb-0.5 ml-1">{senderName}</div>}
                 
-                // 1. 基础计算
-                let showInterval = false;
-                let intervalMinutes = 0;
-                if (index > 0) {
-                  const prevMsg = arr[index - 1]; 
-                  intervalMinutes = Math.floor((msg.timestamp - prevMsg.timestamp) / 60000);
-                  if (intervalMinutes > 20) showInterval = true; 
-                }
+                <div 
+                    className="content rounded-xl shadow-sm break-words whitespace-pre-wrap"
+                    style={{ 
+                        backgroundColor: currentBg, 
+                        color: currentText, 
+                        fontSize: currentFontSize,
+                        padding: `${3 * scale}px ${12 * scale}px`, // 恢复padding
+                        // ★★★ 修复2：恢复你的漂亮尖角气泡样式 ★★★
+                        borderTopRightRadius: (msg.role === 'user' && !isConsecutive) ? '4px' : '12px',
+                        borderTopLeftRadius: (msg.role !== 'user' && !isConsecutive) ? '4px' : '12px'
+                    }}
+                >
+                    {/* ★★★ 修复3：给所有消息都用上翻译卡片组件 ★★★ */}
+                    <HiddenBracketText 
+                        content={msg.content} 
+                        msgId={msg.id} 
+                        fontSize=""
+                    />
+                </div>
+            </div>
 
-                // ★ 核心修复 1：声明变量，准备存放正确的发送者信息
-                let senderName = "";
-                let senderAvatar = "";
-                let senderId = ""; // 用来判断连续发言
+            {/* 头像 (用户消息时 order-3，在最右边) */}
+            <div 
+                className={`flex-none ${msg.role === 'user' ? 'order-3' : 'order-1'}`}
+                style={{ width: `${currentAvatarSize}px` }}
+            >
+                {!isConsecutive ? <img src={senderAvatar} className="rounded-full object-cover border" style={{ width: `${currentAvatarSize}px`, height: `${currentAvatarSize}px` }} alt="avatar" /> : null}
+            </div>
 
-                if (msg.role === 'user') {
-                  // 如果是用户自己，信息不变
-                  senderName = activeContact.userName || "我";
-                  senderAvatar = activeContact.userAvatar;
-                  senderId = 'user'; // 给用户一个固定的ID
-                } else {
-                  // ★ 核心修复 2：如果是AI消息，从消息自带的 senderId 去找人！
-                  const messageSenderId = (msg as any).senderId;
-                  const sender = allContacts.find(c => c.id === messageSenderId);
-
-                  if (sender) {
-                    // 找到了！用这个人的信息
-                    senderName = sender.name;
-                    senderAvatar = sender.avatar;
-                    senderId = sender.id;
-                  } else {
-                    // 如果因为某些原因没找到（比如角色被删了），用群信息做保底
-                    senderName = activeContact.name; // 用群名
-                    senderAvatar = activeContact.avatar; // 用群头像
-                    senderId = activeContact.id;
-                  }
-                }
-                
-                // ★ 核心修复 3：用正确的 senderId 来判断是否连续发言
-                const prevMsgSenderId = index > 0 ? ((arr[index-1] as any).senderId || (arr[index-1].role === 'user' ? 'user' : '')) : '';
-                const isConsecutive = index > 0 && 
-                                      !showInterval &&
-                                      senderId === prevMsgSenderId;
-
-                const showName = !isConsecutive;
-
-                const isSelected = selectedIds.includes(msg.id);
-                const duration = msg.voiceDuration || 10;
-                const timeStr = new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
-                const isEditing = editingMsgId === msg.id;
-
-                const scale = activeContact.chatScale || 1; 
-                const currentAvatarSize = 40 * scale; 
-                const currentFontSize = `${14 * scale}px`;
-                const currentPaddingX = `${12 * scale}px`;
-
-                const userBg = activeContact.bubbleColorUser || '#FBCFE8';
-                const aiBg = activeContact.bubbleColorAI || '#ffffff';
-                const userTextColor = getContrastTextColor(userBg);
-                const aiTextColor = getContrastTextColor(aiBg);
-                const currentBg = msg.role === 'user' ? userBg : aiBg;
-                const currentText = msg.role === 'user' ? userTextColor : aiTextColor;
-
-                // 2. 特殊消息渲染
-                let displayContent = msg.content.replace(/\[.*?\]/g, '').replace('【系统通知】', '').trim();
-                
-                if (msg.role === 'system' || msg.content.includes('[LoverInvitation]') || msg.content.includes('[FriendSystem]') || msg.content.includes('[CoupleSystem]') || msg.content.includes('[DND_BLOCK]') || msg.content.includes('[FlowerSystem]')) {
-                    const SpaceJumper: React.FC<{children: React.ReactNode, type: 'couple' | 'friend'}> = ({ children, type }) => (
-                        <div onClick={() => { if (onNavigateToSpace) onNavigateToSpace(activeContact.id); }} className="w-full flex justify-center cursor-pointer group">
-                            <div className="transition-transform duration-300 group-hover:scale-105 w-full flex justify-center relative">{children}</div>
-                        </div>
-                    );
-
-                    if (msg.content.includes('[LoverInvitation]') || msg.content.includes('发起了情侣邀请')) {
-                        const isAiInvite = msg.role === 'assistant' || msg.content.includes('向你发起');
-                        return <div key={msg.id} className="w-full flex justify-center my-4 animate-slideUp">{isAiInvite ? <InteractiveLoverInvitation msg={msg} contactName={senderName} onRespond={(msgId, decision) => handleInvitationResponse(msgId, decision)} onNavigate={() => { if (onNavigateToSpace) onNavigateToSpace(activeContact.id); }} /> : <StaticLoverInvitation msg={msg} contactName={activeContact.name} />}</div>;
-                    }
-                    if (msg.content.includes('memory_share_card')) { try { return <SharedMemoryCard key={msg.id} data={JSON.parse(msg.content)} />; } catch (e) {} }
-                    
-                    return (
-                        <React.Fragment key={msg.id}>
-                            {showInterval && <div className="text-center my-4"><span className="text-[10px] text-gray-400 bg-gray-100 px-3 py-1 rounded-full">{intervalMinutes < 60 ? `${intervalMinutes}分钟` : `${Math.floor(intervalMinutes/60)}小时`}</span></div>}
-                            <div className="my-4 animate-slideUp px-4 w-full">
-                                {msg.content.includes('[FriendSystem]') || msg.content.includes('群') ? <SpaceJumper type="friend"><div className="relative bg-[#eff6ff] text-[#1e3a8a] text-xs px-5 py-4 rounded-xl border border-[#bfdbfe] text-center max-w-[85%] flex items-center gap-3"><div className="text-xl">🏡</div><div className="flex flex-col items-start text-left"><span className="font-bold">密友动态</span><span className="opacity-90">{displayContent}</span></div></div></SpaceJumper> : <div className="flex justify-center"><div className="bg-gray-100 text-gray-500 text-xs px-4 py-2 rounded-lg max-w-[90%] text-center">{displayContent}</div></div>}
-                            </div>
-                        </React.Fragment>
-                    );
-                }
-
-                // 3. 聊天气泡渲染
-                const isQuoteMsg = msg.content.trim().startsWith('>');
-                let quoteText = '', replyText = msg.content;
-                if (isQuoteMsg) {
-                    const idx = msg.content.indexOf('\n');
-                    if (idx !== -1) { quoteText = msg.content.substring(0, idx).replace(/^> ?/, '').trim(); replyText = msg.content.substring(idx + 1).trim(); }
-                    else { quoteText = msg.content.replace(/^> ?/, '').trim(); replyText = ""; }
-                }
-
-                return (
-                  <React.Fragment key={msg.id}>
-                    {/* 时间分割线 */}
-                    {showInterval && (
-                      <div className="text-center my-6 animate-fadeIn">
-                        <span className="text-[10px] text-gray-400 bg-gray-100 px-3 py-1 rounded-full shadow-sm">
-                          {intervalMinutes < 60 ? `${intervalMinutes}分钟后` : `${Math.floor(intervalMinutes / 60)}小时后`}
-                        </span>
-                      </div>
-                    )}
-
-                    <div 
-                     id={`msg_${msg.timestamp}`} 
-                     className={`message-wrapper flex gap-2 ${msg.role === 'user' ? 'justify-end' : 'justify-start'} ${index === arr.length - 1 ? 'animate-slideUp' : ''} ${isConsecutive ? 'mb-1' : 'mb-3'}`}
-                     style={{ minHeight: `${currentAvatarSize}px` }} 
-                   >
-                      {isSelectionMode && (
-                        <div className={`flex items-center justify-center ${msg.role === 'user' ? 'order-2' : 'order-1'}`}>
-                          <div onClick={() => toggleMessageSelection(msg.id)} className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${isSelected ? 'bg-blue-500 border-blue-500' : 'border-gray-300 bg-white'}`}>
-                            {isSelected && <span className="text-white text-xs font-bold">✓</span>}
-                          </div>
-                        </div>
-                      )}
-
-                      {/* --- 头像区域 --- */}
-                      <div 
-                         className={`flex-none flex flex-col ${msg.role === 'user' ? 'order-3 items-end' : 'order-1 items-start'}`}
-                         style={{ 
-                             width: `${currentAvatarSize}px`,
-                             paddingTop: showName ? '17px' : '0px'
-                         }}
-                      >
-                        {!isConsecutive ? (
-                            <img 
-                              src={senderAvatar} 
-                              className="rounded-full object-cover border border-gray-100 shadow-sm block bg-white" 
-                              style={{ width: `${currentAvatarSize}px`, height: `${currentAvatarSize}px` }}
-                              alt="avatar" 
-                            />
-                        ) : (
-                            <div style={{ width: `${currentAvatarSize}px` }}></div>
-                        )}
-                      </div>
-
-                      {/* --- 中间内容区 (名字+气泡) --- */}
-                      <div className={`flex flex-col order-2 max-w-[70%] ${msg.role === 'user' ? 'items-end' : 'items-start'}`}>
-                        
-                        {/* 名字显示 */}
-                        {showName && (
-                            <div 
-                                className={`text-[10px] text-gray-400 select-none font-medium mb-0.5 ${
-                                    msg.role === 'user' ? 'mr-1 text-right' : 'ml-1 text-left'
-                                }`}
-                                style={{ lineHeight: '14px', height: '14px' }} 
-                            >
-                                {senderName}
-                            </div>
-                        )}
-
-                        <div
-                          className={`message-bubble relative group transition-transform duration-75 active:scale-95`}
-                          onTouchStart={() => handleTouchStart(msg)}
-                          onMouseDown={() => handleTouchStart(msg)}
-                          onMouseUp={handleTouchEnd}
-                          onMouseLeave={handleTouchEnd}
-                          onContextMenu={(e) => e.preventDefault()}
-                        >
-                          {isEditing ? (
-                            <div className="bg-white border-2 border-blue-400 rounded-xl p-2 shadow-lg min-w-[200px] z-50">
-                              <textarea value={editContent} onChange={(e) => setEditContent(e.target.value)} className="w-full text-sm p-2 bg-gray-50 rounded outline-none text-gray-800" rows={3} autoFocus onClick={e => e.stopPropagation()} onMouseDown={e => e.stopPropagation()} onTouchStart={e => e.stopPropagation()} />
-                              <div className="flex justify-end gap-2 mt-2"><button onClick={(e) => { e.stopPropagation(); handleCancelEdit(); }} className="text-xs px-3 py-1 bg-gray-200 text-gray-700 rounded font-bold hover:bg-gray-300">取消</button><button onClick={(e) => { e.stopPropagation(); handleSaveEdit(); }} className="text-xs px-3 py-1 bg-blue-500 text-white rounded font-bold hover:bg-blue-600">保存</button></div>
-                            </div>
-                          ) : (
-                            <div 
-                               className={`content rounded-xl leading-relaxed relative break-words whitespace-pre-wrap shadow-sm ` + (!activeContact.customCSS && currentText === '#111827' ? 'border border-gray-200/50' : '')}
-                               style={{
-                                   backgroundColor: !activeContact.customCSS ? currentBg : undefined,
-                                   color: !activeContact.customCSS ? currentText : undefined,
-                                   fontSize: currentFontSize,
-                                   paddingTop: '3px', 
-                                   paddingBottom: '3px',
-                                   paddingLeft: currentPaddingX,
-                                   paddingRight: currentPaddingX,
-                                   borderTopRightRadius: (msg.role === 'user' && !isConsecutive) ? '2px' : '16px',
-                                   borderTopLeftRadius: (msg.role !== 'user' && !isConsecutive) ? '2px' : '16px',
-                                   borderBottomLeftRadius: '16px',
-                                   borderBottomRightRadius: '16px',
-                               }}
-                            >
-                                {isQuoteMsg && quoteText && (<div className="text-xs mb-2 p-2 bg-black/5 rounded-md border-l-4 border-gray-400 opacity-80 select-none"><div className="font-bold text-[10px] text-gray-500 mb-0.5">↪️ 引用:</div><div className="line-clamp-2 italic">{quoteText}</div></div>)}
-                                {msg.type === 'voice' || msg.content.trim().startsWith('[Voice Message]') ? (<VoiceBubble msg={msg} isPlaying={playingMsgId === msg.id} progress={audioProgress} duration={duration} onPlay={() => playMessageAudio(msg.id, msg.content)} onSeek={handleSeek} isUser={msg.role === 'user'} />) : msg.content.trim().startsWith('[FakeImage]') ? (<details className="group"><summary className="list-none outline-none cursor-pointer"><div className="bg-white/50 border-2 border-dashed border-black/10 rounded-lg p-3 flex items-center gap-2 hover:bg-white/80 transition-colors"><span className="text-xl">🖼️</span><span className="text-[10px] font-bold opacity-60 uppercase">查看画面</span></div></summary><div className="mt-2 text-sm italic opacity-80 pl-2 border-l-2 border-black/20">“{msg.content.replace('[FakeImage]', '').trim()}”</div></details>) : msg.type === 'image' ? (<img src={msg.content} className="rounded-lg max-w-full" alt="msg" />) : (<div className="whitespace-pre-wrap break-words"><HiddenBracketText content={isQuoteMsg ? replyText : msg.content} msgId={msg.id} fontSize={""} /></div>)}
-                            </div>
-                          )}
-                        </div>
-                      </div>
-
-                      {/* --- 时间戳区域 (外置) --- */}
-                      <div 
-                         className={`text-[9px] text-gray-300 select-none flex flex-col justify-end pb-1 ${msg.role === 'user' ? 'order-1 mr-1' : 'order-3 ml-1'}`}
-                         style={{ minWidth: '24px' }}
-                      >
-                         {timeStr}
-                      </div>
-
-                    </div>
-                  </React.Fragment>
-                );
-            })}
-
+        </div>
+        </React.Fragment>
+    );
+})}
 
 
 
