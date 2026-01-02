@@ -13,30 +13,32 @@ import WorldBookApp from './WorldBookApp'; // <--- 确保加了这行导入！
 import html2canvas from 'html2canvas';
 import { searchDocuments, Document } from '../services/memoryService';
 import { readTavernPng, fileToBase64 } from './utils/fileUtils';
-import GroupChatApp from './GroupChatApp';
 
 
 
 
 
-
-interface ChatAppProps {
-  contacts: Contact[];
+// ############################################################################
+// 🟢 群聊专用 Props 定义
+// ############################################################################
+interface GroupChatAppProps {
+  group: Contact;              // ★★★ 核心：直接把“当前群组”传进来，不用查ID了
+  allContacts: Contact[];      // ★★★ 核心：把“所有人”传进来，为了做记忆挂载
+  
+  // 下面这些是通用的，保持不变，用于更新数据
   setContacts: React.Dispatch<React.SetStateAction<Contact[]>>;
   globalSettings: GlobalSettings;
   setGlobalSettings: React.Dispatch<React.SetStateAction<GlobalSettings>>;
   worldBooks: WorldBookCategory[];
   setWorldBooks: React.Dispatch<React.SetStateAction<WorldBookCategory[]>>;
+  
+  // 退出群聊（返回列表）
   onExit: () => void;
-  isBackground?: boolean; 
-  initialContactId: string | null;
-  onChatOpened: () => void;
-  onNewMessage: (contactId: string, name: string, avatar: string, content: string) => void;
-  onOpenSettings?: () => void;
-  jumpToTimestamp?: number | null; 
-  // ★★★ 新增：允许 ChatApp 通知外面要跳转 ★★★
-  onJumpToMessage?: (contactId: string, timestamp: number) => void;
-  onNavigateToSpace?: (contactId: string) => void;
+  
+  // 其他通用功能
+  isBackground?: boolean;
+  onNewMessage?: (contactId: string, name: string, avatar: string, content: string) => void;
+  playMessageAudio?: (id: string, text: string) => void; // 如果群聊也要听语音
 }
 
 
@@ -117,86 +119,6 @@ const interpretRelativeTime = (relativeTime: string | undefined, originalText: s
 
 
 
-
-// 3. 状态炼金术 (计算头顶那个状态)
-const calculateComplexState = (
-  energy: { current: number; status: string }, 
-  hef: any // 我们从 hef 里读取 friendshipScore
-): { text: string; color: string; ping: string; emoji: string } => {
-  
-  // 1. 提取数值
-  const e = energy.current;
-  const joy = hef?.joy || 0;
-  const anger = hef?.anger || 0;
-  const sadness = hef?.sadness || 0;
-  const fear = hef?.fear || 0;
-  const trust = hef?.trust || 0;
-  // ★★★ 核心新增：获取宏观的友谊值 ★★★
-  const friendshipScore = hef?.friendshipScore || 0;
-  
-  const hour = new Date().getHours();
-  const isMorning = hour >= 6 && hour < 11;
-  const isAfternoon = hour >= 13 && hour < 17;
-  const isNight = hour >= 22 || hour < 5;
-
-  // 2. 优先级 A: 生理极限
-  if (energy.status === 'Sleeping') {
-    if (sadness > 60) return { text: "带泪入睡 💧", color: "bg-indigo-500", ping: "bg-indigo-400", emoji: "😪" };
-    if (joy > 80) return { text: "做美梦中 🌙", color: "bg-purple-500", ping: "bg-purple-400", emoji: "😴" };
-    return { text: "呼呼大睡 💤", color: "bg-indigo-500", ping: "bg-indigo-400", emoji: "😴" };
-  }
-  
-  if (energy.status === 'Exhausted' || e < 10) {
-    if (anger > 50) return { text: "累到炸毛 💢", color: "bg-red-700", ping: "bg-red-600", emoji: "😫" };
-    return { text: "彻底断电 🪫", color: "bg-gray-500", ping: "bg-gray-400", emoji: "🫠" };
-  }
-
-  // 3. 优先级 B: 特殊时间段 Buff (新增逻辑)
-  // 如果是早上且精力还行，显示刚醒的状态
-  if (isMorning && e > 60 && e < 90) {
-     return { text: "晨间开机中 ☕", color: "bg-orange-400", ping: "bg-orange-300", emoji: "🥱" };
-  }
-  // 如果是饭点下午
-  if (isAfternoon && e > 40 && e < 70) {
-     return { text: "午后犯困 🥯", color: "bg-yellow-500", ping: "bg-yellow-400", emoji: "😪" };
-  }
-
-  // 4. 优先级 C: 低能量混合态 (Energy < 40)
-  if (e < 40) {
-    if (anger > 60) return { text: "低电量烦躁 💣", color: "bg-orange-600", ping: "bg-orange-500", emoji: "🤯" };
-    if (sadness > 60) return { text: "累且emo 🌧️", color: "bg-blue-800", ping: "bg-blue-700", emoji: "😶‍🌫️" };
-    if (fear > 60) return { text: "瑟瑟发抖 🥶", color: "bg-cyan-700", ping: "bg-cyan-600", emoji: "😨" };
-    return { text: "电量不足 🪫", color: "bg-yellow-600", ping: "bg-yellow-500", emoji: "🥱" };
-  }
-
-  // 5. 优先级 D: 高能量混合态 (Energy > 80)
-  if (e > 80) {
-    if (anger > 70) return { text: "怒气值满 🔥", color: "bg-red-600", ping: "bg-red-500", emoji: "🤬" };
-    if (joy > 80) return { text: "嗨到不行 🥳", color: "bg-pink-500", ping: "bg-pink-400", emoji: "😆" };
-    return { text: "元气爆棚 ✨", color: "bg-green-500", ping: "bg-green-400", emoji: "😤" };
-  }
-
-// 6. 优先级 E: 纯情绪主导 (★★★ 核心修改区域 ★★★)
-  const maxEmotionVal = Math.max(joy, anger, sadness, fear, trust);
-  if (maxEmotionVal > 60) {
-    if (joy === maxEmotionVal) return { text: "心情愉悦 🎶", color: "bg-yellow-400", ping: "bg-yellow-300", emoji: "😄" };
-    if (anger === maxEmotionVal) return { text: "有点生气 😠", color: "bg-red-500", ping: "bg-red-400", emoji: "😒" };
-    if (sadness === maxEmotionVal) return { text: "有些失落 🍃", color: "bg-blue-400", ping: "bg-blue-300", emoji: "😔" };
-    if (fear === maxEmotionVal) return { text: "焦虑不安 😖", color: "bg-purple-400", ping: "bg-purple-300", emoji: "😖" };
-    
-    // ★★★ 在这里加入友谊值判断！ ★★★
-   // ==================== 这是一组代码：【ChatApp.tsx】修复“较信任”的奇怪逻辑 ====================
-    // ★★★ 修正版：信任情绪回归其本质——安全感 ★★★
-    if (trust === maxEmotionVal) {
-      // 当信任感是主导情绪时，无论关系如何，AI 的内心都是安稳的。
-      return { text: "内心安稳 🍃", color: "bg-emerald-400", ping: "bg-emerald-300", emoji: "😌" };
-    }
-  }
-
-  // 7. 默认状态
-  if (e > 60) return { text: "状态在线 ✅", color: "bg-green-500", ping: "bg-green-400", emoji: "🙂" };
-  return { text: "发呆摸鱼 🐟", color: "bg-emerald-500", ping: "bg-emerald-400", emoji: "😮‍💨" };
-};
 
 
 
@@ -573,17 +495,6 @@ const compressImage = (file: File): Promise<string> => {
     reader.onerror = (error) => reject(error);
   });
 };
-
-
-
-
-
-
-
-
-
-
-
 
 
 
@@ -1433,6 +1344,84 @@ const MemoryNote: React.FC<{
 
 
 
+// ==================== 💾 群聊专用组件：记忆挂载器 ====================
+interface MemoryMountProps {
+  contacts: Contact[]; // 所有联系人
+  mountedConfig: { [contactId: string]: number }; // 当前挂载配置 { "felix_id": 50 } 代表挂载50条
+  onUpdateConfig: (contactId: string, count: number) => void;
+  onClose: () => void;
+}
+
+const MemoryMountPanel: React.FC<MemoryMountProps> = ({ contacts, mountedConfig, onUpdateConfig, onClose }) => {
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm animate-fadeIn" onClick={onClose}>
+      <div className="bg-white w-[90%] max-w-sm rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[80%]" onClick={e => e.stopPropagation()}>
+        
+        {/* 头部 */}
+        <div className="bg-indigo-600 p-4 shrink-0 flex justify-between items-center">
+          <div>
+            <h3 className="text-white font-bold text-lg">💾 记忆挂载舱</h3>
+            <p className="text-indigo-200 text-xs">选择要将多少私聊记忆同步到群聊</p>
+          </div>
+          <button onClick={onClose} className="text-white font-bold text-xl">×</button>
+        </div>
+
+        {/* 列表 */}
+        <div className="flex-1 overflow-y-auto p-4 space-y-4">
+          {contacts.map(contact => {
+            const mountCount = mountedConfig[contact.id] || 0;
+            const maxHistory = contact.history.length;
+
+            return (
+              <div key={contact.id} className={`border rounded-xl p-3 transition-all ${mountCount > 0 ? 'border-indigo-500 bg-indigo-50' : 'border-gray-200 bg-white'}`}>
+                <div className="flex justify-between items-center mb-2">
+                  <div className="flex items-center gap-2">
+                    <img src={contact.avatar} className="w-8 h-8 rounded-full border border-white shadow-sm" />
+                    <span className="font-bold text-sm text-gray-800">{contact.name}</span>
+                  </div>
+                  <span className={`text-xs font-bold px-2 py-1 rounded ${mountCount > 0 ? 'bg-indigo-100 text-indigo-600' : 'bg-gray-100 text-gray-400'}`}>
+                    {mountCount > 0 ? `已挂载 ${mountCount} 条` : '未挂载'}
+                  </span>
+                </div>
+
+                {/* 滑块控制 */}
+                <div className="flex items-center gap-3">
+                  <span className="text-[10px] text-gray-400 w-8">0</span>
+                  <input 
+                    type="range" 
+                    min="0" 
+                    max={Math.min(200, maxHistory)} // 最多允许挂载200条，或者全部历史
+                    step="10"
+                    value={mountCount}
+                    onChange={(e) => onUpdateConfig(contact.id, parseInt(e.target.value))}
+                    className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-indigo-500"
+                  />
+                  <span className="text-[10px] text-gray-400 w-8">{Math.min(200, maxHistory)}</span>
+                </div>
+                <p className="text-[9px] text-gray-400 mt-1 text-center">
+                  拖动滑块选择挂载的记忆条数 (私聊历史: {maxHistory}条)
+                </p>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* 底部 */}
+        <div className="p-4 border-t bg-gray-50">
+          <button onClick={onClose} className="w-full bg-indigo-600 text-white py-3 rounded-xl font-bold shadow-lg active:scale-95 transition">
+            确认生效
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+
+
+
+
+
 
 
 
@@ -2159,46 +2148,6 @@ const PersonaPanel = ({
 
 
 
-  // ==================== [组件修复] 把雷达图函数放回这里！ ====================
-  const renderRadar = () => {
-    const hef = contact?.hef || {};
-    const iv = hef.INDIVIDUAL_VARIATION || {};
-    const big5 = iv.personality_big5 || { openness: 5, conscientiousness: 5, extraversion: 5, agreeableness: 5, neuroticism: 5 };
-
-    const getPoint = (value: number, angle: number) => {
-      const val = Math.max(0, Math.min(10, value || 5));
-      const radius = (val / 10) * 40;
-      const x = 50 + radius * Math.cos((angle - 90) * Math.PI / 180);
-      const y = 50 + radius * Math.sin((angle - 90) * Math.PI / 180);
-      return `${x},${y}`;
-    };
-
-    const p1 = getPoint(big5.openness, 0);
-    const p2 = getPoint(big5.extraversion, 72);
-    const p3 = getPoint(big5.agreeableness, 144);
-    const p4 = getPoint(big5.neuroticism, 216);
-    const p5 = getPoint(big5.conscientiousness, 288);
-
-    return (
-      <div className="relative w-full h-64 flex items-center justify-center my-2 select-none">
-        <div className="absolute top-4 left-1/2 -translate-x-1/2 flex flex-col items-center"><span className="text-[10px] font-bold text-gray-500 bg-white/80 px-1 rounded backdrop-blur">开放性</span><span className="text-[9px] text-blue-400 font-mono">{big5.openness}</span></div>
-        <div className="absolute top-16 right-6 flex flex-col items-center"><span className="text-[10px] font-bold text-gray-500 bg-white/80 px-1 rounded backdrop-blur">外向性</span><span className="text-[9px] text-blue-400 font-mono">{big5.extraversion}</span></div>
-        <div className="absolute bottom-8 right-10 flex flex-col items-center"><span className="text-[10px] font-bold text-gray-500 bg-white/80 px-1 rounded backdrop-blur">宜人性</span><span className="text-[9px] text-blue-400 font-mono">{big5.agreeableness}</span></div>
-        <div className="absolute bottom-8 left-10 flex flex-col items-center"><span className="text-[10px] font-bold text-gray-500 bg-white/80 px-1 rounded backdrop-blur">敏感度</span><span className="text-[9px] text-blue-400 font-mono">{big5.neuroticism}</span></div>
-        <div className="absolute top-16 left-6 flex flex-col items-center"><span className="text-[10px] font-bold text-gray-500 bg-white/80 px-1 rounded backdrop-blur">尽责性</span><span className="text-[9px] text-blue-400 font-mono">{big5.conscientiousness}</span></div>
-        <div className="w-40 h-40 relative">
-          <svg className="absolute inset-0 w-full h-full overflow-visible" viewBox="0 0 100 100">
-             <polygon points="50,10 88,38 74,82 26,82 12,38" fill="#f3f4f6" stroke="#e5e7eb" strokeWidth="1" />
-             <polygon points="50,30 69,44 62,66 38,66 31,44" fill="none" stroke="#e5e7eb" strokeWidth="1" strokeDasharray="2 2" />
-             <line x1="50" y1="50" x2="50" y2="10" stroke="#e5e7eb" strokeWidth="0.5" /><line x1="50" y1="50" x2="88" y2="38" stroke="#e5e7eb" strokeWidth="0.5" /><line x1="50" y1="50" x2="74" y2="82" stroke="#e5e7eb" strokeWidth="0.5" /><line x1="50" y1="50" x2="26" y2="82" stroke="#e5e7eb" strokeWidth="0.5" /><line x1="50" y1="50" x2="12" y2="38" stroke="#e5e7eb" strokeWidth="0.5" />
-             <polygon points={`${p1} ${p2} ${p3} ${p4} ${p5}`} fill="rgba(59, 130, 246, 0.4)" stroke="#3b82f6" strokeWidth="2" className="drop-shadow-sm transition-all duration-700 ease-out" />
-             <circle cx={p1.split(',')[0]} cy={p1.split(',')[1]} r="1.5" fill="#2563eb" /><circle cx={p2.split(',')[0]} cy={p2.split(',')[1]} r="1.5" fill="#2563eb" /><circle cx={p3.split(',')[0]} cy={p3.split(',')[1]} r="1.5" fill="#2563eb" /><circle cx={p4.split(',')[0]} cy={p4.split(',')[1]} r="1.5" fill="#2563eb" /><circle cx={p5.split(',')[0]} cy={p5.split(',')[1]} r="1.5" fill="#2563eb" />
-          </svg>
-        </div>
-      </div>
-    );
-  };
-  // ==================== [修复结束] ====================
 
   // --- 辅助函数也放回来 ---
   const toggleSelect = (id: string) => {
@@ -2362,7 +2311,6 @@ ${memoryContent}
       alert("合并失败，请检查网络或 API 设置");
     }
   };
-
   return (
     <div className="absolute inset-0 z-50 flex items-end sm:items-center justify-center animate-fadeIn pointer-events-none">
       <div className="absolute inset-0 bg-black/50 backdrop-blur-sm pointer-events-auto" onClick={() => { onClose(); resetMultiSelect(); }} />
@@ -2404,111 +2352,6 @@ ${memoryContent}
 
         {/* Content */}
         <div className="flex-1 overflow-y-auto p-4 space-y-6">
-          {/* 这是一组代码：修复版情绪面板 (解决“睁眼说瞎话”的显示Bug) */}
-{/* ==================== [究极融合版] 情绪控制台 ==================== */}
-          {activeTab === 'emotion' && (
-            <div className="space-y-6 animate-fadeIn">
-              
-              {/* 1. 顶部：炼金术状态显示 (大表情 + 文字状态) */}
-              <div className="text-center">
-                <div className="text-6xl mb-2 transition-transform hover:scale-110 duration-300 cursor-default">
-                  {/* 调用炼金术计算表情 */}
-                  {(() => {
-                     const state = calculateComplexState(energy, contact?.hef);
-                     return state.emoji;
-                  })()}
-                </div>
-                
-                {/* 状态文字 (如: 又累又气) */}
-                <h3 className="text-xl font-bold text-gray-800">
-                  {calculateComplexState(energy, contact?.hef).text.split(' ')[0]}
-                </h3>
-                
-                {/* 关系状态胶囊 */}
-                <span className={`text-xs font-bold px-2 py-1 rounded-full mt-1 inline-block ${
-                   (contact?.affectionScore ?? 50) < 0 ? 'bg-gray-200 text-gray-600' : 'bg-pink-100 text-pink-600'
-                }`}>
-           
-{contact?.relationshipStatus || '相识'}
-                </span>
-              </div>
-
-              <div className="bg-white border border-gray-100 p-5 rounded-2xl space-y-5 shadow-sm">
-                
-                {/* 2. ⚡ 能量条区域 (保留你的旧功能) */}
-                <div>
-                  <div className="flex justify-between text-xs font-bold text-gray-500 mb-1">
-                    <span className="flex items-center gap-1">
-                        ⚡ 能量 
-                        <span className={`text-[9px] px-1.5 rounded-sm uppercase tracking-wider ${
-                            energy.status === 'Sleeping' ? 'bg-indigo-100 text-indigo-500' : 
-                            energy.status === 'Awake' ? 'bg-green-100 text-green-500' : 
-                            energy.status === 'Tired' ? 'bg-yellow-100 text-yellow-600' :
-                            'bg-red-100 text-red-500'
-                        }`}>
-                            {energy.status}
-                        </span>
-                    </span>
-                    <span>{Math.round(energy.current)}%</span>
-                  </div>
-                  <div className="w-full h-2.5 bg-gray-100 rounded-full overflow-hidden">
-                    <div 
-                      className={`h-full transition-all duration-700 ease-out ${
-                          energy.status === 'Sleeping' ? 'bg-indigo-400' : 
-                          energy.current < 20 ? 'bg-red-500' : 
-                          energy.current < 50 ? 'bg-yellow-400' :
-                          'bg-gradient-to-r from-yellow-400 to-orange-500'
-                      }`}
-                      style={{width: `${Math.max(5, energy.current)}%`}}
-                    ></div>
-                  </div>
-                  {energy.status === 'Sleeping' && (
-                      <p className="text-[9px] text-indigo-400 mt-1 text-center animate-pulse">💤 正在回血中...</p>
-                  )}
-                </div>
-
-                {/* 3. ❤️ 爱意条 (Romance - 红轴) */}
-                <div>
-                  <div className="flex justify-between text-xs font-bold mb-1">
-                    <span className="text-rose-500">❤️ 爱意 (Romance)</span>
-                    <span className={(contact?.affectionScore ?? 50) < 0 ? "text-gray-600" : "text-rose-500"}>
-                      {contact?.affectionScore ?? 50}
-                    </span>
-                  </div>
-                  <div className="w-full h-2.5 bg-gray-100 rounded-full overflow-hidden relative">
-                    <div className="absolute left-1/2 top-0 bottom-0 w-0.5 bg-white z-10 opacity-50"></div>
-                    <div 
-                      className={`h-full transition-all duration-700 ease-out ${
-                        (contact?.affectionScore ?? 50) < 0 ? 'bg-gradient-to-r from-gray-800 to-gray-500' : 'bg-gradient-to-r from-pink-300 to-rose-500'
-                      }`}
-                      style={{ width: `${Math.max(0, Math.min(100, ((contact?.affectionScore ?? 50) + 100) / 2))}%` }}
-                    ></div>
-                  </div>
-                </div>
-
-                {/* 4. 🤝 友谊条 (Friendship - 蓝轴) */}
-                <div>
-                  <div className="flex justify-between text-xs font-bold mb-1">
-                    <span className="text-sky-500">🤝 友谊 (Trust)</span>
-                    <span className="text-sky-500">
-                      {contact?.friendshipScore ?? 50}
-                    </span>
-                  </div>
-                  <div className="w-full h-2.5 bg-gray-100 rounded-full overflow-hidden relative">
-                    <div className="absolute left-1/2 top-0 bottom-0 w-0.5 bg-white z-10 opacity-50"></div>
-                    <div 
-                      className="h-full transition-all duration-700 ease-out bg-gradient-to-r from-sky-300 to-blue-500"
-                      style={{ width: `${Math.max(0, Math.min(100, ((contact?.friendshipScore ?? 50) + 100) / 2))}%` }}
-                    ></div>
-                  </div>
-                  <div className="flex justify-between text-[9px] text-gray-300 mt-1 font-mono">
-                    <span>-100</span><span>0</span><span>+100</span>
-                  </div>
-                </div>
-
-              </div>
-            </div>
-          )}
 
 
 
@@ -2604,31 +2447,6 @@ ${memoryContent}
                            />
                        </div>
                     </div>
-                 </div>
-              </div>
-
-              {/* 2. 核心数据区：MBTI + 雷达图 */}
-              <div className="grid grid-cols-3 gap-3">
-                 {/* 左边：MBTI 芯片 */}
-                 <div className="col-span-1 bg-gray-50 rounded-xl p-3 border border-gray-100 flex flex-col items-center justify-center">
-                    {(() => {
-                        const { openness: O, conscientiousness: C, extraversion: E, agreeableness: A } = big5;
-                        const mbti = `${E>5?'E':'I'}${O>5?'N':'S'}${A>5?'F':'T'}${C>5?'J':'P'}`;
-                        return (
-                           <>
-                             <span className="text-[9px] font-bold text-gray-400 uppercase">Type</span>
-                             <span className="text-lg font-black text-blue-600 mt-1">{mbti}</span>
-                           </>
-                        );
-                    })()}
-                 </div>
-                 
-                 {/* 右边：雷达图容器 */}
-                 <div className="col-span-2 bg-white border border-gray-100 rounded-xl p-2 relative overflow-hidden">
-                    <div className="scale-75 -mt-6 -mb-6">
-                        {renderRadar()}
-                    </div>
-                    <div className="absolute bottom-1 right-2 text-[9px] text-gray-300 font-mono">PSYCHO-METRICS</div>
                  </div>
               </div>
 
@@ -3514,6 +3332,11 @@ ${memoryContent}
 
 
 
+
+
+
+
+
 // ############################################################################
 // #REGION 5: 主程序入口 (ChatApp Main)
 // ############################################################################
@@ -3521,23 +3344,17 @@ ${memoryContent}
 
 
 
-// 这是一组代码：【ChatApp.tsx】头部定义 (确保接通了 onNavigateToSpace 这根电线)
-const ChatApp: React.FC<ChatAppProps> = ({
-  contacts,
+const GroupChatApp: React.FC<GroupChatAppProps> = ({
+  group,           // <--- 也就是原来的 activeContact
+  allContacts,     // <--- 用来做记忆挂载列表
   setContacts,
   globalSettings,
   setGlobalSettings,
   worldBooks,
   setWorldBooks,
   onExit,
-  isBackground, 
-  initialContactId,
-  onChatOpened,
-  onNewMessage,
-  onOpenSettings,
-  jumpToTimestamp, 
-  onJumpToMessage,
-  onNavigateToSpace // <--- ★★★ 必须确保这一行存在！否则点不动！ ★★★
+  isBackground,
+  onNewMessage
 }) => {
 
 
@@ -3553,18 +3370,10 @@ const ChatApp: React.FC<ChatAppProps> = ({
 
 
 
+ const contacts = allContacts;
 
- // ★★★ 新增：群聊相关状态 ★★★
-  const [showCreateGroupModal, setShowCreateGroupModal] = useState(false); // 建群弹窗开关
-  const [selectedMemberIds, setSelectedMemberIds] = useState<string[]>([]); // 建群时选了谁
-  const [groupName, setGroupName] = useState(""); // 群名
+const [view, setView] = useState<'chat' | 'settings'>('chat'); 
 
-
-
-
-// 1. 核心视图状态
-  const [view, setView] = useState<'list' | 'create' | 'chat' | 'settings'>('list'); // 当前在哪个页面
-  const [activeContactId, setActiveContactId] = useState<string | null>(initialContactId); // 当前选中的人ID
 
 // 2. 核心数据计算 (根据ID找到人)
   // 这一行非常重要！后面的代码都要用 activeContact
@@ -3603,112 +3412,12 @@ const ChatApp: React.FC<ChatAppProps> = ({
 
 
 
- // ==================== 精力生命周期与监听 (Effects) ====================
 
-// 这是一组代码：【最终修复版】的生物钟系统，包含一个可重用的核心函数
-// ★★★ 1. 这是我们打包好的“大脑”函数 ★★★
-const calculateAndUpdateEnergy = () => {
-    const now = Date.now();
-    let hasChanges = false;
 
-    const updatedContacts = contacts.map(c => {
-        let needsUpdate = false;
-        let updatedContact = { ...c };
 
-        // 闹钟检测逻辑 (保持不变)
-        if (c.agreements && c.agreements.length > 0) {
-            const dueAgreement = c.agreements.find(a => a.status === 'pending' && a.trigger.type === 'time' && typeof a.trigger.value === 'number' && a.trigger.value <= now && !c.dueAgreementId);
-            if (dueAgreement) {
-                updatedContact.dueAgreementId = dueAgreement.id;
-                updatedContact.pendingProactive = true;
-                needsUpdate = true;
-            }
-        }
 
-        // 如果在后台，只做闹钟检测，不做精力计算 (这部分逻辑在心跳里处理)
-        if (isBackgroundRef.current) {
-            return needsUpdate ? updatedContact : c;
-        }
 
-        // 初始化防崩溃
-        if (!updatedContact.mood?.energy) {
-            updatedContact.mood = { ...(updatedContact.mood || {}), current: updatedContact.mood?.current || "Calm", energy: { current: 80, max: 100, status: 'Awake', lastUpdate: now } };
-        }
 
-        const energySys = updatedContact.mood.energy;
-        const timeDiffMinutes = (now - energySys.lastUpdate) / 60000;
-        
-        // 如果时间差小于1分钟，没必要计算
-        if (timeDiffMinutes < 1 && !needsUpdate) return c;
-
-        let newEnergy = energySys.current;
-        let newStatus = energySys.status;
-
-        // ★★★ 核心修复逻辑：断层补觉 ★★★
-        // 如果距离上次更新超过了4小时(240分钟)，并且现在不是深夜（说明是第二天早上了）
-        if (timeDiffMinutes > 240 && !(new Date().getHours() >= 23 || new Date().getHours() < 6)) {
-            console.log(`[生物钟校准] 检测到 ${c.name} 离线超过4小时，强制回血！`);
-            newEnergy = 95; // 直接回满到95
-            newStatus = 'Awake';
-        } else {
-            // 正常的实时消耗逻辑
-            let changeRate = 0;
-            if (energySys.status === 'Sleeping') {
-                changeRate = 0.5; // 睡觉时每分钟回血0.5
-                if (newEnergy >= 100) newStatus = 'Awake';
-            } else {
-                // ... (你原来的消耗逻辑) ...
-                const currentHour = new Date().getHours();
-                if (currentHour >= 23 || currentHour < 6) changeRate = -1.2;
-                else if (currentHour >= 18) changeRate = -0.4;
-                else if (currentHour >= 14) changeRate = -0.2;
-                else changeRate = -0.1;
-            }
-            newEnergy += changeRate * timeDiffMinutes;
-        }
-
-        // 边界修正
-        if (newEnergy > 100) newEnergy = 100;
-        if (newStatus !== 'Sleeping') {
-            if (newEnergy <= 0) { newEnergy = 0; newStatus = 'Exhausted'; }
-            else if (newEnergy < 20) { newStatus = 'Tired'; }
-            else { newStatus = 'Awake'; }
-        }
-
-        // 检查是否有实质变化
-        if (Math.abs(newEnergy - energySys.current) > 0.1 || newStatus !== energySys.status || needsUpdate) {
-            hasChanges = true;
-            updatedContact.mood = { ...updatedContact.mood, energy: { ...energySys, current: parseFloat(newEnergy.toFixed(1)), status: newStatus, lastUpdate: now } };
-            return updatedContact;
-        }
-        
-        return c;
-    });
-
-    if (hasChanges) {
-        setContacts(updatedContacts);
-    }
-};
-
-// ★★★ 2. 这是 App 刚打开时立刻执行一次的“校准” ★★★
-useEffect(() => {
-    console.log("[生物钟] App 启动，执行一次强制校准...");
-    // 延迟一点点执行，确保所有数据都加载好了
-    setTimeout(() => calculateAndUpdateEnergy(), 1000); 
-}, []); // 空数组意味着这个 effect 只在组件第一次加载时运行一次
-
-// ★★★ 3. 这是改造后的“心跳”，每30秒调用一次“大脑” ★★★
-useEffect(() => {
-    const metabolismInterval = setInterval(() => {
-        // 如果 App 在后台，我们不计算精力，只检查闹钟
-        if(isBackgroundRef.current) {
-            // 这里可以只保留闹钟检查的逻辑，但为了简单，我们直接调用，函数内部会处理
-        }
-        calculateAndUpdateEnergy();
-    }, 30000); // 依然是30秒心跳一次
-
-    return () => clearInterval(metabolismInterval);
-}, [contacts, setContacts]); // 依赖项保持不变
 
 
 
@@ -3729,6 +3438,15 @@ useEffect(() => {
   // =========================================================================================
   // ✍️ 第 1 区：输入与发送系统 (Input & Send)
   // =========================================================================================
+
+
+
+// 群聊新增
+const [showMountPanel, setShowMountPanel] = useState(false); // 控制面板开关
+const [mountedMemoryConfig, setMountedMemoryConfig] = useState<{ [id: string]: number }>({}); // 存储配置
+
+
+
 
   // --- 1.1 输入状态 ---
   const [input, setInput] = useState(""); // 输入框里的文字
@@ -7105,43 +6823,6 @@ impressionThreshold: Math.floor(Math.random() * (150 - 90 + 1)) + 90, // 对于 
   };
 
 
-// ★★★ 新增：创建群聊函数 ★★★
-  const handleCreateGroup = () => {
-    if (!groupName.trim()) return alert("起个群名吧！");
-    if (selectedMemberIds.length < 1) return alert("群里至少得有一个人吧（除了你）");
-
-    const newGroup: Contact = {
-      id: "group_" + Date.now(),
-      created: Date.now(),
-      name: groupName,
-      // 群头像可以用一个特定的默认图
-      avatar: "https://api.dicebear.com/7.x/initials/svg?seed=" + groupName, 
-      isGroup: true,       // 标记为群
-      members: selectedMemberIds, // 存入成员ID
-      
-      // 以下是为了防报错填的默认值
-      persona: "群聊模式",
-      userName: globalSettings.userName || "User",
-      userAvatar: globalSettings.avatar || "",
-      userPersona: "",
-      history: [],
-      mood: { current: "Active", energy: { current: 100, max: 100, status: 'Awake', lastUpdate: Date.now() } },
-      hef: {} as any, 
-      longTermMemories: [],
-      userTags: [],
-      // ... 其他你需要的默认值
-    };
-
-    setContacts(prev => [newGroup, ...prev]); // 加到列表最上面
-    setShowCreateGroupModal(false); // 关弹窗
-    setGroupName("");
-    setSelectedMemberIds([]);
-  };
-
-
-
-
-
   const handleUpdateContact = (updates: Partial<Contact>) => {
     if (!activeContact) return;
     setContacts(prev => prev.map(c => c.id === activeContact.id ? { ...c, ...updates } : c));
@@ -7257,7 +6938,7 @@ const handleDeleteContact = (contactIdToDelete: string) => {
   setContacts(prevContacts => prevContacts.filter(c => c.id !== contactIdToDelete));
   // 如果删除的是当前活跃聊天，重置并返回列表
   if (activeContactId === contactIdToDelete) {
-    setActiveContactId(null);
+    onExit();
     setView('list');
   }
 };
@@ -7835,30 +7516,6 @@ useEffect(() => {
     });
   }, [contacts]); // 依赖项是 [contacts]，意味着只要角色数据一变，就立刻检查
 
-
-
-
-  // 5. 跳转并清除红点
-// 跳转 + 自动触发 AI 回复 
-  useEffect(() => {
-    if (initialContactId) {
-      console.log(`[ChatApp] 接到跳转指令 -> 目标: ${initialContactId}`);
-      
-      // 1. 强制选中联系人
-      setActiveContactId(initialContactId);
-      
-      // 2. ★★★ 强制切换视图 (解决只跳到列表的问题) ★★★
-      setView('chat'); 
-      
-      // 3. 清除未读红点
-      setContacts(prev => prev.map(c => c.id === initialContactId ? { ...c, unread: 0 } : c));
-
-
-
-      // 5. 通知 App.tsx 清除跳转标记
-      onChatOpened();
-    }
-  }, [initialContactId]);
 
 
 
@@ -8465,372 +8122,8 @@ const readTavernPng = async (file: File): Promise<any | null> => {
 
 
 
-// ==================== 视图部分：列表页 (已修复崩溃问题) ====================
-  if (view === 'list') {
-    return (
-      <div className="h-full w-full bg-gray-50 flex flex-col pt-[calc(44px+env(safe-area-inset-top))]">
-        
-        {/* ★★★ 修复点：列表页 Header 不应读取 activeContact ★★★ */}
-<SafeAreaHeader
-          title="消息列表"
-          // 左边：点击调用 onExit，返回到手机桌面
-          left={
-            <button onClick={onExit} className="text-blue-500 text-base font-bold px-3 py-2 flex items-center hover:opacity-70 transition-opacity">
-              <span className="text-2xl mr-0.5 pb-1">‹</span>返回
-            </button>
-          }
-          // 右边：点击进入 create 视图（导入/新建）
-right={
-  <div className="flex items-center gap-3">
-    {/* ★★★ 新增：建群按钮 ★★★ */}
-    <button 
-      onClick={() => setShowCreateGroupModal(true)} 
-      className="text-xl bg-blue-50 text-blue-600 w-8 h-8 rounded-full flex items-center justify-center font-bold"
-    >
-      👨‍👩‍👧
-    </button>
-
-    {/* 原有的导入按钮 */}
-    <label className="text-blue-500 text-2xl cursor-pointer hover:opacity-70 transition-opacity">
-      📥
-      <input type="file" accept=".json,.png" onChange={handleCardImport} className="hidden" />
-    </label>
-    {/* 原有的新建单人按钮 */}
-    <button onClick={() => setView('create')} className="text-blue-500 text-3xl font-light px-3 py-1 hover:opacity-70 transition-opacity">
-      +
-    </button>
-  </div>
-}
-        />
-
-        {/* 列表内容区 */}
-        <div className="flex-1 overflow-y-auto bg-gray-50 pb-[calc(80px+env(safe-area-inset-bottom))]">
-          {/* 聊天列表 */}
-          {navTab === 'chats' && (
-            <>
-              {contacts.length === 0 && (
-                <div className="flex flex-col items-center justify-center h-full text-gray-400">
-                  <p>暂无消息</p>
-                  <p className="text-sm">点击右上角 + 号创建一个新朋友吧</p>
-                </div>
-              )}
-              {contacts.map((c, index) => (
-             <ChatListItem
-                    key={c.id}
-                    contact={c}
-                    onClick={() => {
-                      // 1. ★★★ 标记为手动进入！告诉后面的代码不要执行跳转！ ★★★
-                      isManualNav.current = true;
-                      
-                      // 2. 正常切换页面 (删掉了报错的 setJumpTo... 代码)
-                      setActiveContactId(c.id);
-                      setView('chat');
-                    }}
-                    onDelete={handleDeleteContact}
-                    onPin={handlePinContact}
-                    isPinned={index === 0 && contacts.length > 1}
-                  />
-              ))}
-            </>
-          )}
-
-          {/* 动态（占位） */}
-          {navTab === 'moments' && (
-            <div className="flex flex-col items-center justify-center h-full text-gray-400">
-              <p>朋友圈功能开发中...</p>
-            </div>
-          )}
-
-{/* ==================== ⭐ 收藏夹：真·聊天记录卡片版 (最终修复) ==================== */}
-          {navTab === 'favorites' && (
-            <div className="flex flex-col min-h-full bg-gray-50">
-              {/* 顶部标签栏 */}
-              <div className="p-3 bg-white shadow-sm overflow-x-auto whitespace-nowrap no-scrollbar flex gap-2 z-10 sticky top-0">
-                {["全部", ...Array.from(new Set(favorites.map(f => f.category)))].map(cat => (
-                  <button
-                    key={cat}
-                    onClick={() => setActiveFavCategory(cat)}
-                    className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all ${activeFavCategory === cat
-                        ? 'bg-blue-500 text-white shadow-md transform scale-105'
-                        : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
-                      }`}
-                  >
-                    {cat}
-                  </button>
-                ))}
-              </div>
-
-              {/* 列表内容区 */}
-              <div className="flex-1 p-4 space-y-6 pb-20">
-                {favorites.filter(f => activeFavCategory === "全部" || f.category === activeFavCategory).map((item) => {
-                  // 1. 获取对应的角色信息 (用来拿头像和气泡颜色)
-                  const contact = contacts.find(c => c.id === item.contactId || c.name === item.contactName);
-                  
-                  // 2. 获取正确的颜色配置 (如果没有找到角色，就用默认粉色/白色)
-                  const bubbleUser = contact?.bubbleColorUser || '#FBCFE8';
-                  const bubbleAI = contact?.bubbleColorAI || '#FFFFFF';
-                  
-                  // 3. 准备要显示的消息列表
-                  const displayMessages = item.isPackage ? item.messages : [item.msg];
-
-                  return (
-                    <div
-                      key={item.id}
-                      // ★★★ 长按检测 (onTouchStart + onMouseDown) ★★★
-                      onTouchStart={() => {
-                        isLongPress.current = false;
-                        longPressTimer.current = setTimeout(() => {
-                          isLongPress.current = true;
-                          setSelectedFav(item);
-                          setShowFavMenu(true);
-                          if (navigator.vibrate) navigator.vibrate(50);
-                        }, 600);
-                      }}
-                      onTouchEnd={() => { if (longPressTimer.current) clearTimeout(longPressTimer.current); }}
-                      onMouseDown={() => { longPressTimer.current = setTimeout(() => { setSelectedFav(item); setShowFavMenu(true); }, 600); }}
-                      onMouseUp={() => { if (longPressTimer.current) clearTimeout(longPressTimer.current); }}
-                      onContextMenu={(e) => e.preventDefault()} // 禁止浏览器默认菜单
-                      
-                      // 视觉容器：白色圆角卡片
-                      className="bg-white rounded-3xl shadow-[0_4px_20px_rgba(0,0,0,0.05)] border border-gray-100 overflow-hidden relative group active:scale-98 transition-transform duration-200 select-none"
-                    >
-                      {/* --- 卡片头部：来源信息 --- */}
-                      <div className="bg-gray-50/80 px-4 py-3 border-b border-gray-100 flex justify-between items-center backdrop-blur-sm">
-                        <div className="flex items-center gap-2">
-                          {/* 顶部小头像 */}
-                          <img src={contact?.avatar || item.avatar} className="w-6 h-6 rounded-full border border-white shadow-sm object-cover" />
-                          <div>
-                            <div className="font-bold text-xs text-gray-800">{item.contactName} 的回忆</div>
-                            <div className="text-[9px] text-gray-400 font-mono">{new Date(item.timestamp).toLocaleDateString()}</div>
-                          </div>
-                        </div>
-                        <span className="bg-blue-50 text-blue-500 text-[10px] px-2 py-1 rounded-lg font-bold border border-blue-100">
-                          #{item.category}
-                        </span>
-                      </div>
-
-                      {/* --- 卡片内容：模拟聊天窗口 (核心修改区) --- */}
-                      <div className="p-4 space-y-3 bg-gray-50/30">
-                        {displayMessages?.filter(Boolean).map((m, i) => {
-                          const isMe = m.role === 'user';
-                          // 头像逻辑：如果是用户，尝试取当前用户的头像；如果是AI，取角色头像
-                          const currentAvatar = isMe 
-                            ? (contact?.userAvatar || "https://api.dicebear.com/7.x/avataaars/svg?seed=User") 
-                            : (contact?.avatar || item.avatar);
-
-                          return (
-                            <div key={i} className={`flex items-start gap-2 ${isMe ? 'justify-end' : 'justify-start'}`}>
-                              
-                              {/* AI 头像 (在左边) */}
-                              {!isMe && (
-                                <img src={currentAvatar} className="w-8 h-8 rounded-full border border-white shadow-sm flex-shrink-0 object-cover" />
-                              )}
-                              
-                              {/* 气泡本体 */}
-                              <div className="flex flex-col max-w-[75%]">
-                                <div 
-                                  className={`px-3 py-2 text-xs leading-relaxed shadow-sm break-words relative
-                                    ${isMe ? 'rounded-2xl rounded-tr-sm' : 'rounded-2xl rounded-tl-sm'}
-                                  `}
-                                  style={{ 
-                                    backgroundColor: isMe ? bubbleUser : bubbleAI,
-                                    color: getContrastTextColor(isMe ? bubbleUser : bubbleAI),
-                                    border: '1px solid rgba(0,0,0,0.05)'
-                                  }}
-                                >
-                                  {/* 内容渲染：图片/语音/文字 */}
-                                  {m.type === 'image' || (m.content && m.content.startsWith('data:image')) ? (
-                                    <img src={m.content} className="rounded-lg max-w-full" alt="img" />
-                                  ) : m.type === 'voice' ? (
-                                    <div className="flex items-center gap-1 opacity-80"><span>🔊</span> 语音消息</div>
-                                  ) : (
-                                    <span>{m.content?.replace(/\[.*?\]/g, '') || '...'}</span>
-                                  )}
-                                </div>
-                              </div>
-
-                              {/* 用户 头像 (在右边) */}
-                              {isMe && (
-                                <img src={currentAvatar} className="w-8 h-8 rounded-full border border-white shadow-sm flex-shrink-0 object-cover" />
-                              )}
-                            </div>
-                          );
-                        })}
-                      </div>
-
-                      {/* 底部提示条 */}
-                      <div className="bg-white p-1.5 border-t border-gray-50 text-center">
-                         <p className="text-[8px] text-gray-300 font-bold tracking-widest uppercase scale-90">长按跳转 • LONG PRESS TO JUMP</p>
-                      </div>
-                      
-                      {/* 长按遮罩 (防止直接点到图片) */}
-                      <div className="absolute inset-0 z-20 bg-transparent" />
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* 5. 底部导航栏 */}
-        <div 
-          className="absolute bottom-0 left-0 right-0 bg-white border-t flex justify-around pt-3 shadow-[0_-5px_15px_rgba(0,0,0,0.05)] z-50"
-          style={{ paddingBottom: `calc(12px + env(safe-area-inset-bottom))` }}
-        >
-          <button onClick={() => setNavTab('chats')} className={`flex flex-col items-center ${navTab === 'chats' ? 'text-blue-500' : 'text-gray-400'}`}>
-            <span className="text-xl">💬</span>
-            <span className="text-[10px] font-bold">聊天</span>
-          </button>
-          <button onClick={() => setNavTab('moments')} className={`flex flex-col items-center ${navTab === 'moments' ? 'text-blue-500' : 'text-gray-400'}`}>
-            <span className="text-xl">⭕</span>
-            <span className="text-[10px] font-bold">动态</span>
-          </button>
-          <button onClick={() => setNavTab('favorites')} className={`flex flex-col items-center ${navTab === 'favorites' ? 'text-blue-500' : 'text-gray-400'}`}>
-            <span className="text-xl">⭐</span>
-            <span className="text-[10px] font-bold">收藏</span>
-          </button>
-        </div>
-
-{/* ★★★ 建群选择人员弹窗 ★★★ */}
-        {showCreateGroupModal && (
-          <div className="fixed inset-0 z-[100] bg-black/50 flex items-center justify-center p-4">
-            <div className="bg-white w-full max-w-sm rounded-2xl flex flex-col max-h-[80%] shadow-2xl animate-scaleIn">
-              <div className="p-4 border-b">
-                <h3 className="font-bold text-lg text-center">发起群聊</h3>
-              </div>
-              
-              <div className="p-4 space-y-4 flex-1 overflow-y-auto">
-                {/* 群名输入 */}
-                <div>
-                  <label className="text-xs font-bold text-gray-500 block mb-1">群聊名称</label>
-                  <input 
-                    className="w-full bg-gray-100 border-b-2 border-transparent focus:border-blue-500 p-2 outline-none text-sm"
-                    placeholder="例如：周末开黑群"
-                    value={groupName}
-                    onChange={e => setGroupName(e.target.value)}
-                  />
-                </div>
-
-                {/* 人员选择 */}
-                <div>
-                  <label className="text-xs font-bold text-gray-500 block mb-2">选择成员 ({selectedMemberIds.length})</label>
-                  <div className="space-y-2">
-                    {/* 只显示单人，不显示已有的群 */}
-                    {contacts.filter(c => !c.isGroup).map(c => (
-                      <div 
-                        key={c.id}
-                        onClick={() => {
-                          setSelectedMemberIds(prev => 
-                            prev.includes(c.id) ? prev.filter(id => id !== c.id) : [...prev, c.id]
-                          );
-                        }}
-                        className={`flex items-center gap-3 p-2 rounded-xl border cursor-pointer transition ${selectedMemberIds.includes(c.id) ? 'bg-blue-50 border-blue-500' : 'border-gray-100'}`}
-                      >
-                        <img src={c.avatar} className="w-8 h-8 rounded-full" />
-                        <span className="text-sm font-bold flex-1">{c.name}</span>
-                        {selectedMemberIds.includes(c.id) && <span className="text-blue-500">✓</span>}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-
-              <div className="p-4 border-t flex gap-3">
-                <button onClick={() => setShowCreateGroupModal(false)} className="flex-1 py-3 bg-gray-100 rounded-xl font-bold text-gray-500 text-sm">取消</button>
-                <button onClick={handleCreateGroup} className="flex-1 py-3 bg-blue-500 rounded-xl font-bold text-white text-sm">创建 ({selectedMemberIds.length})</button>
-              </div>
-            </div>
-          </div>
-        )}
-  
-{/* ★★★ 收藏夹长按菜单 ★★★ */}
-        {showFavMenu && selectedFav && (
-          <div className="absolute inset-0 z-50 flex items-end justify-center bg-black/40 animate-fadeIn" onClick={() => setShowFavMenu(false)}>
-            <div className="bg-white w-full rounded-t-2xl p-4 animate-slideUp" onClick={e => e.stopPropagation()}>
-              <div className="text-center text-gray-400 text-xs mb-4">收藏选项</div>
-              
-              {/* 跳转按钮 */}
-              <button 
-                onClick={handleJumpToFav} 
-                className="w-full py-3 mb-2 bg-blue-50 text-blue-600 rounded-xl font-bold flex items-center justify-center gap-2"
-              >
-                <span>🚀</span> 跳转到消息原文
-              </button>
-
-              {/* 删除按钮 */}
-              <button 
-                onClick={() => {
-                   if(confirm("确定删除这条收藏吗？")) {
-                       setFavorites(prev => prev.filter(f => f.id !== selectedFav.id));
-                       setShowFavMenu(false);
-                   }
-                }} 
-                className="w-full py-3 text-red-500 font-bold border-b"
-              >
-                🗑️ 删除收藏
-              </button>
-              
-              <div className="h-2 bg-gray-100 -mx-4 mt-2"></div>
-              <button onClick={() => setShowFavMenu(false)} className="w-full py-3 text-gray-500 font-bold">取消</button>
-            </div>
-          </div>
-        )}
 
 
-
-
-      </div>
-    );
-  }
-
-
-  
-  if (view === 'create') {
-    return (
-      <div className="h-full w-full bg-white flex flex-col p-6 overflow-y-auto">
-        <h2 className="text-2xl font-bold mb-6 text-gray-800">New Contact</h2>
-        <div className="space-y-6">
-                    {/* 👇👇👇 超级安全版 PresetSelector，只在有预设时才显示 👇👇👇 */}
-          {globalSettings?.userPresets && globalSettings.userPresets.length > 0 && activeContact && (
-            <PresetSelector globalSettings={globalSettings} onSelect={(p: any) => {
-              if (!p) return;
-              setEditForm(prev => ({
-                ...prev,
-                userName: p.userName || activeContact.userName || "User",
-                userAvatar: p.userAvatar || activeContact.userAvatar,
-                userPersona: p.description || activeContact.userPersona || ""
-              }));
-              alert(`已切换为: ${p.name || "未知预设"}（记得点底部 Save 保存哦）`);
-            }} />
-          )}
-          {/* 👆👆👆 结束 👆👆👆 */}
-          {/* 👆👆👆 [插入结束] 👆👆👆 */}
-          <div className="flex flex-col items-center">
-            <div className="w-24 h-24 rounded-full bg-gray-100 overflow-hidden mb-2 border-2 border-dashed border-gray-300 relative group">
-              {editForm.avatar ? <img src={editForm.avatar} className="w-full h-full object-cover" alt="avatar" /> : <span className="absolute inset-0 flex items-center justify-center text-gray-400">AI Photo</span>}
-              <input type="file" onChange={(e) => handleImageUpload(e, 'avatar')} className="absolute inset-0 opacity-0 cursor-pointer" accept="image/*" />
-            </div>
-            <span className="text-xs text-blue-500">Upload Character Photo</span>
-          </div>
-          <div>
-            <label className="text-sm font-bold text-gray-700">Character Name</label>
-            <input type="text" className="w-full border-b border-gray-300 py-2 outline-none focus:border-blue-500 transition" placeholder="角色名"
-              value={editForm.name || ""} onChange={e => setEditForm({ ...editForm, name: e.target.value })} />
-          </div>
-          <div>
-            <label className="text-sm font-bold text-gray-700">Your Name</label>
-            <input type="text" className="w-full border-b border-gray-300 py-2 outline-none focus:border-blue-500 transition" placeholder="用户名"
-              value={editForm.userName || ""} onChange={e => setEditForm({ ...editForm, userName: e.target.value })} />
-          </div>
-          <button onClick={handleCreateContact} className="w-full bg-blue-500 text-white py-3 rounded-xl font-bold shadow-lg mt-8 active:scale-95 transition">
-            Start Chatting
-          </button>
-          <button onClick={() => setView('list')} className="w-full text-gray-400 py-3 text-sm">Cancel</button>
-        </div>
-      </div>
-    );
-  }
 
 
 
@@ -9209,192 +8502,6 @@ if (view === 'settings' && activeContact) {
 
 
 
-          {/* ★★★ 五维数值编辑器 (Big 5 Sliders) ★★★ */}
-          <div className="mt-4 bg-gray-50 p-3 rounded-xl border border-gray-100 animate-slideDown">
-            <h4 className="text-[10px] font-bold text-gray-400 uppercase mb-3 flex items-center gap-1">
-              🧬 Personality DNA (0-10)
-            </h4>
-            
-            {[
-              { key: 'openness', label: '开放性 (脑洞/艺术)', left: '保守', right: '探索' },
-              { key: 'conscientiousness', label: '尽责性 (自律/严谨)', left: '随意', right: '严谨' },
-              { key: 'extraversion', label: '外向性 (社交/活力)', left: '社恐', right: '社牛' },
-              { key: 'agreeableness', label: '宜人性 (友善/包容)', left: '毒舌', right: '天使' },
-              { key: 'neuroticism', label: '敏感度 (情绪/焦虑)', left: '钝感', right: '敏感' },
-            ].map((trait) => {
-              // 安全获取当前数值
-              const currentHef = editForm.hef || form.hef || {};
-              const iv = currentHef.INDIVIDUAL_VARIATION || {};
-              const big5 = iv.personality_big5 || { openness: 5, conscientiousness: 5, extraversion: 5, agreeableness: 5, neuroticism: 5 };
-              const val = big5[trait.key] ?? 5;
-
-              return (
-                <div key={trait.key} className="mb-3 last:mb-0">
-                  <div className="flex justify-between items-center mb-1">
-                    <span className="text-[10px] font-bold text-gray-600">{trait.label}</span>
-                    <span className="text-[10px] font-mono text-blue-500 font-bold bg-white px-1.5 rounded border border-blue-100">
-                      {Number(val).toFixed(1)}
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-[9px] text-gray-400 w-6 text-right">{trait.left}</span>
-                    <input 
-                       type="range" 
-                       min="0" max="10" step="0.1" 
-                       value={val}
-                       onChange={(e) => {
-                           const newVal = parseFloat(e.target.value);
-                           // 深度更新逻辑
-                           const newHef = { ...currentHef };
-                           if (!newHef.INDIVIDUAL_VARIATION) newHef.INDIVIDUAL_VARIATION = {};
-                           if (!newHef.INDIVIDUAL_VARIATION.personality_big5) newHef.INDIVIDUAL_VARIATION.personality_big5 = { ...big5 };
-                           
-                           newHef.INDIVIDUAL_VARIATION.personality_big5[trait.key] = newVal;
-                           
-                           setEditForm({ ...editForm, hef: newHef });
-                       }}
-                       className="flex-1 h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-500"
-                    />
-                    <span className="text-[9px] text-gray-400 w-6">{trait.right}</span>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-
-
-
-
-{/* ==================== [双轴版] 初始羁绊校准 (爱意 + 友谊) ==================== */}
-          <div className="mt-6 bg-gradient-to-br from-rose-50 to-slate-50 p-4 rounded-xl border border-rose-100 animate-slideDown relative overflow-hidden">
-            
-            {/* 锁定后的遮罩层 */}
-            {form.isAffectionLocked && (
-              <div className="absolute inset-0 z-10 bg-white/60 backdrop-blur-[1px] flex flex-col items-center justify-center select-none">
-                <div className="text-4xl mb-2">🔒</div>
-                <div className="text-xs font-bold text-gray-500 uppercase tracking-widest">
-                  RELATIONSHIP LOCKED
-                </div>
-                <div className="text-[10px] text-gray-500 mt-1 font-bold">
-                  命运的齿轮已经转动，初始状态已锁定
-                </div>
-              </div>
-            )}
-
-            <div className="flex justify-between items-center mb-4">
-              <div className="flex items-center gap-2">
-                <span className="text-xl">⚖️</span>
-                <div>
-                  <h3 className="text-xs font-bold text-gray-700 uppercase">初始关系双轴校准</h3>
-                  <p className="text-[9px] text-gray-400">设定故事开始时的 爱意(红) 与 友谊(蓝)</p>
-                </div>
-              </div>
-              
-              {/* ★★★ 升级版：双轴 AI 判定按钮 ★★★ */}
-              {!form.isAffectionLocked && (
-                <button
-                  disabled={isAnalyzing}
-              // 这是一组代码：新的 onClick 事件，只负责打开问答弹窗
-onClick={() => {
-    // 检查API配置，如果没有就不往下走
-    const activePreset = globalSettings.apiPresets.find(p => p.id === globalSettings.activePresetId);
-    if (!activePreset) {
-        alert("请先在系统设置中配置 API Key！");
-        return;
-    }
-    // 重置旧答案并打开问答弹窗
-    setDestinyAnswers({ q1: '', q2: '' });
-    setShowDestinyQuiz(true);
-}}
-                  className="bg-white border border-purple-200 text-purple-600 px-3 py-1 rounded-full text-[10px] font-bold shadow-sm hover:bg-purple-50 transition flex items-center gap-1"
-                >
-                  {isAnalyzing ? <><span className="animate-spin">⏳</span> 推演中...</> : <>🔮 AI 判定命运</>}
-                </button>
-              )}
-            </div>
-
-
-
-
-
-
-            {/* ==================== 🔴 滑块 1: 爱意值 (Romance) ==================== */}
-            <div className="mb-4">
-                <div className="flex justify-between items-end mb-1 px-1">
-                    <span className="text-[10px] font-bold text-rose-500 flex items-center gap-1">
-                        ❤️ 爱意 (Romance) 
-                        <span className="text-gray-300 font-normal">- 心动与激情</span>
-                    </span>
-                    <span className={`text-xs font-black ${(editForm.affectionScore || 50) < 0 ? 'text-gray-500' : 'text-rose-500'}`}>
-                        {form.affectionScore ?? 50}
-                    </span>
-                </div>
-                <div className="flex items-center gap-2">
-                    <span className="text-[9px] text-gray-400 w-6 text-right">-100</span>
-                    <input
-                      type="range"
-                      min="-100" max="100" step="1"
-                      disabled={!!form.isAffectionLocked}
-                      value={form.affectionScore ?? 50}
-                      onChange={(e) => setEditForm(prev => ({ ...prev, affectionScore: parseInt(e.target.value) }))}
-                      className={`w-full h-2 rounded-lg appearance-none cursor-pointer ${form.isAffectionLocked ? 'bg-gray-200' : 'bg-gradient-to-r from-gray-200 via-rose-200 to-rose-500 accent-rose-500'}`}
-                    />
-                    <span className="text-[9px] text-gray-400 w-6">100</span>
-                </div>
-            </div>
-
-            {/* ==================== 🔵 滑块 2: 友谊值 (Friendship) ==================== */}
-            <div className="mb-4">
-                <div className="flex justify-between items-end mb-1 px-1">
-                    <span className="text-[10px] font-bold text-sky-600 flex items-center gap-1">
-                        🤝 友谊 (Friendship) 
-                        <span className="text-gray-300 font-normal">- 信任与默契</span>
-                    </span>
-                    <span className={`text-xs font-black ${(editForm.friendshipScore || 50) < 0 ? 'text-gray-500' : 'text-sky-600'}`}>
-                        {form.friendshipScore ?? 50}
-                    </span>
-                </div>
-                <div className="flex items-center gap-2">
-                    <span className="text-[9px] text-gray-400 w-6 text-right">-100</span>
-                    <input
-                      type="range"
-                      min="-100" max="100" step="1"
-                      disabled={!!form.isAffectionLocked}
-                      // ★★★ 这里绑定 friendshipScore ★★★
-                      value={form.friendshipScore ?? 50}
-                      onChange={(e) => setEditForm(prev => ({ ...prev, friendshipScore: parseInt(e.target.value) }))}
-                      className={`w-full h-2 rounded-lg appearance-none cursor-pointer ${form.isAffectionLocked ? 'bg-gray-200' : 'bg-gradient-to-r from-gray-200 via-sky-200 to-sky-500 accent-sky-500'}`}
-                    />
-                    <span className="text-[9px] text-gray-400 w-6">100</span>
-                </div>
-            </div>
-
-
-
-
-
-            {/* 锁定按钮 */}
-            {!form.isAffectionLocked ? (
-              <button
-                onClick={() => {
-                  if (confirm(`⚠️ 确定以现在的数值开始吗？\n\n❤️ 爱意: ${editForm.affectionScore || 50}\n🤝 友谊: ${editForm.friendshipScore || 50}\n\n一旦锁定，这就是你们的起点！`)) {
-                    setEditForm(prev => ({ ...prev, isAffectionLocked: true }));
-                  }
-                }}
-                className="w-full py-2 bg-gradient-to-r from-gray-700 to-gray-900 text-white rounded-lg text-xs font-bold shadow-md hover:opacity-90 active:scale-95 transition"
-              >
-                🔒 锁定双轴初始值 (开启故事)
-              </button>
-            ) : (
-              <div className="text-center">
-                 <div className="inline-block bg-white/50 text-gray-400 px-3 py-1 rounded-full text-[10px] border border-gray-200 shadow-sm">
-                   ✅ 初始状态已锁定
-                 </div>
-              </div>
-            )}
-          </div>
-
-
 
 
 
@@ -9617,6 +8724,33 @@ onClick={() => {
           </button>
         </section>
 
+
+
+
+
+
+
+{/* ★★★ 新增：记忆挂载控制台 ★★★ */}
+        <section className="bg-white rounded-2xl p-4 shadow-sm border border-gray-200 mb-6">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <span className="text-xl">💾</span>
+              <div>
+                <h3 className="text-xs font-bold text-gray-400 uppercase">记忆挂载舱</h3>
+                <p className="text-[10px] text-gray-400">
+                  当前已同步: <span className="text-indigo-600 font-bold">{Object.keys(mountedMemoryConfig).length}</span> 人
+                </p>
+              </div>
+            </div>
+            
+            <button
+              onClick={() => setShowMountPanel(true)}
+              className="px-4 py-2 bg-indigo-50 text-indigo-600 rounded-xl font-bold text-xs shadow-sm border border-indigo-100 hover:bg-indigo-100 active:scale-95 transition"
+            >
+              ⚙️ 配置挂载
+            </button>
+          </div>
+        </section>
 
 
 
@@ -10327,29 +9461,7 @@ const activePreset = globalSettings.apiPresets.find(p => p.id === globalSettings
   // ==================== 聊天界面 ====================
 
     // 🟢 1. 插入：计算其他人的未读消息数
-if (view === 'chat' && activeContact) {
-    
-    // ★★★ 如果当前选中的是群聊，直接渲染 GroupChatApp！ ★★★
-    if (activeContact.isGroup) {
-      return (
-        <GroupChatApp
-          // 把必要的数据传过去
-          group={activeContact} 
-          allContacts={contacts} // 传所有联系人过去，为了做记忆挂载！
-          setContacts={setContacts}
-          globalSettings={globalSettings}
-          onExit={() => {
-             setView('list'); 
-             setActiveContactId(null);
-          }}
-          // ... 还可以传其他你觉得需要的 props
-        />
-      );
-    }
-
-    // ★★★ 如果是普通私聊，走下面的原有逻辑 (保持不变) ★★★
-    // ... 这里是你原来的私聊界面 return 代码 ...
-
+    if (activeContact) {
     const otherUnreadCount = contacts.reduce((acc, c) => c.id !== activeContact.id ? acc + ((c as any).unread || 0) : acc, 0);
 
 return (
@@ -11721,6 +10833,22 @@ onForceUpdate={async () => {
 
 
 
+
+{/* ★★★ 记忆挂载面板 (挂在这里！) ★★★ */}
+        {showMountPanel && (
+          <MemoryMountPanel 
+            contacts={contacts} 
+            mountedConfig={mountedMemoryConfig}
+            onUpdateConfig={(id, count) => setMountedMemoryConfig(prev => ({ ...prev, [id]: count }))}
+            onClose={() => setShowMountPanel(false)}
+          />
+        )}
+
+
+
+
+
+
 {/* ▼▼▼ 把你的新代码粘贴在这里！▼▼▼ */}
 {/* ==================== 漂亮的警告弹窗 ==================== */}
 <WarningModal 
@@ -11743,19 +10871,4 @@ onForceUpdate={async () => {
 };
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-export default ChatApp;
+export default GroupChatApp;

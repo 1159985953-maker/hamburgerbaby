@@ -325,7 +325,8 @@ export interface Contact {
   affectionScore: number;
   friendshipScore?: number;
   relationshipStatus: string;
-  
+  isGroup?: boolean;       // 标记：这是否是一个群？
+  members?: string[];      // 成员：存成员的 ID (如果是群的话)
   // ★★★ 核心：邀请状态 (none=未邀请, inviting=等待同意, accepted=已建成, rejected=被拒) ★★★
   invitationStatus?: 'none' | 'inviting' | 'accepted' | 'rejected';
   

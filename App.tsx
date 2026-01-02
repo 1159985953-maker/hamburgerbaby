@@ -25,7 +25,8 @@ import DiaryApp from './components/DiaryApp'; // <--- ➕ 加上这一行！
 // 1. 在这里改账号密码和【身份牌 role】
 const ALLOWED_USERS = [
 
-
+  // 你可以再加一个 VIP 用户
+  { id: "00", user: "heety", pass: "zhangyue051110", name: "heety", role: "vip" },
 
   // 这是一个管理员，role 是 'admin'，拥有所有权限
   { id: "0", user: "hannie",  pass: "hanniehanbaobao", name: "hannie", role: "admin" },
