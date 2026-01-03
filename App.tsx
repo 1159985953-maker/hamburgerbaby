@@ -614,18 +614,7 @@ const calculateEmotionalNeed = (contact: Contact): EmotionalNeed | undefined => 
 
 const App: React.FC = () => {
   // --- 状态定义 ---
-  const [globalNotification, setGlobalNotification] = useState<{
-    type: 'proactive_thinking' | 'new_message';
-    contactId: string;
-    name: string;
-    avatar: string;
-    content?: string;
-    // 新增：保存用户自定义的名字和个性签名
-userName: string;
-userSignature: string;
-userPersona?: string;
-lifeAIHistory?: {role: 'user'|'assistant', content: string}[];
-  } | null>(null);
+const [globalNotification, setGlobalNotification] = useState<any | null>(null);
 // ==================== [新代码组 2] 登录状态管理 ====================
   // 检查浏览器缓存，看之前是不是登录过
   const [currentUser, setCurrentUser] = useState<any>(() => {

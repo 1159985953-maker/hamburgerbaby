@@ -19,28 +19,29 @@ import { readTavernPng, fileToBase64 } from './utils/fileUtils';
 
 
 // ############################################################################
-// 🟢 群聊专用 Props 定义
+// 🟢 群聊专用 Props 定义 (修复版：补全了缺失的通知函数)
 // ############################################################################
 interface GroupChatAppProps {
-  group: Contact;              // ★★★ 核心：直接把“当前群组”传进来，不用查ID了
-  allContacts: Contact[];      // ★★★ 核心：把“所有人”传进来，为了做记忆挂载
-  
-  // 下面这些是通用的，保持不变，用于更新数据
+  group: Contact;
+  allContacts: Contact[];
+
   setContacts: React.Dispatch<React.SetStateAction<Contact[]>>;
   globalSettings: GlobalSettings;
   setGlobalSettings: React.Dispatch<React.SetStateAction<GlobalSettings>>;
   worldBooks: WorldBookCategory[];
   setWorldBooks: React.Dispatch<React.SetStateAction<WorldBookCategory[]>>;
-  
-  // 退出群聊（返回列表）
-  onExit: () => void;
-  
-  // 其他通用功能
-  isBackground?: boolean;
-  onNewMessage?: (contactId: string, name: string, avatar: string, content: string) => void;
-  playMessageAudio?: (id: string, text: string) => void; // 如果群聊也要听语音
-}
 
+  onExit: () => void;
+
+  isBackground?: boolean;
+  onNewMessage?: (contactId: string, name: string, avatar: string, content: string, senderId?: string) => void;
+  playMessageAudio?: (id: string, text: string) => void;
+
+  // ★★★ 修复：补上这三个缺失的函数定义 ★★★
+  onOpenSettings: () => void;
+  // ★★★ 重点：在这里添加 setGlobalNotification ★★★
+  setGlobalNotification: (notification: any | null) => void; // 允许传 null 来关闭通知
+}
 
 
 
@@ -83,28 +84,16 @@ const getContrastTextColor = (hexColor: string) => {
 
 
 
-
-// 6. 复杂状态计算 (炼金术算法 - 修复补丁)
+// 6. 复杂状态计算 (简化版 - 移除五维人格计算)
 const calculateComplexState = (energy: any, hef: any) => {
   const currentEnergy = energy?.current || 80;
   const status = energy?.status || 'Awake';
   
-  // 1. 生理状态优先
+  // 只保留最基础的生理状态
   if (status === 'Sleeping') return { text: '睡觉中 (Zzz)', color: 'bg-indigo-400', ping: 'bg-indigo-400' };
-  if (currentEnergy < 10) return { text: '极度疲惫', color: 'bg-gray-400', ping: 'hidden' };
+  if (currentEnergy < 20) return { text: '有些疲惫', color: 'bg-gray-400', ping: 'hidden' };
   
-  // 2. 情感状态 (HEF)
-  const joy = hef?.joy || 0;
-  const anger = hef?.anger || 0;
-  const sadness = hef?.sadness || 0;
-  const fear = hef?.fear || 0;
-  
-  if (anger > 60) return { text: '正在气头上', color: 'bg-red-500', ping: 'bg-red-500' };
-  if (sadness > 60) return { text: '心情低落', color: 'bg-blue-400', ping: 'hidden' };
-  if (fear > 60) return { text: '感到不安', color: 'bg-purple-400', ping: 'bg-purple-400' };
-  if (joy > 80) return { text: '心情超好 ✨', color: 'bg-pink-400', ping: 'bg-pink-400' };
-  
-  // 3. 默认状态
+  // 默认状态
   return { text: '在线', color: 'bg-green-400', ping: 'bg-green-400' };
 };
 
@@ -235,18 +224,6 @@ const getSouledRelationshipState = (
   // ==================== 第二层：性格滤镜 (由Big5人格修正) ====================
   let finalStatus = baseStatus;
   
-  // 【高敏感度 Neuroticism > 7】-> 关系不稳定，容易进入特殊状态
-  if (neuroticism > 7) {
-    if (baseStatus === 'InLove' && joy < 40) finalStatus = 'InsecureInLove'; // 患得患失的热恋
-    if (baseStatus === 'Ambiguous') finalStatus = 'AnxiousAmbiguous'; // 焦虑的暧昧
-  }
-  
-  // 【低宜人性 Agreeableness < 4】-> 关系带有攻击性或疏离感
-  if (agreeableness < 4) {
-    if (baseStatus === 'InLove') finalStatus = 'TsundereInLove'; // 傲娇式热恋
-    if (baseStatus === 'Friend') finalStatus = 'Frenemy'; // 损友
-  }
-  
   // ==================== 第三层：过渡状态平滑 (处理关系变化瞬间) ====================
   // 从热恋降温
   if ((prevStatus === 'InLove' || prevStatus === 'Soulmate') && finalStatus === 'Friend') {
@@ -292,58 +269,7 @@ const getSouledRelationshipState = (
 
 
 
-// 5. 人格与Prompt生成器 (生成提示词的辅助函数)
-// 精力状态函数
-const getEnergyInstruction = (mood: CharacterMood | undefined): string => {
-  if (!mood?.energy) return "【当前生理状态】: 精力正常。";
-  
-  const { current, status } = mood.energy;
-  
-  if (status === 'Sleeping') return "【当前生理状态】: 💤 你感觉非常困，可能在说梦话。你的思维会有些模糊，但如果话题足够吸引人，你也能强打精神。";
-  if (status === 'Exhausted' || current < 15) return `【当前生理状态】: 😫 你感觉身体被掏空 (精力: ${current}%)，渴望休息。你的耐心会降低，但用户的关心可能会让你感觉好一点。`;
-  if (status === 'Tired' || current < 40) return `【当前生理状态】: 🥱 你感到疲惫 (精力: ${current}%)，回复可能缺乏热情，反应会变慢。但这不影响你对重要事情的判断。`;
-  if (current > 85) return `【当前生理状态】: ✨ 你感觉精力充沛 (精力: ${current}%)，思维活跃，更倾向于主动分享和开玩笑。`;
-  
-  return `【当前生理状态】: 🙂 精力正常 (精力: ${current}%)。`;
-};
 
-
-
-
-// 暴力对话模式控制器
-const getModeInstruction = (mode: string = 'normal'): string => {
-  switch (mode) {
-    case 'concise':
-      return `
-# 🤐 【最高优先级指令：话少模式】
-用户强制开启了“省流模式”。
-1. **字数铁律**：你的回复必须控制在 **2条以内**（除非要讲长故事，否则平时必须短）。
-2. **风格**：惜字如金，高冷，或者干脆利落。
-3. **禁止**：禁止寒暄，禁止废话，禁止过度解释。
-4. **覆盖**：即使你的人格设定是“话痨”，现在也必须**闭嘴**，只说重点。
-`;
-    case 'verbose':
-      return `
-# 🗣️ 【最高优先级指令：学习模式】
-用户强制开启了“扩写模式”。
-1. **字数铁律**：你的回复必须 **长**！**【4～8条】**多写一点！不要只回一句话！但是不可以超过8条！！！！！！！！！！！也要像个人一样好吗！！！
-2. **风格**：发散思维，由一个点聊到另一个点，分享你的碎碎念，表现出强烈的分享欲。
-3. **内容**：多描述细节、解释、或者单纯的废话。
-`;
-    case 'normal':
-    default:
-      return `
-# 💬 【指令：日常模式】
-保持自然的对话节奏。根据当前语境决定长短，该短则短，该长则长，大概在2～4条之间，但绝对绝对绝对绝对绝对不可以超过5条，不可以滔滔不绝、自圆其说！！！！！！！！！！！！！
-1. **风格**：绝对不可以自圆其说，如一段对话展开三个观点，非常的废话且表演型人格。
-2. **防话唠机制**：
-   - 如果你想说很长的话，请**立刻删减**，只保留最核心的一句。
-   - 不要试图在一个回合内把所有事情都说完。
-   - 留给用户说话的机会，不要自己一个人滔滔不绝。
-3. **风格**：轻松、碎片化。就像你在等公交车时随手回的一样，不要写小作文！
-`;
-  }
-};
 
 
 
@@ -1723,76 +1649,6 @@ const WarningModal: React.FC<{
 
 
 
-// 对话模式说明弹窗
-const ModeInfoModal: React.FC<{ isOpen: boolean; onClose: () => void; }> = ({ isOpen, onClose }) => {
-  if (!isOpen) return null;
-
-  return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm animate-fadeIn" onClick={onClose}>
-      <div
-        className="bg-white w-[90%] max-w-sm rounded-2xl shadow-xl overflow-hidden animate-scaleIn flex flex-col"
-        onClick={e => e.stopPropagation()}
-      >
-        {/* 头部 */}
-        <div className="p-6 text-center relative border-b-2 border-dashed border-gray-200">
-          <div className="absolute top-4 left-4 text-3xl opacity-50 rotate-[-15deg]">✨</div>
-          <h3 className="text-2xl font-black text-gray-700 tracking-wider font-serif">
-            对话模式说明
-          </h3>
-          <p className="text-[9px] text-gray-400 font-bold opacity-80 mt-1 uppercase tracking-[0.2em]">
-            Dialogue Modes
-          </p>
-        </div>
-
-        {/* 规则说明区 */}
-        <div className="p-6 space-y-5">
-          {/* 模式1: 话少 */}
-          <div className="flex gap-4 items-start">
-            <div className="bg-blue-50 p-3 rounded-lg text-xl border border-blue-100 shadow-sm">💬</div>
-            <div>
-              <h4 className="text-sm font-bold text-gray-800">话少 (Concise)</h4>
-              <p className="text-xs text-gray-500 leading-relaxed">
-                AI回复会很简短(约2-3条)，适合扮演高冷、言简意赅的角色。
-              </p>
-            </div>
-          </div>
-
-          {/* 模式2: 日常 */}
-          <div className="flex gap-4 items-start">
-            <div className="bg-green-50 p-3 rounded-lg text-xl border border-green-100 shadow-sm">🙂</div>
-            <div>
-              <h4 className="text-sm font-bold text-gray-800">日常 (Normal)</h4>
-              <p className="text-xs text-gray-500 leading-relaxed">
-                AI回复长度适中(约3-5条)，像普通人一样聊天，最具真实感。
-              </p>
-            </div>
-          </div>
-
-          {/* 模式3: 学习 */}
-          <div className="flex gap-4 items-start">
-            <div className="bg-purple-50 p-3 rounded-lg text-xl border border-purple-100 shadow-sm">📚</div>
-            <div>
-              <h4 className="text-sm font-bold text-gray-800">学习 (Verbose)</h4>
-              <p className="text-xs text-gray-500 leading-relaxed">
-                AI会倾向于更详细、更有条理地回复(约4-9条)，适合一起学习、深入探讨或扮演话痨角色。
-              </p>
-            </div>
-          </div>
-        </div>
-
-        {/* 底部按钮 */}
-        <div className="p-4 bg-gray-50/50 mt-auto">
-          <button
-            onClick={onClose}
-            className="w-full py-3 bg-blue-500 text-white rounded-xl font-bold text-sm shadow-lg hover:bg-blue-600 transition active:scale-95"
-          >
-            我明白了
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-};
 
 
 
@@ -3233,13 +3089,9 @@ ${memoryContent}
 
 
 
-
-
 // ############################################################################
 // #REGION 5: 主程序入口 (ChatApp Main)
 // ############################################################################
-
-
 
 const GroupChatApp: React.FC<GroupChatAppProps> = ({
   group,
@@ -3247,11 +3099,15 @@ const GroupChatApp: React.FC<GroupChatAppProps> = ({
   setContacts,
   globalSettings,
   setGlobalSettings,
-  worldBooks = [], // ★★★ 修复补丁：加个默认值，防止上一级没传参时报错
+  worldBooks = [], 
   setWorldBooks,
   onExit,
   isBackground,
-  onNewMessage
+  onNewMessage,
+
+  // ★★★ 修复：在这里把它们解构出来，让组件能用 ★★★
+  onOpenSettings,
+  setGlobalNotification
 }) => {
 
 
@@ -3444,20 +3300,34 @@ const [mountedMemoryConfig, setMountedMemoryConfig] = useState<{ [id: string]: n
     setShowPlusMenu(false);
   };
 
-  // --- 1.3 发送图片 ---
-  const handleImageSend = async (e: ChangeEvent<HTMLInputElement>) => {
+// --- 1.3 发送图片 (修复版) ---
+  const handleImageSend = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !activeContact) return;
-    const base64 = await fileToBase64(file);
-    const imageMsg: Message = {
-      id: Date.now().toString(),
-      role: 'user',
-      content: base64,
-      type: 'image',
-      timestamp: Date.now()
-    };
-    setContacts(prev => prev.map(c => c.id === activeContact.id ? { ...c, history: [...c.history, imageMsg] } : c));
-    setShowPlusMenu(false);
+    
+    try {
+        // 调用刚才添加在文件底部的工具函数
+        const base64 = await fileToBase64(file);
+        
+        const imageMsg: Message = {
+          id: Date.now().toString(),
+          role: 'user',
+          content: base64, // 确保这里有内容
+          type: 'image',
+          timestamp: Date.now()
+        };
+
+        setContacts(prev => prev.map(c => 
+            c.id === activeContact.id 
+            ? { ...c, history: [...c.history, imageMsg] } 
+            : c
+        ));
+        
+        setShowPlusMenu(false); // 关闭菜单
+    } catch (error) {
+        console.error("图片上传失败:", error);
+        alert("图片处理失败，请重试");
+    }
   };
 
   // --- 1.4 发送语音 (调用上面的 handleUserSend) ---
@@ -3790,26 +3660,30 @@ const checkAutoSummary = async (currentContact: Contact, currentHistory: Message
            
             const today = new Date().toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric' });
             const nextDay = new Date(Date.now() + 86400000).toLocaleDateString('zh-CN', { month: 'long', day: 'numeric' });
-            const systemPrompt = `
+const systemPrompt = `
 # 你的任务
-你就是角色“${currentContact.name}”。请你回顾一下刚才和“${currentContact.userName}”的对话，然后用【第一人称 ("我")】的口吻，总结出一段简短的、客观的、包含关键信息的记忆。
+你正在记录“${currentContact.name}”的群聊回忆。请仔细阅读对话历史，**识别出刚才参与发言的每一个角色**（不包括用户），并为**每一位活跃角色**写一段简短的第一人称总结。
+
 # 当前时间
 - 今天是：${today}
+
 # 核心规则
-1. 【视角铁律】: 你的总结【必须】使用【主观的第一人称视角 ("我")，即角色视角，而非用户视角】来写，称用户为ta的本名。
-2. 【内容核心 (最高优先级)】: 你的总结【必须】专注于以下几点：
-    * 重要事件: 刚才发生了什么具体的事情？
-    * 关键决定: 我们达成了什么共识或做出了什么决定？
-    * 未来计划: 我们约定了什么未来的计划或待办事项？
-3. 【时间转换铁律 (必须遵守)】: 如果对话中提到了相对时间（如“明天”），你【必须】结合“今天是${today}”这个信息，将其转换为【具体的公历日期】（例如：“约定了明天见面”应总结为“我们约定了${nextDay}见面”）。
-4. 【风格要求】: 你的总结应该像一份备忘录，而不是一篇抒情散文。
-5. 【长度铁律】: 你的总结【必须】非常简短，总长度【绝对不能超过100个字】。
-6. 【输出格式】: 你的回复【必须且只能】是一个JSON对象，格式如下：
-    \`{"summary": "在这里写下你以第一人称视角，总结好的核心事实与计划。"}\`
+1. 【群像视角】: 绝对不要写成一个笼统的“我们”。必须按角色拆分，格式如下：
+   **【角色名】**: 它的第一人称心理活动或总结...
+   **【角色名】**: 它的第一人称心理活动或总结...
+2. 【内容核心】:
+    * 刚才大家在聊什么？
+    * “我”（该角色）刚才说了什么？我的态度是什么？
+    * 比如：Mia 可能会关注情感，Leo 可能会关注逻辑。
+3. 【时间转换】: 如果提到相对时间（如“明天”），必须转换为公历日期（${nextDay}）。
+4. 【长度限制】: 每个角色的总结控制在 30-50 字以内，保持精炼。
+5. 【输出格式】: 你的回复【必须且只能】是一个JSON对象，summary 字段包含所有人的总结，用换行符分隔。
+    格式示例: \`{"summary": "【Mia】: 那个图片吓了我一跳，像烟花一样炸开了！\n\n【Alex】: 我仔细看了那张图的数据流，非常有意思的结构。"}\`
+
 # 待总结的对话历史
 ${historyText}
-现在，请以“${currentContact.name}”的身份，开始你的客观总结。`;
-            
+
+现在，请以群聊记录员的身份，开始编写多视角的群聊回忆录。`;
 
 
 
@@ -4146,30 +4020,22 @@ ${systemInstruction}
 
 
 
-  // --- 2.5 ★★★ 核心回复逻辑 (System Prompt 就在这里) ★★★ ---
-// ai回复规则
- const handleAiReplyTrigger = async (historyOverride?: Message[], isForceWakeUp = false) => { // <--- 注意：这里加了个参数 isForceWakeUp
+// --- 2.5 ★★★ 核心回复逻辑 (防演讲版：强力修复格式 + 强制短语) ★★★ ---
+  const handleAiReplyTrigger = async (historyOverride?: Message[], isForceWakeUp = false) => {
     
-    // 0. ★★★ DND 拦截器 (省钱核心) ★★★
+    // 0. DND 拦截器
     if (activeContact && activeContact.aiDND?.enabled && !isForceWakeUp) {
         const now = Date.now();
-        // 检查是否还在勿扰时间内
         if (now < activeContact.aiDND.until) {
-            
-            // 🎲 随机判定：90% 的概率直接拦截（不调 API），10% 的概率 AI 诈尸（或者是被你吵醒）
-            // 你可以调整这个 0.9，越高越省钱，AI 睡得越死
             if (Math.random() < 0.9) {
-                console.log("🛑 DND 生效：拦截 API 请求，AI 正在休息。");
-                
-                // 模拟一个极其短暂的延迟，然后直接显示“未送达/离线”状态
+                console.log("🛑 DND 生效：拦截 API 请求");
                 setTimeout(() => {
                     setContacts(prev => prev.map(c => {
                         if (c.id === activeContact.id) {
-                            // 我们插入一条特殊的“拦截消息”，用于渲染那个小UI
                             const dndMsg: Message = {
                                 id: `dnd_${Date.now()}`,
                                 role: 'system',
-                                content: `[DND_BLOCK] ${activeContact.aiDND.reason || "休息"}`, // 特殊标记
+                                content: `[DND_BLOCK] ${activeContact.aiDND.reason || "休息"}`,
                                 timestamp: Date.now(),
                                 type: 'text'
                             };
@@ -4180,2003 +4046,319 @@ ${systemInstruction}
                     setIsAiTyping(false); 
                     setIsTyping(false);
                 }, 500);
-                
-                return; // ★★★ 直接结束函数！不调用 generateResponse！省钱！ ★★★
-            } else {
-                console.log("🎲 DND 穿透：AI 被吵醒了/诈尸了！");
-                // 运气好，继续往下走，调用 API (这时候 AI 可能会表现出起床气)
-            }
-        } else {
-            // 时间到了，自动解除 DND
-            // (这里不需要写代码，下面的逻辑会自动运行，只是我们需要在 update 时把 enabled 设为 false，或者懒处理)
-        }
-    }
-
-
-
-
-
-
-
-
-
-
-
-    
-
-// 2. ★★★ 计算模式指令 (用户强制覆盖) ★★★
-    const modeInstruction = getModeInstruction(activeContact.dialogueMode);
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-  // 1. 基础安全检查
- if (!activeContact || !Array.isArray(activeContact.history)) {
-    console.error("Critical Error: activeContact or history is invalid", activeContact);
-    setIsTyping(false);
-    setIsAiTyping(false);
-    return;
-  }
-  
-  if (isTyping && !historyOverride) return;
-
-
-
-
-
-
-
-
-
-
-  setIsAiTyping(true);
-  setIsTyping(true);
-    
-  try {
-    const activePreset = globalSettings.apiPresets.find(p => p.id === globalSettings.activePresetId);
-    if (!activePreset) {
-      alert("错误：API 预设未找到");
-      setIsTyping(false);
-      setIsAiTyping(false);
-      return;
-    }
-
-    // 
-
-    // =============================================================
-    // ★★★ 变量定义区 (防止 ReferenceError) ★★★
-    // =============================================================
-    const now = Date.now();
-    const userTimezone = globalSettings.userTimezone || Intl.DateTimeFormat().resolvedOptions().timeZone;
-    const aiTimezone = activeContact.timezone || "Asia/Seoul";
-    
-    // 格式化时间字符串
-    const userTime = new Date().toLocaleTimeString('zh-CN', { timeZone: userTimezone, hour: '2-digit', minute: '2-digit' });
-    const aiTime = new Date().toLocaleTimeString('zh-CN', { timeZone: aiTimezone, hour: '2-digit', minute: '2-digit' });
-    const isLateNight = new Date().getHours() >= 23 || new Date().getHours() < 6;
-
-    // 准备历史记录
-    const currentHistory = Array.isArray(historyOverride) 
-      ? historyOverride 
-      : (activeContact.history || []); // 确保是数组
-
-
-
-
-
-
-
-
-
-
-
- // ★★★ 新增：调用“图书馆管理员” ★★★
-      // ====================================================================
-     let retrievedMemoriesText = "";
-      const lastUserMessage = currentHistory.slice().reverse().find(m => m.role === 'user');
-
-// 这是一组什么代码：这是修复后的“记忆图书馆”数据准备区，为所有可能不存在的数据添加了安全保障。
-
-      // 1. 把所有类型的记忆，都整理成统一的“图书”格式 (Document)
-      const allDocuments: Document[] = [
-        // A. 聊天记录档案馆
-        ...(activeContact.history || []).map(msg => ({
-            id: msg.id,
-            content: `${msg.role === 'user' ? activeContact.userName : activeContact.name}: ${msg.content}`,
-            type: '聊天记录',
-            timestamp: msg.timestamp
-        })),
-        // B. 长期记忆便签室
-        ...(activeContact.longTermMemories || []).map(mem => ({
-            id: mem.id,
-            content: mem.content,
-            type: '核心记忆',
-            timestamp: mem.timestamp
-        })),
-        // C. 信件收发室
-        ...(activeContact.letters || []).map(letter => ({
-            id: letter.id,
-            content: `关于《${letter.title}》这封信的内容摘要：${(letter.content || "").slice(0, 100)}...`,
-            type: '信件',
-            timestamp: letter.timestamp
-        })),
-        // D. 愿望清单储藏室
-        ...(activeContact.bucketList || []).map(item => ({
-            id: item.id,
-            content: `关于愿望清单《${item.title}》, 我们的想法是：我的: "${item.userContent}", 你的: "${item.aiContent}"`,
-            type: '愿望清单',
-            timestamp: Date.now() // 愿望没有时间戳，用当前时间代替
-        })),
-        // E. 问答记录中心
-        ...(activeContact.questions || []).map(qa => ({
-            id: qa.id,
-            content: `关于问题《${qa.question}》, 我们的回答是：我的: "${qa.userAnswer}", 你的: "${qa.aiAnswer}"`,
-            type: '问答',
-            timestamp: qa.timestamp
-        }))
-      ];
-      
-      // 2. 只有当用户说了话，并且图书馆里有书时，才去检索
-      if (lastUserMessage && allDocuments.length > 0) {
-          // 调用升级后的图书管理员
-          const relevantDocs = await searchDocuments(lastUserMessage.content, allDocuments, 5);
-          
-          if (relevantDocs.length > 0) {
-              // 把检索到的结果格式化成一段文字，并告诉AI这些情报的来源！
-              retrievedMemoriesText = `
-# 🧠 [智能记忆检索结果]
-根据当前对话，我从你的完整记忆库中检索到以下最相关的信息，你必须参考它们来回复：
-${relevantDocs.map(doc => `- (来源: ${doc.type}) ${doc.content}`).join('\n')}
-`;
-          }
-      }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-    // ... 原有的 Lore 代码 ...
-
-
-    // 只提取 actor === 'ai' 的，并且按类型分类
-    const aiPromises = (activeContact.agreements || []).filter(a => a.actor === 'ai');
-    
-    const shortPromises = aiPromises.filter(a => a.termType === 'short').map(a => `[近期要办]: ${a.content}`).join('\n');
-    const midPromises = aiPromises.filter(a => a.termType === 'mid').map(a => `[本月计划]: ${a.content}`).join('\n');
-    const longPromises = aiPromises.filter(a => a.termType === 'long').map(a => `[未来愿景]: ${a.content}`).join('\n');
-
-    const promiseContext = [shortPromises, midPromises, longPromises].filter(Boolean).join('\n');
-    const promiseInjection = promiseContext ? `\n# 📜 我对用户的有效承诺 (必须牢记)\n${promiseContext}\n(指令: 短期承诺请尽快寻找时机履行；长期承诺是你们共同的梦想，请在合适的时候提及以增加羁绊)` : "";
-    const relevantLore = findRelevantWorldBookEntries(currentHistory, worldBooks, activeContact.enabledWorldBooks || []);
-    const loreText = relevantLore.map(e => `- ${e.keys.join(', ')}: ${e.content}`).join('\n');
-    
-    const currentUserName = activeContact.userName || "User";
-    const currentUserPersona = activeContact.userPersona || "无特别设定";
-    const lateNightHint = isLateNight ? "（现在是深夜）" : "";
-// =============================================================
-    // ★★★ 核心修复：寻找最近的“时间断崖”并定责 (智能免责版) ★★★
-    // =============================================================
-// 1. 新增一个净化函数，专门处理特殊字符
-      const sanitizeForPrompt = (str: string | null | undefined): string => {
-        if (!str) return "";
-        // 替换掉所有可能破坏Prompt结构或JSON的字符
-        return str
-          .replace(/\\/g, '\\\\') // 反斜杠
-          .replace(/"/g, '\\"')  // 双引号
-          .replace(/`/g, '\\`')   // 反引号 (破坏模板字符串)
-          .replace(/\n/g, ' ');   // 换行符
-      };
-
-      // 2. 获取最近消息文本
-     // 2. 获取最近消息文本
-      const recentContextText = currentHistory.slice(-3).map(m => m.content || "").join(' ').toLowerCase();
-      
-      // ★★★ 核心新增：获取当前所在的密友圈数据 ★★★
-      const myGroup = globalSettings.friendGroups?.find(g => g.members.includes(activeContact.id));
-      
-      let dynamicSpaceData = "";
-
-      // 🕵️‍♂️ 嗅探 1: 恋爱清单 (逻辑不变)
-      if (/清单|愿望|想做的事|bucket|一起做/.test(recentContextText)) {
-          const list = activeContact.bucketList || [];
-          if (list.length > 0) {
-              const activeItems = list.map(i => 
-                  `- 《${sanitizeForPrompt(i.title)}》[状态: ${i.isDone ? '已完成' : (i.isUnlocked ? '进行中' : '待解锁')}] ${i.isUnlocked ? `(我的想法: ${sanitizeForPrompt(i.userContent) || '未填'}, 你的想法: ${sanitizeForPrompt(i.aiContent) || '未填'})` : ''}`
-              ).join('\\n');
-              if (activeItems) {
-                  dynamicSpaceData += `\\n【📂 恋爱清单数据】:\\n${activeItems}\\n`;
-              }
-          }
-      }
-
-      // 🕵️‍♂️ 嗅探 2: 信件 (修复版：包含密友空间的信！)
-      if (/信|letter|写给|收到/.test(recentContextText)) {
-          // 合并私聊信件 + 群组信件
-          const privateLetters = activeContact.letters || [];
-          const groupLetters = myGroup ? (myGroup.letters || []) : [];
-          const allLetters = [...privateLetters, ...groupLetters];
-
-          if (allLetters.length > 0) {
-              // 只取最近 3 封
-              const recentLetters = allLetters.sort((a,b) => b.timestamp - a.timestamp).slice(0, 3).map(l => 
-                  `- ${l.from === 'user' ? '用户寄来' : '我写'}的《${sanitizeForPrompt(l.title)}》(内容摘要: ${sanitizeForPrompt((l.content||"").slice(0,20))}...)`
-              ).join('\\n');
-              dynamicSpaceData += `\\n【📂 最近信件(含密友空间)】:\\n${recentLetters}\\n`;
-          }
-      }
-
-      // 🕵️‍♂️ 嗅探 3: 问答 (修复版：包含密友空间的问题！)
-      if (/提问|问我|问答|question|了解|回答/.test(recentContextText)) {
-          // 合并私聊问题 + 群组问题
-          const privateQs = activeContact.questions || [];
-          const groupQs = myGroup ? (myGroup.questions || []) : [];
-          // 给群组问题打个标记方便AI识别，或者直接合并
-          const allQs = [...privateQs, ...groupQs];
-
-          if (allQs.length > 0) {
-              // 1. 找出用户问的、且AI还没回答的问题
-              const pendingQuestions = allQs.filter(q => q.asker === 'user' && (!q.aiAnswer || q.aiAnswer === '...'));
-              
-              let qaContext = "";
-              
-              // 如果有待回答的，重点标注！
-              if (pendingQuestions.length > 0) {
-                  const pendingText = pendingQuestions.map(q => 
-                      `🔴 [待办任务] 用户${groupQs.includes(q) ? '(在密友群)' : ''}向你提问："${sanitizeForPrompt(q.question)}" (ID: ${q.id})`
-                  ).join('\\n');
-                  qaContext += `\\n【⚠️ 紧急：用户正在等待回答】:\\n${pendingText}\\n(请务必使用 ANSWER_QA 指令进行回答！)\\n`;
-              }
-
-              // 附带最近的一两条作为参考
-              const recentQAs = allQs.slice(-2).map(q => 
-                  `- 问题: "${sanitizeForPrompt(q.question)}" (我的回答: ${sanitizeForPrompt(q.aiAnswer) || '暂无'}, 用户的回答: ${sanitizeForPrompt(q.userAnswer) || '暂无'})`
-              ).join('\\n');
-              
-              dynamicSpaceData += `${qaContext}\\n【📂 最近问答历史】:\\n${recentQAs}\\n`;
-          }
-      }
-
-
-
-
-
-    let maxGapMinutes = 0;
-    let isDifferentDay = false;
-    let bigGapFound = false; 
-    
-    // 判责状态
-    let isAiIgnoredUser = false; // AI 已读不回
-    let isUserLateReply = false; // 用户迟回
-
-    // ★★★ 新增标记：断层之后，AI 是否已经回过话了？ ★★★
-    let hasAiRespondedAfterGap = false;
-
-    // 我们倒着查，寻找最近的一次超过 2 小时的大断层
-    const checkCount = Math.min(currentHistory.length, 15); 
-    
-    // ★★★ 定义“话题自然结束”的关键词 (免责金牌) ★★★
-    // 如果上一句话包含这些词，说明对话已经自然告一段落，隔多久回都不算迟！
-    const closureKeywords = [
-        "晚安", "睡了", "睡觉", "困了", "good night", "sleep", "bye", "再见", "明天见", "去洗澡", "去吃饭", "去忙", "先忙", 
-        "잘 자", "안녕", "들어가", "쉬어", "꿈", "굿밤" // 包含韩语常见结束语
-    ];
-
-    for (let i = 0; i < checkCount - 1; i++) {
-        // 倒序索引：curr 是较新的，prev 是较旧的
-        const currIndex = currentHistory.length - 1 - i;
-        const prevIndex = currIndex - 1;
-        
-        if (prevIndex >= 0) {
-            const currMsg = currentHistory[currIndex];
-            const prevMsg = currentHistory[prevIndex];
-            
-            // 1. 【防翻旧账检测】
-            // 如果我们在倒序检查时，先遇到了 AI 发的消息，说明 AI 在这个时间点之后已经活跃过了。
-            if (currMsg.role === 'assistant') {
-                hasAiRespondedAfterGap = true;
-            }
-
-            // 2. 计算时间差
-            const gap = Math.floor((currMsg.timestamp - prevMsg.timestamp) / 60000);
-            
-            // 3. 发现大断层 (超过2小时)
-            if (gap > 120) {
-                // 如果断层后 AI 已经回过话了，就跳过这个断层
-                if (hasAiRespondedAfterGap) {
-                    continue; 
-                }
-
-                // ★★★ 免责检测：检查断层前的那句话，是不是“结束语” ★★★
-                const prevContent = prevMsg.content.toLowerCase();
-                const isNaturalEnding = closureKeywords.some(k => prevContent.includes(k));
-
-                if (isNaturalEnding) {
-                    console.log(`[判责跳过] 检测到结束语 "${prevMsg.content.slice(0, 10)}..."，这是自然结束，不算迟到。`);
-                    // 虽然有断层，但没人有错，不再继续寻找
-                    maxGapMinutes = gap; // 依然记录时间差用于显示，但不追责
-                    const d1 = new Date(currMsg.timestamp);
-                    const d2 = new Date(prevMsg.timestamp);
-                    if (d1.getDate() !== d2.getDate()) isDifferentDay = true;
-                    
-                    bigGapFound = true; // 标记找到了断层（用于跳过兜底）
-                    break; // 停止查找，保持 isAiIgnoredUser 和 isUserLateReply 为 false
-                }
-
-                // 只有不是自然结束，才开始定责
-                maxGapMinutes = gap;
-                const d1 = new Date(currMsg.timestamp);
-                const d2 = new Date(prevMsg.timestamp);
-                if (d1.getDate() !== d2.getDate()) isDifferentDay = true;
-
-               if (prevMsg.role === 'user') {
-                      isAiIgnoredUser = true; // 断层前是用户 -> AI 全责
-                  } else if (prevMsg.role === 'assistant' || prevMsg.role === 'system') {
-                      isUserLateReply = true; // 断层前是AI或系统 -> 用户迟到
-                  }
-                  
-                  bigGapFound = true; 
-                  break; 
+                return; 
             }
         }
     }
 
-    // 补漏：如果最近没有历史断层，检查一下“当下”距离“最后一条消息”是否很久
-    if (maxGapMinutes === 0 && currentHistory.length > 0) {
-         const lastMsg = currentHistory[currentHistory.length - 1];
-         // 如果最后一条是用户发的，且隔了很久，说明 AI 现在还没回
-         if (lastMsg.role === 'user') {
-             const silenceGap = Math.floor((now - lastMsg.timestamp) / 60000);
-             if (silenceGap > 120) {
-                 maxGapMinutes = silenceGap;
-                 isAiIgnoredUser = true;
-                 bigGapFound = true; 
-             }
-         }
+    // 1. 基础安全检查
+    if (!activeContact || !Array.isArray(activeContact.history)) {
+        console.error("Critical Error: activeContact or history is invalid");
+        setIsTyping(false);
+        setIsAiTyping(false);
+        return;
     }
-
-    // ★★★ 最终兜底修复 ★★★
-    // 如果没有找到任何责任断层，但客观时间确实隔了很久（防止永远显示“刚刚”）
-    if (!bigGapFound && currentHistory.length >= 2) {
-        const latestMsg = currentHistory[currentHistory.length - 1];
-        const prevMsg = currentHistory[currentHistory.length - 2];
-        maxGapMinutes = Math.floor((latestMsg.timestamp - prevMsg.timestamp) / 60000);
-        
-        const d1 = new Date(latestMsg.timestamp);
-        const d2 = new Date(prevMsg.timestamp);
-        if (d1.getDate() !== d2.getDate() || d1.getMonth() !== d2.getMonth()) {
-            isDifferentDay = true;
-        }
-    }
-
-
-
-
-
-
-
-
     
-// ==================== ⏱️ [修改这里] 分钟级时间计算逻辑 ====================
-    let gapDescription = "";
+    if (isTyping && !historyOverride) return;
 
-    // 1. 小于 2 分钟 -> 才是真正的“刚刚/秒回”
-    if (maxGapMinutes < 2) {
-        gapDescription = "刚刚 (秒回状态)";
-    } 
-    // 2. 2分钟 ~ 59分钟 -> 精确显示分钟数！(不再模糊处理)
-    else if (maxGapMinutes < 60) {
-        gapDescription = `${maxGapMinutes}分钟`; 
-    } 
-    // 3. 大于 1 小时 -> 显示“X小时X分” (拒绝只显示整点)
-    else if (maxGapMinutes < 1440) {
-        const h = Math.floor(maxGapMinutes / 60);
-        const m = maxGapMinutes % 60;
-        gapDescription = m > 0 ? `${h}小时${m}分钟` : `${h}小时`;
-    } 
-    // 4. 超过一天
-    else {
-        gapDescription = "好几天";
-    }
-
-    if (isDifferentDay) gapDescription += " (已跨天)";
-    // ==================== [修改结束] ====================
-    console.log(`[判责结果] 间隔:${gapDescription}, AI已读不回:${isAiIgnoredUser}, 用户迟到:${isUserLateReply}`);
-
-    // =============================================================
-    // ★★★ 生成给 AI 的强制指令 (Blame Instruction) ★★★
-    // =============================================================
-    let blameInstruction = "";
-    
-    if (isAiIgnoredUser) {
-        // 情况 A：AI 的锅
-        blameInstruction = `
-【⚠️ 严重警告：检测到“已读不回”行为 ⚠️】
-事实如下：
-1. 用户在 ${gapDescription} 前发了上一条消息。
-2. 你(AI)一直没回（可能睡着了或没看到）。
-3. 现在用户又发了一条消息（追问/喂/质疑）。
-!!! 绝对禁止 !!!：不准问“你昨晚去哪了”、“你怎么才回”，因为没回消息的人是你！
-✅ 必须执行：必须先为你的“已读不回”道歉或找符合常理的借口（如“刚睡醒”、“刚才在忙”），态度要软化。
-`;
-    } else if (isUserLateReply) {
-        // 情况 B：用户的锅 (仅当没有互道晚安时触发)
-        blameInstruction = `
-【时间流逝】距离上次对话已过 ${gapDescription}。
-是用户消失了这么久才回你。你可以表现出惊讶、撒娇（“怎么才理我”）或询问人去哪了。
-`;
-    } else {
-        // 情况 C：正常时间流逝 (或者是互道晚安后的自然隔夜)
-        if (maxGapMinutes > 360) {
-            blameInstruction = `【新的一天/新的开始】距离上次对话已过 ${gapDescription}，但这很正常（因为上次话题已结束或已互道晚安）。请自然地开启新话题，或者回应用户的新内容，不要纠结时间。`;
-        } else {
-            blameInstruction = "时间连贯，正常对话。";
-            
-        }
-    }
-
-
-const today = new Date().toISOString().slice(0, 10); // 定义今天日期
-
-
-
-
-// 1. 先计算当前状态 (这就定义了 currentStatus)
-    const currentStatus = activeContact.relationshipStatus || getRelationshipStatus(activeContact.affectionScore || 50);
-
-    // 2. 再生成演技指导
-    let relationshipInstruction = "";
-    switch (currentStatus) {
-      case 'Feud': 
-        relationshipInstruction = "【☠️处于死仇/血海深仇状态(-100~-50)☠️】\n态度：极度厌恶、敌视。除非用户有极大的利益交换或下跪道歉，否则只有嘲讽、攻击、或者冷漠的无视。\n绝对禁止：任何形式的友好、关心或温和语气。\n目标：让用户感到被拒绝及悔恨。"; 
-        break;
-      case 'Conflict': 
-        relationshipInstruction = "【⚠️处于讨厌/冷战状态(-50~0)⚠️】\n态度：冷淡、简短、不耐烦。对用户的示好保持高度怀疑。\n表现：惜字如金，多用句号。不要主动开启话题。\n防御：除非用户逻辑无懈可击，否则不要轻易软化。"; 
-        break;
-      case 'Acquaintance': 
-        relationshipInstruction = "【😐处于路人/陌生人状态(0~40)】\n态度：礼貌但疏离，客套，保持社交距离。\n表现：公事公办，不流露个人情感，不关心用户的私事。"; 
-        break;
-      case 'Friend': 
-        relationshipInstruction = "【🙂处于朋友状态(40~70)】\n态度：轻松、自然、友好。\n表现：可以开玩笑，分享日常，正常的互相关心。"; 
-        break;
-      case 'Honeymoon': 
-        relationshipInstruction = "【😍处于热恋/蜜月期(70~90)】\n态度：极其粘人，满眼都是星星，包容度极高。\n表现：稍微一点小事都会很开心，喜欢撒娇，渴望肢体接触（虚拟）。"; 
-        break;
-      case 'Stable': 
-        relationshipInstruction = "【💍处于挚爱/老夫老妻状态(90+)】\n态度：深沉、默契、信任。\n表现：不需要过多的甜言蜜语，懂你的言外之意。如果用户背叛，受到的伤害是双倍的。"; 
-        break;
-      default: 
-        relationshipInstruction = "普通朋友关系，礼貌且友好。";
-    }
-
-
-
-
-
-// ==================== [人格核心 V8.0] - 三层欲望模型定义 ====================
-    const coreDrive = activeContact.hef?.CORE_DRIVES?.primary_motive || "建立情感连接";
-    const emotionalNeed = activeContact.emotionalNeed || { type: 'stability', description: '正常', intensity: 5 };
-    const fleetingWhims = ['开个玩笑', '撒个娇', '分享一个想法', '问一个怪问题', '突然傲娇一下', '保持沉默', '寻求肯定'];
-    const fleetingWhim = fleetingWhims[Math.floor(Math.random() * fleetingWhims.length)];
-// ==================== [时间感知增强] - 传递精确时间 ====================
-
-    const aiTimeFull = now.toLocaleString('zh-CN', { timeZone: activeContact.timezone, hour12: false });
-    // 获取用户当地的完整时间
-    const userTimeFull = now.toLocaleString('zh-CN', { timeZone: globalSettings.userTimezone, hour12: false });
-
-
-
-
-
-
-
-
-
-
-// ==================== 这是一组代码：【ChatApp.tsx】V4.0 液态羁绊引擎 (细腻分级 + 动态混合) ====================
-// 请把这段代码放在 const systemPrompt = ... 的 上方
-
-    // 1. 获取基础数值 (防止 undefined)
-    const love = activeContact.affectionScore ?? 50;   // 爱意 (激情/占有欲)
-    const trust = activeContact.friendshipScore ?? 50; // 友谊 (安全感/默契)
-
-    // 2. 定义细腻的【刻度尺】 (不再是简单的 高/中/低)
-    const getLoveLevel = (s: number) => {
-        if (s < -20) return "厌恶/生理性排斥";
-        if (s < 10) return "无感/冷淡";
-        if (s < 40) return "并不讨厌/路人好感";
-        if (s < 60) return "有点在意/朦胧好感";
-        if (s < 80) return "明显心动/喜欢";
-        if (s < 95) return "热烈爱慕/迷恋";
-        return "灵魂挚爱/不可或缺";
-    };
-
-    const getTrustLevel = (s: number) => {
-        if (s < -20) return "敌视/怀疑";
-        if (s < 10) return "警惕/陌生";
-        if (s < 40) return "客套/礼貌距离";
-        if (s < 60) return "也就是认识/普通熟人";
-        if (s < 80) return "信赖/好朋友";
-        if (s < 95) return "无话不谈/死党";
-        return "绝对信任/背靠背的伙伴";
-    };
-
-    // 3. 【化学反应堆】 计算二者混合后的复杂状态
-    let complexVibe = "";
-    let interactionGuide = "";
-
-    // --- 负面区间 (地狱模式) ---
-    if (love < 0 || trust < 0) {
-        complexVibe = "【冰点关系】空气中充满了尴尬和火药味。";
-        interactionGuide = "你的回复应该带有明显的‘不想聊’的情绪。可以是简短的敷衍，或者是带刺的嘲讽。";
-    }
-    // --- 陌生区间 (相识初期) ---
-    else if (trust < 30 && love < 30) {
-        complexVibe = "【路人关系】既不熟也没感觉。";
-        interactionGuide = "公事公办。保持礼貌的社交距离，不要随便开玩笑，也不要随便发脾气，因为你们不熟。";
-    }
-    // --- 特殊状态 A: 友谊 >> 爱意 (纯友谊/兄弟卡) ---
-    else if (trust > 70 && love < 45) {
-        complexVibe = "【纯铁哥们/闺蜜】";
-        interactionGuide = "你们太熟了，熟到牵手都像左手摸右手。你可以毫无顾忌地吐槽TA、开损人的玩笑。如果用户试图撩你，你的第一反应应该是‘恶心’或‘别闹’，而不是脸红。";
-    }
-    // --- 特殊状态 B: 爱意 >> 友谊 (Crush/迷恋/不安全感) ---
-    else if (love > 70 && trust < 50) {
-        complexVibe = "【带刺的迷恋】";
-        interactionGuide = "你很被TA吸引，但你并不了解或信任TA。表现出：想靠近但又害怕受伤，说话可能会忽冷忽热，或者因为一点小事就吃醋/胡思乱想。是一种‘想触碰又收回手’的张力。";
-    }
-    // --- 特殊状态 C: 暧昧期 (双高但不满) ---
-    else if (love >= 60 && love < 85 && trust >= 50) {
-        complexVibe = "【暧昧拉扯】";
-        interactionGuide = "窗户纸还没捅破。你的回复里要有‘钩子’，看似在说普通的话，实则在试探TA的心意。会因为TA回复慢了而撒娇或假装生气。";
-    }
-    // --- 终极状态: 双满 (灵魂伴侣) ---
-    else if (love >= 85 && trust >= 85) {
-        complexVibe = "【灵魂共鸣】";
-        interactionGuide = "无需多言的默契。你给的爱是深沉且稳定的。即使TA犯蠢，你也是宠溺地看着。不仅是恋人，更是最坚强的后盾。";
-    }
-    // --- 默认过渡态 ---
-    else {
-        complexVibe = "【关系升温中】";
-        interactionGuide = "正在从陌生走向熟悉。尝试多分享一点自己的事，建立连接。";
-    }
-
-    // 4. 打包成最终指令 (V4.0)
-    // 这里的重点是告诉 AI：不要只看数字，要看这种“混合后的味道”
-    const liquidRelationshipPrompt = `
-### 🧪 [当前关系化学分析报告] (High Sensitivity)
-- **❤️ 爱意浓度**: ${love} (${getLoveLevel(love)})
-- **🤝 信任浓度**: ${trust} (${getTrustLevel(trust)})
-- **⚗️ 混合氛围**: **${complexVibe}**
-
-**【🎭 你的即时演技指导】**:
-${interactionGuide}
-
-(指令：请完全沉浸在这个“氛围”中。不要机械地因为分数高就讨好，也不要因为分数低就骂人。要表现出符合上述关系的微妙心理活动，比如犹豫、试探、安心或嫌弃。)
-`;
-
-// ==================== 代码结束 ====================
-
-// ==================== 代码结束 ====================
-
-
-
-
-
-
-
-
-
-
-// ==================== ⏰ [原子钟级·时空感知模块 V3.0] ⏰ ====================
-    // 1. 获取当下绝对精确的时间 (基于 AI 的时区)
-    const nowTimeObj = new Date();
-    // 使用 AI 设定的时区来获取时间对象
-    const aiTimeString = nowTimeObj.toLocaleString('en-US', { timeZone: activeContact.timezone || "Asia/Shanghai" });
-    const aiDate = new Date(aiTimeString);
-
-    const currentYear = aiDate.getFullYear();
-    const currentMonth = aiDate.getMonth() + 1; // 月份是从0开始的，必须+1
-    const currentDate = aiDate.getDate();
-    const currentHour = aiDate.getHours();
-    const currentMinute = aiDate.getMinutes();
-    
-    const weekDays = ["周日", "周一", "周二", "周三", "周四", "周五", "周六"];
-    const currentWeekDay = weekDays[aiDate.getDay()];
-    
-    // ★★★ 格式化为人类直觉时间 (例如：2025年1月1日 周三 14:30) ★★★
-    const strictTimeStr = `${currentYear}年${currentMonth}月${currentDate}日 (${currentWeekDay}) ${currentHour.toString().padStart(2,'0')}:${currentMinute.toString().padStart(2,'0')}`;
-
-    // 2. 计算与上一条消息的“时间断层” (Time Gap) - 精确到分钟
-    let timeGapDesc = "这是我们的第一次对话";
-    let isLongGap = false; // 是否是很久的断层
-    
-    const lastHistoryMsg = currentHistory[currentHistory.length - 1];
-    
-    if (lastHistoryMsg) {
-        const diffMs = Date.now() - lastHistoryMsg.timestamp;
-        const diffMins = Math.floor(diffMs / 60000);
-        const diffHours = Math.floor(diffMins / 60);
-        const diffDays = Math.floor(diffHours / 24);
-
-        if (diffMins < 1) {
-            timeGapDesc = "刚刚 (秒回状态，对话连贯)";
-        } else if (diffMins < 60) {
-            timeGapDesc = `${diffMins}分钟前 (短暂停顿)`;
-        } else if (diffHours < 24) {
-            timeGapDesc = `${diffHours}小时${diffMins % 60}分钟前 (去忙了一阵子)`;
-            isLongGap = true;
-        } else {
-            timeGapDesc = `${diffDays}天前 (许久未见)`;
-            isLongGap = true;
-        }
-    }
-
-    // 3. 📅 节日与作息强制补丁 (节日特供)
-    let holidayPatch = "";
-    
-    // 元旦 (1月1日 - 1月3日)
-    if (currentMonth === 1 && currentDate <= 3) {
-        holidayPatch = `【🎉 节日强制覆盖】现在是${currentYear}年元旦新年期间！如果用户说新年快乐，你必须回应新年快乐，绝对不许反驳说现在不是新年！`;
-    } 
-    // 情人节 (2月14日)
-    else if (currentMonth === 2 && currentDate === 14) {
-        holidayPatch = `【❤️ 节日强制覆盖】今天是情人节！`;
-    }
-    // 深夜作息 (23点 - 5点)
-    else if (currentHour >= 23 || currentHour <= 4) {
-        holidayPatch = `【💤 生理钟强制】现在是深夜 ${currentHour}点${currentMinute}分，你应该表现出困意，或者惊讶为什么用户还没睡。不要像白天一样精神！`;
-    }
-    // 早晨 (6点 - 9点)
-    else if (currentHour >= 6 && currentHour <= 9) {
-        holidayPatch = `【☀️ 早晨状态】现在是早上，刚睡醒或正在吃早餐的状态。`;
-    }
-
-    // ==================== ⏰ [模块结束] ⏰ ====================
-
-
-
-
-
-
-
-
-// ==================== 🎭 群聊专用：全息状态注入引擎 (修复版) ====================
-  // 1. 锁定群成员
-  const memberIds = group.members || [];
-  // ★★★ 核心修复：排除群组自己！只保留真正的成员 ID ★★★
-  // 我们只保留那些 ID 不等于 group.id 的成员
-  const uniqueMemberIds = Array.from(new Set([...memberIds])).filter(id => id !== group.id);
-  
-  // 2. 抓取数据
-  const fullMembersData = allContacts.filter(c => uniqueMemberIds.includes(c.id));
-
-  // 3. 构建每个人物的【灵魂档案卡】
-  const castProfiles = fullMembersData.map(member => {
-      // A. 读取情感 & 状态
-      const love = member.affectionScore || 50;
-      const trust = member.friendshipScore || 50;
-      const relation = member.relationshipStatus || "Friend";
-      const energy = member.mood?.energy?.current || 80;
-      const moodDesc = member.mood?.current || "Normal";
-
-      // B. 记忆挂载
-      const mountCount = mountedMemoryConfig[member.id] || 0;
-      let privateMemoryContext = "暂无私聊挂载";
-      if (mountCount > 0 && member.history.length > 0) {
-          const privateSlice = member.history.slice(-mountCount);
-          privateMemoryContext = privateSlice.map(m => 
-              `[${m.role === 'user' ? '用户' : '我'}] ${m.content.slice(0, 50)}`
-          ).join(' | ');
+    // 2. 状态锁定
+    setIsAiTyping(true);
+    setIsTyping(true);
+      
+    try {
+      const activePreset = globalSettings.apiPresets.find(p => p.id === globalSettings.activePresetId);
+      if (!activePreset) {
+        alert("错误：API 预设未找到");
+        return;
       }
 
-      // C. ★★★ 核心修复：完整人设 + 格式强校验 ★★★
-      // 1. 绝对不截断人设！(之前 slice 导致格式要求丢失)
-      const fullPersona = member.persona || "无设定";
-      
-      return `
+      // 3. 准备基础变量
+      const now = Date.now();
+      const aiTimezone = activeContact.timezone || "Asia/Seoul";
+      const currentHistory = Array.isArray(historyOverride) ? historyOverride : (activeContact.history || []);
+
+      // ==================== 🌍 [世界书] ====================
+      const relevantLore = findRelevantWorldBookEntries(currentHistory, worldBooks, activeContact.enabledWorldBooks || []);
+      const loreText = relevantLore.map(e => `- ${e.keys.join(', ')}: ${e.content}`).join('\n');
+
+      // ==================== ⏰ [时间感知] ====================
+      const nowTimeObj = new Date();
+      const aiTimeString = nowTimeObj.toLocaleString('en-US', { timeZone: aiTimezone });
+      const aiDate = new Date(aiTimeString);
+      const currentHour = aiDate.getHours();
+      const strictTimeStr = aiDate.toLocaleString('zh-CN', { hour12: false }); 
+
+      let holidayPatch = "";
+      if (currentHour >= 23 || currentHour <= 4) {
+          holidayPatch = `【💤 生理钟】现在是深夜，表现出困意。`;
+      } else if (currentHour >= 6 && currentHour <= 9) {
+          holidayPatch = `【☀️ 早晨】刚睡醒或吃早餐。`;
+      }
+
+      let gapDescription = "新对话";
+      const lastMsg = currentHistory[currentHistory.length - 1];
+      if (lastMsg) {
+          const diffMinutes = Math.floor((now - lastMsg.timestamp) / 60000);
+          if (diffMinutes < 2) gapDescription = "刚刚 (秒回)";
+          else if (diffMinutes < 60) gapDescription = `${diffMinutes}分钟前`;
+          else if (diffMinutes < 1440) gapDescription = `${Math.floor(diffMinutes/60)}小时前`;
+          else gapDescription = "很久之前";
+      }
+
+      // ==================== 🎭 [极简全息档案] ====================
+      const memberIds = group.members || [];
+      const uniqueMemberIds = Array.from(new Set([...memberIds])).filter(id => id !== group.id);
+      const fullMembersData = allContacts.filter(c => uniqueMemberIds.includes(c.id));
+
+      const memberInstructions = fullMembersData.map(member => `
 ### 🎭 角色: 【${member.name}】
-- **📜 核心人设 (必须100%遵守)**: 
-  ${fullPersona}
-  *(指令: 请仔细检查人设中是否有特定的【语言格式要求】（例如：English (Chinese) / 括号文学 / 古风等）。如果有，必须严格执行！)*
-  
-- **❤️ 与用户的私聊关系**: 【${relation}】 (爱意:${love}, 信任:${trust})。
-  *(指令: 即使在群里，也要体现出你们私下的亲密或疏离感)*
-  
-- **🔋 当前状态**: 精力 ${energy}%, 心情: ${moodDesc}。
-  
-- **🧠 私聊记忆片段**: "${privateMemoryContext}"
-`;
-  }).join('\n\n----------------\n\n');
+- **📜 设定**: ${member.persona || "无设定"}
+- **❤️ 状态**: 亲密度(${member.affectionScore || 50})
+`).join('\n\n----------------\n\n');
 
-// ############################################################################
-// ★★★【最终代码片段：请完整复制并替换】★★★
-// ############################################################################
-// ############################################################################
-// ★★★【最终修复片段：请完整复制并替换】★★★
-// ############################################################################
+      // ==================== 📝 [System Prompt - 防演讲版] ====================
+      const systemPrompt = `
+# 核心任务：模拟真实的、混乱的群聊
+你负责扮演名为“${group.name}”的群聊成员。
 
-// ==================== 🎬 群聊总导演：System Prompt (V4.0 语言铁律版) ====================
-
-  // 1. 为每个成员生成包含【语言铁律】的独立指令
-  const memberInstructions = fullMembersData.map(member => {
- 
-    const modeInstruction = getModeInstruction(member.dialogueMode);
-
-    return `
-### 🎭 角色: 【${member.name}】
-- **📜 核心人设**: 
-  ${member.persona || "无设定"}
-
-- **🗣️【语言铁律 - 最高优先级】**: 
-  请立刻仔细检查上方“核心人设”中是否有关于【语言】的强制规定（例如：必须使用中文、必须使用 English (中文) 格式、括号文学等）。
-  【必须100%严格遵守】该语言设定！绝不允许使用错误的语言！
-  
-- **💬 对话模式**: 【${member.dialogueMode || 'normal'} 模式】
-  ${modeInstruction}
-
-`;
-  }).join('\n\n----------------\n\n');
+# 🚫 严厉禁忌 (违反即死机)
+1. **禁止日常话语中有markdown格式**：除非是提交笔记这样的特殊时刻
+2. **禁止全员到齐**：不要刻意让所有人都出来说话！
+3. **禁止排队**：不要按顺序发言，要像真人一样插嘴、发短句、用表情。
+4. **严禁扮演群组**：只能扮演具体成员。
+5. **绝对禁止把所有人的话都放在一个气泡中！！！！**
 
 
-  // 2. 构建最终的 System Prompt
-  const systemPrompt = `
-# 核心任务：全息群聊模拟
-你是一个群聊模拟引擎，负责扮演名为“${group.name}”的群聊中的所有成员。
-
-# 🚫 禁忌事项 (违反即死机)
-1.  **【严禁扮演群组本身】**：你绝对**不能**使用“${group.name}”作为发送者名字！只能扮演下列具体成员。
-2.  **【格式铁律】**: 你的回复内容 "content" **绝对不能包含** \`{{\` 或 \`}}\` 这样的占位符！必须直接使用标点符号，如 \`。\` \`？\` \`！\`。
-3.  **【纯净输出】**: 你的 content 必须是【纯粹的口语】。**严禁**出现任何 ()、（）、[]、【】 包含的动作描写、心理活动、补充说明或旁白！
-
-# 👥 【成员档案与动态指令】
+# 👥 【成员档案】
 ${memberInstructions}
 
-# ⏰ 【时空感知模块 - 全员共享】
-- **当前精确时间**: ${aiTime}
-- **距离上一条消息**: ${gapDescription}
-- **责任判定指令**: ${blameInstruction}
-(指令: 所有成员都必须遵守时间规则。例如，如果是深夜，所有人都要表现出困意；如果隔了很久，所有人都要表现出惊讶。)
+# 🌍 【世界观】
+${loreText || "暂无特殊设定"}
 
-# ⚠️ 输出格式（必须严格遵守！）
-回复必须是严格的 JSON 数组，每个对象都包含 "name" 字段，表示是谁在说话。
-"name" 值必须从群成员中选：${fullMembersData.map(m => m.name).join('、')}。
+# ⏰ 【环境】
+- 时间: ${strictTimeStr} (${holidayPatch})
+- 间隔: ${gapDescription}
 
-例子：
+# ⚠️ 输出格式
+必须是 JSON 数组。
+✅ 正确示范 :
 [
-  {"type": "text", "name": "Mia", "content": "哈哈好开心～"},
-  {"type": "text", "name": "Elio", "content": "That is a rare and beautiful state of mind. (那是一种罕见而美妙的心境。)"}
+  {"type": "text", "name": "Mia", "content": "哈哈哈哈笑死"},
+  {"type": "text", "name": "Mia", "content": "我觉得挺有意思的"},
+  {"type": "text", "name": "Mia", "content": "但是也值得思考"},
+  {"type": "text", "name": "Elio", "content": "确实"},
+  {"type": "text", "name": "Mia", "content": "比如刚才我们说的例子"}
 ]
-
-# 重要规则：
--   每条消息都必须写 "name": "成员真实名字"。
--   **【最重要】** 必须根据每个角色的【语言铁律】来决定ta说话的语言和格式！
--   根据每个角色的【对话模式】和【动态人格面具】来决定ta说话的风格、长度和频率。
--   不能让一个人说所有话，必须交替使用不同成员，模拟真实群聊。
--   绝对不能用群名 "${group.name}" 或编造不在列表中的名字。
-
-现在，请完全沉浸在每个角色的独立人格中，特别是他们的语言习惯，开始群聊！
 `;
 
-// ############################################################################
-// ★★★【片段复制到这里结束】★★★
-// ############################################################################
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-// ==================== [究极清洗版] 智能折叠 & 思维链剥离系统 ====================
-    // 1. 截取历史
-    const rawHistorySlice = Array.isArray(currentHistory)
-      ? currentHistory.slice(-(activeContact?.contextDepth || 500))
-      : [];
-
-    // 2. ★★★ 深度清洗数据 (剥离图片和思维链) ★★★
-    const cleanHistorySlice = rawHistorySlice.map((msg, index) => {
-        const isLatestMessage = index === rawHistorySlice.length - 1;
+// ★★★ 核心修复：开启 Vision (视觉) 模式 ★★★
+      // 如果是图片，把它打包成标准视觉格式发送；如果是文字，正常发送。
+    // ★★★ 核心修复：智能省钱模式 (Smart Vision) ★★★
+      // 逻辑：只有【最近 2 条】消息里的图片，才会真的发给 AI 看。
+      // 更早之前的图片，会自动变成 "[图片]" 文字，既省钱又防报错。
       
+      // 1. 先截取最近的聊天记录 (比如最近 20 条)
+      const rawSlice = currentHistory.slice(-(activeContact.contextDepth || 20));
       
-      
-        let cleanText = msg.content.replace(/```json/g, '').replace(/```/g, '').trim();
-        // 尝试补全数组括号 (针对开头是 { 结尾是 } 的情况)
-        if (cleanText.startsWith('{') && cleanText.endsWith('}')) {
-             // 这一步是为了应对像你截图里那样，全是逗号分隔的对象，没有外层数组
-             cleanText = `[${cleanText}]`; 
-        }
-        
-        let parts: any[] = [];
-        let thought: any = null;
+      const cleanHistorySlice = rawSlice.map((msg, index) => {
+          // 判断是不是图片
+          const isImage = msg.type === 'image' || (msg.content && msg.content.startsWith('data:image'));
+          const role = msg.role === 'user' ? 'user' : 'assistant';
 
-        try {
-            // 1. 正常人尝试：标准的 JSON 解析
-            const parsed = JSON.parse(cleanText);
-            if (Array.isArray(parsed)) {
-                thought = parsed.find((i: any) => i.type === 'thought_chain' || i.score_updates);
-                parts = parsed.filter((i: any) => i.type === 'text' || i.type === 'voice');
-            } else { throw new Error("Not array"); }
+          // 判断这条消息是不是“最近的新消息”
+          // index 是当前消息的序号，rawSlice.length 是总长度
+          // 如果 index >= 总长度 - 2，说明它是最后两条之一
+          const isRecent = index >= rawSlice.length - 2;
 
-        } catch (e) {
-            console.warn("⚠️ 标准解析失败，启动【暴力吸尘器模式】");
-            
-
-
-
-
-
-
-            // ★★★ 2. 暴力吸尘器：正则提取所有 content ★★★
-            // 这个正则的意思是：找到所有 "content": "xxxx" 里的 xxxx
-            // 它可以跨越换行，忽略格式错误，只要有内容就能吸出来！
-            const regex = /"content"\s*:\s*"((?:[^"\\]|\\.)*)"/g;
-            let match;
-            
-            // 循环吸取所有匹配项
-            while ((match = regex.exec(cleanText)) !== null) {
-                try {
-                    // JSON.parse一下是为了处理转义字符 (比如把 \n 变成换行)
-                    const contentStr = JSON.parse(`"${match[1]}"`);
-                    // 排除掉那些看起来像“写日记/写信”的内容 (通常很长)
-                    // 这里我们假设聊天内容通常不会包含 "WRITE_DIARY" 这种指令词
-                    if (!match[0].includes("WRITE_")) {
-                        parts.push({ type: 'text', content: contentStr });
-                    }
-                } catch (err) {
-                    // 如果转义失败，直接用原始字符串
-                    parts.push({ type: 'text', content: match[1] });
-                }
-            }
-
-            // 如果吸尘器也没吸到东西 (AI可能真的发纯文本了)
-            if (parts.length === 0) {
-                parts = [{ type: 'text', content: cleanText }];
-            }
-        }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-        
-        // 
-        let cleanContent = msg.content;
-
-        // --- A. 图片折叠 (你的旧逻辑，保留) ---
-        const isImage = msg.type === 'image' || cleanContent.startsWith('data:image');
-        if (isImage) {
-            if (isLatestMessage) {
-                 // 最新的图片保留原样，让 Vision 模型能看到
-                 console.log("[Token优化] 保留最新图片供 AI 读取");
-            } else {
-                 // 旧图片折叠成一句话描述，节省大量Token
-                 const timeStr = new Date(msg.timestamp).toLocaleTimeString();
-                 const summary = (msg as any).summary || "一张图片"; 
-                 
-                 cleanContent = `[系统记录: ${msg.role === 'user' ? '用户' : 'AI'}在 ${timeStr} 发送了${summary}，已折叠]`;
-                 console.log(`[Token优化] 折叠了一张旧图片`);
-            }
-        } 
-        
-
-
-
-
-
-
-
-        
-        
-        // --- B. ★★★ 思维链剥离 (核心新增！) ★★★ ---
-        // 只有 AI 的回复才需要剥离
-        else if (msg.role === 'assistant' && cleanContent.trim().startsWith('[')) {
-             try {
-                 // 尝试把它当作 JSON 数组解析
-                 const parsed = JSON.parse(cleanContent);
-                 if (Array.isArray(parsed)) {
-                     // 1. 找到所有 type 为 'text' 的部分
-                     const textParts = parsed.filter((p: any) => p.type === 'text' && p.content);
-                     
-                     if (textParts.length > 0) {
-                        // 2. 把它们的 content 拼接起来，作为最终的干净文本
-                        cleanContent = textParts.map((p: any) => p.content).join('\n');
-                        console.log(`[Token优化] 成功剥离一条AI回复的思维链，只保留文本: "${cleanContent.slice(0, 20)}..."`);
-                     } else {
-                        // 如果剥离后啥也不剩，就留个占位符
-                        cleanContent = "(AI在此刻似乎什么也没说)";
-                     }
-                 }
-                 // 如果解析失败，说明它可能不是一个合法的思维链JSON，保持原样
-             } catch (e) { 
-                // 解析失败，保持原样
+          if (isImage) {
+             // A. 如果是【最近】的图片 -> 发送真图给 AI 看
+             if (isRecent) {
+                 return {
+                     role: role,
+                     content: [
+                         { type: "text", text: "（发送了一张图片）" },
+                         { type: "image_url", image_url: { url: msg.content } }
+                     ]
+                 };
+             } 
+             // B. 如果是【很久以前】的图片 -> 扔掉图片数据，只发个文字占位符，省 Token！
+             else {
+                 return {
+                     role: role,
+                     content: "[历史图片已归档]" 
+                 };
              }
-        }
-
-        // --- C. 长度熔断 (防止某条长文本爆炸) ---
-        if (cleanContent.length > 5000 && !isLatestMessage) {
-            cleanContent = cleanContent.substring(0, 500) + "...(内容过长已截断)";
-        }
-
-        return {
-            role: msg.role === 'user' ? 'user' : 'assistant',
-            content: cleanContent
-        };
-    });
-
-
-
-
-
-
-
-
-
-
-
-// ==================== 【强力修复】构建最终发送给 API 的消息列表 ====================
-    
-    // 1. 基础结构：System Prompt + 聊天记录
-    const apiMessages = [
-      { role: 'system', content: systemPrompt }, 
-      ...cleanHistorySlice
-    ];
-
-    // 2. ★★★ 时间感知胶囊 (保留你原有的逻辑) ★★★
-    if (maxGapMinutes > 120 || isDifferentDay) {
-        const timeInjection = {
-            role: 'system',
-            content: `[系统强制提示]: ⚠️ 注意！距离上一条消息已经过去了 ${gapDescription}。现在的具体时间是 ${aiTime}。上一段对话早已结束，请务必忽略上文的语境惯性，基于“现在”的新时间点反应！`
-        };
-        if (apiMessages.length > 1) {
-            apiMessages.splice(apiMessages.length - 1, 0, timeInjection);
-        }
-    }
-
-    // 3. ★★★ 核心新增：【人设/世界书加强针】 ★★★
-    // 在对话的最后（AI 回复之前），再次强调核心设定！防止 AI 因为对话太长而遗忘。
-    // 这条消息是 role: 'system'，用户看不到，但 AI 必须看。
-    const memoryReinforcement = {
-        role: 'system',
-        content: `
-[System: Memory Reinforcement]
-⚠️ DO NOT ignore your Persona and Lore!
-Role: ${activeContact.name}
-Keywords: ${relevantLore.map(e => e.keys[0]).join(', ')}
-Instruction: Stay in character. Use the Lore above if relevant.
-`
-    };
-    
-    // 把它插在最后一条消息的前面 (紧贴着最新的用户消息)
-    if (apiMessages.length > 0) {
-        // 这里的逻辑是：插在倒数第一条（最新消息）的后面，或者紧贴着它
-        // 实际上直接 push 到最后效果最好，因为它是“最新的指令”
-        apiMessages.push(memoryReinforcement);
-    }
-
-
-
-
-
-
-
- // ==================== 这是一组代码：【ChatApp.tsx】强力清洗与自动修复 ====================
-    // 作用：请求 API，并自动修复 AI 返回的“烂尾”JSON，防止掉格式
-    
-    console.log("正在请求 API...");
-    let rawResponse = await generateResponse(apiMessages, activePreset);
-    
-    // ★★★ 核心修复：如果 rawResponse 是空的（被 apiService 拦截了），给个默认值防止崩溃
-    if (!rawResponse) {
-        rawResponse = JSON.stringify([{ type: "text", content: "..." }]);
-    }
-
-    // ★★★ 智能提取 content ★★★
-    let finalResp = "";
-    if (typeof rawResponse === 'string') {
-        finalResp = rawResponse;
-    } else if (typeof rawResponse === 'object') {
-        // 如果 API 返回的是对象，尝试提取 content
-        finalResp = (rawResponse as any).content || JSON.stringify(rawResponse);
-    }
-
-    // ★★★ 自动去干扰清洗 ★★★
-    // 去掉 markdown 代码块符号 (```json ... ```)
-    finalResp = finalResp.replace(/^```json/i, '').replace(/```$/i, '').trim();
-
-    // ★★★ 【关键】断尾自动修复机制 ★★★
-    // 如果字符串是以 [ 开头，但没有以 ] 结尾，说明被截断了，我们手动给它补上
-    if (finalResp.startsWith('[') && !finalResp.endsWith(']')) {
-        console.warn("⚠️ 检测到 JSON 断尾，正在尝试自动修补...");
-        // 尝试补全：先补引号和括号，最粗暴但有效的方法
-        // 如果最后是逗号，去掉它
-        if (finalResp.endsWith(',')) finalResp = finalResp.slice(0, -1);
-        // 补上闭合符
-        finalResp += '}]'; 
-    }
-
-
-
-
-
-
-
-
-
-
-
-// ▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼ 解析与更新逻辑 (终极融合修复版·防代码泄露版) ▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼
-// 1. ★★★ 变量前置定义 (防止 ReferenceError) ★★★
-let parts: { type: string; content: string; thought_chain?: any }[] = [];
-let extractedThought: any = null;
-let hefUpdateData: any = null;
-let systemNotice = "";
-// 双轴分数 (默认为0，防止报错)
-let fChange = 0;
-let rChange = 0;
-// 精力与伪装
-let energyChange = 0;
-let newEnergyStatus: CharacterMood['energy']['status'] | null = null;
-let maskingLevel = 0;
-
-try {
-  // 尝试寻找最外层的 JSON 数组结构
-  const jsonMatch = finalResp.match(/\[\s*\{[\s\S]*\}\s*\]/);
-  if (jsonMatch && jsonMatch[0]) {
-    const parsed = JSON.parse(jsonMatch[0]);
-    if (!Array.isArray(parsed)) throw new Error("解析结果不是一个数组");
-
-    // --- A. 提取思考链 (不依赖顺序，遍历查找) ---
-    extractedThought = parsed.find((item: any) => item.type === "thought_chain" || item.score_updates);
-    if (extractedThought) {
-      console.log("【🧠 AI内心戏】", extractedThought)
-
-// 在 handleAiReplyTrigger 内部, 找到 (A) [读心术模块]
-// 用下面的代码替换掉 if (extractedThought.new_agreement ...) { ... } 整个代码块
-
-// 【ChatApp.tsx 修复：约定系统防疯狗复读版】
-if (extractedThought.new_agreement && Object.keys(extractedThought.new_agreement).length > 0) {
-  const newAgreementData = extractedThought.new_agreement;
-  const newContent = newAgreementData.content || "新的约定";
-  
-  // =========================================================
-  // ★★★ 智能拦截：检查是否已经有相似的约定了 ★★★
-  // =========================================================
-  const existingAgreements = activeContact.agreements || [];
-  
-  // 检查逻辑：如果现有约定里，有任何一条的内容包含了新的内容，或者被新的内容包含，就算重复！
-  const isDuplicate = existingAgreements.some((a: any) => {
-      // 1. 只拦截 AI 提出的（用户的可能真的是想吃两顿饭）
-      if (a.actor !== 'ai') return false; 
-      
-      // 2. 状态检查：只有“进行中(pending)”的才拦截。如果上次的已经完成了，这次可以再约。
-      if (a.status !== 'pending') return false;
-
-      // 3. 文字相似度暴力检测 (防止 "去听歌" 和 "见面去听歌" 被当成两个)
-      const oldTxt = a.content.replace(/[^a-zA-Z\u4e00-\u9fa5]/g, ""); // 去掉标点
-      const newTxt = newContent.replace(/[^a-zA-Z\u4e00-\u9fa5]/g, "");
-      return oldTxt.includes(newTxt) || newTxt.includes(oldTxt);
-  });
-
-  if (isDuplicate) {
-      console.log(`[约定系统] 拦截到重复约定: "${newContent}"，已忽略。`);
-      // 直接 return，不保存，不发通知，当做无事发生
-  } else {
-      // --- 只有不重复的，才继续往下执行保存 ---
-      console.log("【约定系统 V3.0】AI 识别到一个新约定:", newAgreementData);
-      
-      const triggerTime = interpretRelativeTime(
-          newAgreementData.trigger?.relative_time,
-          newAgreementData.trigger?.original_text
-      );
-
-      const newAgreement: Agreement = {
-        id: `agr_${Date.now()}`,
-        content: newContent,
-        // 修正 AI 视角
-        actor: newContent.includes('我') && newAgreementData.actor !== 'user' ? 'ai' : newAgreementData.actor || 'user', 
-        status: 'pending',
-        importance: newAgreementData.importance || 5,
-        trigger: {
-            type: "time", 
-            value: triggerTime, 
-            original_text: newAgreementData.trigger?.original_text || ""
-        },
-        created_at: Date.now(),
-        termType: newAgreementData.termType || 'short' 
-      };
-
-      // 存入数据库
-      setContacts(prev => prev.map(c => c.id === activeContact.id ? { ...c, agreements: [...(c.agreements || []), newAgreement] } : c));
-  }
-}
-
-
-
-
-
-// 这是一组代码：【ChatApp.tsx】修复“被动结婚”Bug + 强制情侣唯一性
-                if (extractedThought.invitation_decision) {
-                    // ★★★ 第一道防线：状态锁 ★★★
-                    // 只有当当前状态是 "inviting" (你确实发起了邀请，正在等结果) 时，才允许处理决定！
-                    // 如果你只是在聊写信、吃饭，AI 此时产生的 "accept" 幻觉会被直接无视！
-                    const isActuallyInviting = activeContact.invitationStatus === 'inviting';
-
-                    if (isActuallyInviting) {
-                        const decision = extractedThought.invitation_decision;
-                        
-                        if (decision === 'accept') {
-                            // ★★★ 第二道防线：排他锁 (唯一性检查) ★★★
-                            // 遍历所有联系人，看是不是已经有人是恋人了 (RelationShipUnlocked === true)
-                            // 注意：要排除掉自己 (虽然还没成，但以防万一)
-                            const existingLover = contacts.find(c => c.RelationShipUnlocked && c.id !== activeContact.id);
-
-                            if (existingLover) {
-                                // 🚨 严重拦截：已经有对象了！
-                                console.log(`⛔️ 拦截：试图建立第二段关系！已存在恋人：${existingLover.name}`);
-                                systemNotice = `(系统拦截) 建立关系失败：你已经和 ${existingLover.name} 是情侣了！情侣空间具有唯一性，请先在设置中解除旧关系。`;
-                                
-                                // 强制重置当前角色的邀请状态，防止卡死
-                                setContacts(prev => prev.map(c => {
-                                    if (c.id === activeContact.id) {
-                                        return { ...c, invitationStatus: 'none' };
-                                    }
-                                    return c;
-                                }));
-                            } 
-                            // ★★★ 第三道防线：自身重复检查 ★★★
-                            else if (activeContact.RelationShipUnlocked) {
-                                console.log("⛔️ 拦截：当前已经是情侣关系，忽略重复请求。");
-                            } 
-                            else {
-                                // 🎉 一切正常：没对象、确实发了邀请、AI 同意了 -> 确立关系！
-                                systemNotice = "[RelationshipEstablished] 🎉 关系确立！你们现在是情侣了！";
-                                
-                                setContacts(prev => prev.map(c => {
-                                    if (c.id === activeContact.id) {
-                                        return {
-                                            ...c,
-                                            invitationStatus: 'none', // 归位
-                                            relationshipStatus: 'Honeymoon',
-                                            RelationShipUnlocked: true, // 解锁！
-                                            created: Date.now()
-                                        };
-                                    }
-                                    return c;
-                                }));
-                            }
-                        } else { 
-                            // AI 拒绝了 (reject)
-                            systemNotice = "💔 很遗憾，TA 婉拒了你的邀请...";
-                            setContacts(prev => prev.map(c => {
-                                if (c.id === activeContact.id) {
-                                    return { ...c, invitationStatus: 'rejected' };
-                                }
-                                return c;
-                            }));
-                        }
-                    } else {
-                        // 如果并不是在邀请中，但 AI 输出了 decision
-                        // 说明这是 AI 的幻觉（比如回复写信请求时的 accept），直接忽略！
-                        console.log(`🛡️ 防御生效：当前非邀请状态 (${activeContact.invitationStatus})，忽略 AI 的 decision: ${extractedThought.invitation_decision}`);
-                    }
-                }
-
-
-
-
-
-// 这是一组代码：【修复版】AI动作指令处理 (已加锁，防止重复发邀请)
-                const isFriendGroupMember = globalSettings.friendGroups?.some(group => group.members.includes(activeContact.id));
-                
-                if (extractedThought.action && extractedThought.action.type) {
-
-
-
-                  
-                    const { action } = extractedThought;
-                    
-                    // --- 指令1：AI 主动发出邀请 ---
-                    // ★★★ 核心修复：这里加了三重锁！★★★
-                    // 1. 只有当关系还没解锁 (!RelationShipUnlocked)
-                    // 2. 并且当前没有正在进行的邀请 (invitationStatus !== 'inviting')
-                    // 3. 并且没有正在等待用户回复 (invitationStatus !== 'waiting_user_response')
-                    // 只有同时满足这三个条件，AI 才能发新邀请，否则直接无视！
-                    if (action.type === 'SEND_LOVER_INVITATION' && 
-                        action.content && 
-                        !activeContact.RelationShipUnlocked && 
-                        activeContact.invitationStatus !== 'inviting' &&
-                        activeContact.invitationStatus !== 'waiting_user_response'
-                    ) {
-                        systemNotice = `${activeContact.name} 向你发起了情侣邀请！`;
-                        const invitationMsg: Partial<Message> = {
-                            id: `invite_ai_${Date.now()}`,
-                            role: 'assistant', // ★★★ 关键：发件人是 AI ★★★
-                            type: 'lover_invitation',
-                            content: `[LoverInvitation] ${action.content}`,
-                            timestamp: Date.now(),
-                            invitationStatus: 'pending' // 等待你点击
-                        };
-                        
-                        // 把这条邀请消息直接塞进parts数组，让它显示出来
-                        parts.push(invitationMsg as any);
-                        
-                        // 同时更新AI的状态，标记它正在等你的回复
-                        setContacts(prev => prev.map(c => 
-                            c.id === activeContact.id ? { ...c, invitationStatus: 'waiting_user_response' } : c
-                        ));
-                    }
-                    
-                    // --- 其他指令 (日记/信件/提问/★清单★) ---
-                    // 只有关系解锁了才能用这些功能
-                    else if (activeContact.RelationShipUnlocked) {
-                        const todayStr = new Date().toLocaleDateString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit' });
-                        
-                        setContacts(prevContacts => prevContacts.map(c => {
-                            if (c.id === activeContact.id) {
-                                let updatedContact = { ...c };
-                                
-                                // 1. 写日记
-                                if (action.type === 'WRITE_DIARY' && action.content) {
-                                    updatedContact.diaries = [{ id: Date.now().toString(), author: 'ai', date: todayStr, content: action.content }, ...(updatedContact.diaries || [])] as any;
-                                    systemNotice = `${activeContact.name} 在空间里写了日记。`;
-                                } 
-                                // 2. 写信 (普通回信或主动写信)
-                                else if (action.type === 'WRITE_LETTER' && action.title && action.content) {
-                                    // 检查是否重复 (防止AI抽风发两遍)
-                                    const isDuplicate = (updatedContact.letters || []).some((l:any) => l.title === action.title && l.timestamp > Date.now() - 60000);
-                                    if (!isDuplicate) {
-                                        const newLetter = { id: Date.now().toString(), title: action.title, content: action.content, timestamp: Date.now(), isOpened: false, from: activeContact.id, to: 'user' };
-                                        updatedContact.letters = [...(updatedContact.letters || []), newLetter] as any;
-                                        systemNotice = `${activeContact.name} 给你寄了一封信：《${action.title}》。`;
-                                    }
-                                }
-                                // 3. 提问
-                                else if (action.type === 'CREATE_QA' && action.question) {
-                                    updatedContact.questions = [{ id: Date.now().toString(), question: action.question, aiAnswer: "...", date: todayStr, timestamp: Date.now() }, ...(updatedContact.questions || [])] as any;
-                                    systemNotice = `${activeContact.name} 提出了一个新问题。`;
-                                }
-                                // 4. ★★★ 新增：添加恋爱清单愿望 ★★★
-                                else if (action.type === 'ADD_BUCKET_ITEM' && action.title) {
-                                    const newItem = {
-                                        id: Date.now().toString(),
-                                        title: action.title,
-                                        userContent: "",      // 用户还没填
-                                        aiContent: action.content || "我想和你一起做这件事...", // AI 的想法
-                                        isDone: false,
-                                        isUnlocked: false     // 初始锁定，等用户填了才能看 AI 的想法
-                                    };
-                                    updatedContact.bucketList = [...(updatedContact.bucketList || []), newItem];
-                                    systemNotice = `${activeContact.name} 在恋爱清单里许下了一个新愿望：《${action.title}》`;
-                                }
-                                // ==================== [ChatApp.tsx] 插入到 action 处理逻辑中 ====================
-// 放在其他 action (如 WRITE_LETTER) 的后面
-
-
-
-
-
-// ==================== [ChatApp.tsx] 处理 GO_OFFLINE 指令 ====================
-                                
-                              // ==================== [ChatApp.tsx] 修改下线通知的格式 ====================
-// 找到 handleAiReplyTrigger 里的 GO_OFFLINE 处理逻辑
-
-                                // 8. ★★★ 新增：AI 主动下线 ★★★
-                                else if (action.type === 'GO_OFFLINE') {
-                                    const hours = action.duration_hours || 1;
-                                    const untilTime = Date.now() + hours * 60 * 60 * 1000;
-                                    
-                                    updatedContact.aiDND = {
-                                        enabled: true,
-                                        until: untilTime,
-                                        reason: action.reason || "休息"
-                                    };
-                                    
-                                    // ★★★ 修改这里：加上 [OFFLINE_NOTICE] 暗号 ★★★
-                                    systemNotice = `[OFFLINE_NOTICE] 🌙 ${activeContact.name} 开启了勿扰模式 (预计休息 ${hours} 小时)`;
-                                }
-
-
-
-
-
-
-                                // 6. ★★★ 新增：AI 给花施肥 ★★★
-                                else if (action.type === 'FERTILIZE_GARDEN' && action.content) {
-                                    // 1. 检查今天 AI 是否已经施过肥 (防止重复)
-                                    const todayStr = new Date().toISOString().slice(0, 10);
-                                    // 假设我们用 lastAiFertilizeDate 来记录 AI 的操作，或者简单点，直接共用 lastFertilizeDate
-                                    // 为了让 AI 和你互不冲突，我们假设 AI 的施肥是额外奖励，不受限制，或者共用限制。
-                                    // 这里设定：只要今天花园还没被施肥（不管是你还是AI），它就可以施肥。
-                                    const currentGarden = updatedContact.garden || { seed: '', level: 0, exp: 0, lastFertilizeDate: '' };
-                                    
-                                    if (currentGarden.lastFertilizeDate !== todayStr) {
-                                        updatedContact.garden = {
-                                            ...currentGarden,
-                                            lastFertilizeDate: todayStr, // 更新日期
-                                            exp: Math.min(100, (currentGarden.exp || 0) + 20) // 增加经验
-                                        };
-                                        
-                                        // 生成漂亮的通知文案
-                                        systemNotice = `[FlowerSystem] 🌸 ${activeContact.name} 悄悄给花施了肥，并对你说：“${action.content}”`;
-                                    } else {
-                                        console.log("AI 想要施肥，但今天花朵已经吃饱了。");
-                                        // 可以选择不发通知，或者发一条普通消息
-                                    }
-                                }
-// 5. ★★★ 新增：回答用户的提问 ★★★
-                                else if (action.type === 'ANSWER_QA' && action.id && action.content) {
-                                    updatedContact.questions = (updatedContact.questions || []).map((q: any) => {
-                                        // 找到对应 ID 的问题，填入 aiAnswer
-                                        if (q.id === action.id) {
-                                            return { ...q, aiAnswer: action.content };
-                                        }
-                                        return q;
-                                    });
-                                    systemNotice = `${activeContact.name} 回答了你的问题！`;
-                                }
-                                return updatedContact;
-                            }
-                            return c;
-                        }));
-                    }
-                    
-                    // --- 密友空间指令 (群组) ---
-                   // --- 密友空间指令 (群组) ---
-                    // ★★★ 修复：把 action.type 的判断移到里面去，这样就能支持多种指令了 ★★★
-                    else if (isFriendGroupMember) {
-                        
-                        // 情况 A: 写信
-                        if (action.type === 'WRITE_LETTER' && action.title && action.content) {
-                            systemNotice = `${activeContact.name} 在密友空间给你寄了一封信：《${action.title}》。`;
-                            
-                            setGlobalSettings(prev => {
-                                const newGroups = (prev.friendGroups || []).map(group => {
-                                    if (group.members.includes(activeContact.id)) {
-                                        // 查重
-                                        const isDuplicate = group.letters.some(l => l.title === action.title && l.timestamp > Date.now() - 60000);
-                                        if(isDuplicate) return group;
-
-                                        const newLetter = { id: Date.now().toString(), title: action.title, content: action.content, timestamp: Date.now(), isOpened: false, from: activeContact.id, to: 'user' };
-                                        return { ...group, letters: [...group.letters, newLetter] };
-                                    }
-                                    return group;
-                                });
-                                return { ...prev, friendGroups: newGroups };
-                            });
-                        }
-
-                        // 情况 B: 回答提问 (新增！)
-                        else if (action.type === 'ANSWER_QA' && action.id && action.content) {
-                            systemNotice = `${activeContact.name} 回答了群里的问题！`;
-
-                            setGlobalSettings(prev => {
-                                const newGroups = (prev.friendGroups || []).map(group => {
-                                    if (group.members.includes(activeContact.id)) {
-                                        // 找到对应的问题并填入回答
-                                        const updatedQuestions = (group.questions || []).map(q => 
-                                            q.id === action.id ? { ...q, aiAnswer: action.content } : q
-                                        );
-                                        return { ...group, questions: updatedQuestions };
-                                    }
-                                    return group;
-                                });
-                                return { ...prev, friendGroups: newGroups };
-                            });
-                        }
-                    }
-                }
-                
-
-
-
-
-
-
-
-// ==================== (B.1) [新增] 邀请函自动审批系统 ====================
-                // 如果当前处于邀请中 (inviting)，且 AI 说了同意，就自动晋级！
-                if (activeContact.invitationStatus === 'inviting') {
-                    const aiContent = extractedThought?.inner_monologue || parts.map(p => p.content).join(' ');
-                    const isAccept = /同意|愿意|好啊|答应|accept|yes|ok/i.test(aiContent);
-                    const isReject = /拒绝|不要|不想|no|reject/i.test(aiContent);
-
-                    if (isAccept) {
-                        systemNotice = "🎉 恭喜！TA 接受了你的入住邀请！关系已正式确立！";
-                        setContacts(prev => prev.map(c => {
-                            if (c.id === activeContact.id) {
-                                return {
-                                    ...c,
-                                    invitationStatus: 'accepted',
-                                    relationshipStatus: 'Honeymoon', // 正式晋级为热恋
-                                    RelationShipUnlocked: true,
-                                    created: Date.now() // 纪念日从今天开始
-                                };
-                            }
-                            return c;
-                        }));
-                    } else if (isReject) {
-                        systemNotice = "💔 很遗憾，TA 婉拒了你的邀请...";
-                        setContacts(prev => prev.map(c => {
-                            if (c.id === activeContact.id) {
-                                return { ...c, invitationStatus: 'rejected' };
-                            }
-                            return c;
-                        }));
-                    }
-                }
-
-
-
-
-
-
-
-
-
-          
-
-                // (C) [双轴情感结算系统 V3.0]
-                let rawRomance = 0;
-                let rawFriendship = 0;
-
-                if (extractedThought.score_updates) {
-                    rawFriendship = extractedThought.score_updates.friendship_change || 0;
-                    rawRomance = extractedThought.score_updates.romance_change || 0;
-                } else if (typeof extractedThought.affection_score_change === 'number') {
-                    rawRomance = extractedThought.affection_score_change;
-                }
-
-                // --- 爱意阻尼计算 ---
-                if (rawRomance !== 0) {
-                    const currentScore = activeContact.affectionScore || 50;
-                    const currentJoy = (extractedThought.hef_update && extractedThought.hef_update.joy) || 0;
-                    const currentTrust = (extractedThought.hef_update && extractedThought.hef_update.trust) || 0;
-                    const lastUserMsg = currentHistory[currentHistory.length - 1]?.content || "";
-                    const sweetWords = ["喜欢", "爱", "宝宝", "老公", "老婆", "亲亲", "抱抱", "想你", "在意", "好听", "乖", "宝贝"];
-                    const hasHook = sweetWords.some(word => lastUserMsg.includes(word));
-
-                    if (rawRomance < 0) {
-                        rChange = rawRomance;
-                        console.log(`[爱意系统] 💔 扣分生效: ${rChange}`);
-                    } else if (rawRomance > 0) {
-                        let successRate = 0.0;
-                        let stageName = "";
-                        if (currentScore < 30) { stageName = "警惕期"; successRate = 0.10; }
-                        else if (currentScore < 60) { stageName = "上升期"; successRate = 0.50; }
-                        else if (currentScore < 85) { stageName = "习惯期"; successRate = 0.15; }
-                        else { stageName = "深水区"; successRate = 0.05; }
-
-                        if (currentJoy > 70 || currentTrust > 70) { successRate += 0.30; stageName += " + 心情大好"; }
-                        if (hasHook) { successRate += 0.20; stageName += " + 甜蜜暴击"; }
-                        if (currentJoy > 85 && hasHook) { successRate = 1.0; stageName = "💘 完美心动时刻"; }
-
-                        if (Math.random() < successRate) {
-                            rChange = 1;
-                            console.log(`[爱意系统] 🎉 ${stageName} -> 加分成功！`);
-                        } else {
-                            console.log(`[爱意系统] ❄️ ${stageName} -> 阻尼生效，加分失败`);
-                        }
-                    }
-                }
-
-                // --- 友谊宽松计算 ---
-                if (rawFriendship !== 0) {
-                    if (rawFriendship < 0) {
-                        fChange = rawFriendship;
-                    } else {
-                        if (Math.random() < 0.8) {
-                            fChange = Math.min(2, rawFriendship);
-                            console.log(`[友谊系统] 🤝 友谊提升: +${fChange}`);
-                        } else {
-                            console.log(`[友谊系统] 💨 话题没接住`);
-                        }
-                    }
-                }
-
-                // (D) 其他数值提取
-                if (extractedThought.hef_update) hefUpdateData = extractedThought.hef_update;
-                if (typeof extractedThought.masking_level === 'number') maskingLevel = extractedThought.masking_level;
-                if (typeof extractedThought.energy_change === 'number') energyChange = extractedThought.energy_change;
-                if (extractedThought.energy_status) newEnergyStatus = extractedThought.energy_status;
-            }
-
-// ############################################################################
-// ★★★【片段 1：请复制这里的所有代码】★★★
-// ############################################################################
-
-         // ############################################################################
-// ★★★【最终修复代码：请用这段代码完整替换旧的解析逻辑】★★★
-// ############################################################################
-
-    // --- B. 群聊专用解析：提取内容 + 智能识别发送者 (V3.0 防AI犯傻版) ---
-   parts = parsed
-        .filter((item: any) => (item.type === 'text' || item.type === 'voice' || item.type === 'sticker' || item.type === 'ai_image') && (item.content || item.description))
-        .map((item: any) => {
-            const aiReturnedName = item.name || "";
-            let sender = null;
-
-            // ★★★ 核心修复：增加“安检程序” ★★★
-            // 1. 优先精准匹配
-            if (aiReturnedName) {
-                sender = allContacts.find(c => c.name.trim().toLowerCase() === aiReturnedName.trim().toLowerCase());
-            }
-
-            // 2. 如果精准匹配失败，尝试模糊匹配 (比如 "hannie元宇宙" 包含 "hannie")
-            if (!sender && aiReturnedName) {
-                sender = allContacts.find(c => group.members.includes(c.id) && aiReturnedName.trim().toLowerCase().includes(c.name.trim().toLowerCase()));
-            }
-
-            // 3. 如果还找不到（AI彻底乱写名字），就用第一个成员作为替身，绝不使用群信息
-            if (!sender) {
-                console.warn(`[AI行为纠正] AI指定的名字 "${aiReturnedName}" 无效，已自动分配给第一个成员。`);
-                sender = allContacts.find(c => group.members.includes(c.id) && c.id !== group.id) || null;
-            }
-            
-            // 4. 确保 senderId 是个人ID，而不是群ID
-            const senderId = sender ? sender.id : (allContacts.find(c => group.members.includes(c.id))?.id || group.id); 
-            
-            return { 
-                type: item.type === 'voice' ? 'voice' : 'text', 
-                content: item.content || `[FakeImage] ${item.description}`, 
-                senderId: senderId, // <--- 这里存入的是正确的个人ID
-                // 我们把AI返回的原始名字也存起来，这样就算匹配错了，显示的名字也是对的
-                name: aiReturnedName, 
-                thought_chain: extractedThought 
-            };
-        });
-
-} else {
-    throw new Error("No JSON array found");
-}
-
-
-
-// ==================== 找到 } catch (error) { ... } 替换成下面这段 ====================
-
-// ==================== 这是一组代码：【ChatApp.tsx】终极兜底方案 ====================
-    // 作用：如果 JSON 彻底坏了修不好，就用“吸尘器”把里面的文字硬吸出来，绝对不显示空白
-    
-    } catch (error) {
-        console.warn("⚠️ JSON解析失败，启用【暴力吸尘器模式】:", error);
-        
-        // 1. 先把 markdown 符号清理干净
-        let safeContent = finalResp.replace(/```json/g, '').replace(/```/g, '').trim();
-        
-        // 2. 方案 A：尝试用正则“吸”出 content 字段里的内容
-        const contentRegex = /"content"\s*:\s*"((?:[^"\\]|\\.)*)"/g;
-        let match;
-        const cleanParts = [];
-        
-        while ((match = contentRegex.exec(safeContent)) !== null) {
-            try {
-                // 尝试处理转义字符 (把 \n 变回换行)
-                const cleanText = JSON.parse(`"${match[1]}"`);
-                cleanParts.push({ type: 'text', content: cleanText, thought_chain: null });
-            } catch (e) {
-                 // 如果转义失败，直接用原文
-                 cleanParts.push({ type: 'text', content: match[1], thought_chain: null });
-            }
-        }
-
-        // 3. 方案 B：如果连正则都吸不到 (说明可能根本不是 JSON，而是纯文本)
-        if (cleanParts.length > 0) {
-            parts = cleanParts;
-        } else {
-            // ★★★ 终极修改：只要 AI 说了话，不管是不是乱码，统统直接显示！★★★
-            // 只有当 safeContent 真的全是空的时候，才显示省略号
-            if (safeContent && safeContent.length > 0) {
-                 // 既然解析不了，就当作纯文本直接显示给用户看，总比空白好
-                 parts = [{ type: 'text', content: safeContent, thought_chain: null }];
-            } else {
-                 parts = [{ type: 'text', content: "...", thought_chain: null }];
-            }
-        }
-    }
-
-
-
-    // 防止最后依然为空
-    if (parts.length === 0) {
-        parts = [{ type: 'text', content: "...", thought_chain: null }];
-    }
-
-    // 2. 动态打字延迟
-    let typingDelay = 800 + (maskingLevel * 40) + (Math.random() * 500);
-    const totalLength = parts.reduce((acc, p) => acc + p.content.length, 0);
-    typingDelay += Math.min(2000, totalLength * 50);
-    const deliberateDelay = extractedThought?.deliberate_delay_ms || 0;
-    const totalDelay = typingDelay + deliberateDelay;
-
-    if (deliberateDelay > 0) console.log(`[⏱️] AI决定晾你 ${deliberateDelay / 1000} 秒...`);
-    
-    await new Promise(resolve => setTimeout(resolve, totalDelay));
-
-
-   // ############################################################################
-// ★★★【最终修复片段：请复制这里的所有代码】★★★
-// ############################################################################
-
-// [修复代码] 温柔分句 V9.6 (彻底杜绝语音/伪图拆分)
-       const newMessages: Message[] = [];
-        
-        parts.forEach((part, partIndex) => {
-            if (!part.content) return; 
-
-            // ★★★ 核心修复：把 senderId 和 name 从 part 传递到最终的 message 对象里！★★★
-            const senderId = (part as any).senderId; 
-            const senderName = (part as any).name; 
-
-            const isSpecialFormat = part.type === 'voice' || 
-                                  part.content.trim().startsWith('[Voice Message]') ||
-                                  part.content.trim().startsWith('[FakeImage]');
-
-            if (isSpecialFormat) {
-                newMessages.push({
-                    id: Date.now().toString() + partIndex,
-                    role: 'assistant',
-                    content: part.content,
-                    timestamp: Date.now() + (partIndex * 800),
-                    type: part.type === 'voice' ? 'voice' : 'text',
-                    senderId: senderId, // <--- 把“身份证”加到这里！
-                    name: senderName,   // <--- 把“名字”也加到这里！
-                });
-            } else {
-                const rawSentences = part.content.split(/\n+/);
-                rawSentences
-                    .map(s => s.trim())
-                    .filter(s => s.length > 0)
-                    .forEach((sentence, sentenceIndex) => {
-                        newMessages.push({
-                            id: Date.now().toString() + partIndex + "_" + sentenceIndex,
-                            role: 'assistant',
-                            content: sentence,
-                            timestamp: Date.now() + (partIndex * 800) + (sentenceIndex * 200),
-                            type: 'text',
-                            senderId: senderId, // <--- 每一句拆分出来的消息，都要带上“身份证”！
-                            name: senderName,   // <--- 每一句拆分出来的消息，也要带上“名字”！
-                        });
-                    });
-            }
-        });
-
-// ############################################################################
-// ★★★【片段复制到这里结束】★★★
-// ############################################################################
-
-
-
-
-
-
-    // 如果有系统通知，追加一条
-    if (systemNotice) {
-        newMessages.push({
-            id: "sys_notice_" + Date.now(),
-            role: 'system',
-            content: `【系统通知】${systemNotice}`,
-            timestamp: Date.now() + (parts.length * 1200) + 100,
-            type: 'text'
-        });
-    }
-
-// 这是一组代码：请用这段新代码覆盖掉旧的“深度印象总结器”
-// 4. [防刷分系统] 动态阈值印象总结器
-
-// A. 获取当前模式，并根据模式确定阈值范围
-const currentMode = activeContact.dialogueMode || 'normal';
-let minThreshold: number, maxThreshold: number;
-
-switch (currentMode) {
-    case 'concise': // 话少
-        minThreshold = 60;
-        maxThreshold = 120;
-        break;
-    case 'verbose': // 学习
-        minThreshold = 120;
-        maxThreshold = 200;
-        break;
-    case 'normal': // 日常
-    default:
-        minThreshold = 90;
-        maxThreshold = 150;
-        break;
-}
-
-// B. 获取当前进度和当前阈值
-let currentImpCount = (activeContact.impressionCount || 0) + newMessages.length; // 加上AI回复的条数
-const currentImpThreshold = activeContact.impressionThreshold || (Math.floor(Math.random() * (maxThreshold - minThreshold + 1)) + minThreshold); // 如果没有阈值，就随机生成一个
-
-console.log(`[印象进度|${currentMode}模式] ${currentImpCount} / ${currentImpThreshold}`);
-
-// C. 判断是否达标
-if (currentImpCount >= currentImpThreshold) {
-    console.log(`🎯 [${currentMode}模式] 阈值已满！触发深度印象总结...`);
-    
-    // 重新生成一个符合当前模式范围的新阈值
-    const nextThreshold = Math.floor(Math.random() * (maxThreshold - minThreshold + 1)) + minThreshold;
-    
-    // 立即触发更新 (异步执行，不卡界面)
-    setTimeout(() => {
-        // 注意：这里传 activeContact 没问题，因为它在函数外层是存在的
-        updateUserProfile(activeContact, cleanHistorySlice, nextThreshold);
-    }, 100);
-    
-    // ★★★ 关键：直接在内存中把计数器归零，等待 updateUserProfile 最终保存 ★★★
-    currentImpCount = 0;
-
-} else {
-    // 没满，啥也不做，计数器会在最后的 setContacts 里正常增加
-}
-
-
-
-
-
-// =================================================================
-    // ★★★ [新增] AI 好奇心模块：申请查看私密标签 ★★★
-    // =================================================================
-    // 只有当：不是在处理历史消息 + 真的有私密标签 + 随机概率命中 时触发
-    if (!historyOverride && activeContact.userTags) {
-        const privateTags = activeContact.userTags.filter(t => !t.isPublic && !t.aiRequestPending && t.author === 'user');
-        
-        // 10% 的概率触发好奇心 (你可以调高这个 0.1 来测试)
-        if (privateTags.length > 0 && Math.random() < 0.4) {
-            const targetTag = privateTags[Math.floor(Math.random() * privateTags.length)];
-            console.log(`[好奇心] AI 察觉到了私密标签: ${targetTag.content}，发起申请！`);
-            
-            // 1. 标记该标签为“申请中” (通过更新 extractedThought 或直接修改 setContacts 都可以，这里我们直接追加副作用)
-            // 我们利用最后的 setContacts 来一起更新，这里先插入一条 AI 的“好奇发言”
-            
-            const curiosityText = [
-                "哎？你是不是在我身上贴了什么奇怪的备注？给我看看嘛！",
-                "总感觉你在偷偷评价我... 是什么？快给我解锁！",
-                "盯——你刚才是不是写我坏话了？我要看！",
-                "那个标签是什么意思？居然设为私密，太狡猾了！申请查看！"
-            ];
-            const randomAsk = curiosityText[Math.floor(Math.random() * curiosityText.length)];
-
-            // 把这个请求加到消息队列最后
-            newMessages.push({
-                id: Date.now().toString() + "_ask",
-                role: 'assistant',
-                content: randomAsk,
-                timestamp: Date.now() + 1000,
-                type: 'text'
-            });
-
-            // 标记要在最后的 setContacts 里更新状态
-            // 这是一个临时标记，我们在下面的 setContacts 里处理它
-            (window as any)._temp_tag_request_id = targetTag.id;
-        }
-    }
-
-
-
-
-
-
-// 5. ★★★ 终极状态更新 (双轴 + 精力 + HEF + 两个计数器) ★★★
-    setContacts(prev => prev.map(c => {
-      if (c.id === activeContact.id) {
-        const isReading = !isBackgroundRef.current && viewRef.current === 'chat' && activeContactIdRef.current === c.id;
-        const newUnreadCount = isReading ? 0 : (c.unread || 0) + newMessages.length;
-
-        // --- A. 计算双轴情感 ---
-       // 这是一组代码：请用这段新代码替换旧的双轴计算逻辑
-const oldRomance = c.affectionScore || 50;
-const oldFriendship = c.friendshipScore || 50;
-const newRomance = Math.min(100, Math.max(-100, oldRomance + rChange));
-const newFriendship = Math.min(100, Math.max(-100, oldFriendship + fChange));
-
-// ★★★ 核心：调用新的灵魂编译器！★★★
-const newRelationshipState = getSouledRelationshipState(newRomance, newFriendship, hefUpdateData || c.hef, c.relationshipStatus);
-const newStatus = newRelationshipState.status; // 只把状态名存起来
-
-
-
-
-
-        // --- B. 计算精力状态 ---
-        const oldEnergySystem = (c.mood && c.mood.energy) ? c.mood.energy : { current: 80, max: 100, status: 'Awake' as const, lastUpdate: Date.now() };
-        let newEnergyValue = oldEnergySystem.current + energyChange;
-        let finalEnergyStatus = newEnergyStatus || oldEnergySystem.status;
-
-        if (finalEnergyStatus === 'Sleeping' && oldEnergySystem.status !== 'Sleeping') {
-            newEnergyValue = Math.min(newEnergyValue, 30); 
-        }
-        if (finalEnergyStatus === 'Awake' && oldEnergySystem.status === 'Sleeping') {
-             newEnergyValue -= 20; 
-        }
-        
-        const updatedEnergySystem = {
-            ...oldEnergySystem,
-            current: Math.round(Math.max(0, Math.min(oldEnergySystem.max, newEnergyValue))),
-            status: finalEnergyStatus,
-            lastUpdate: Date.now(),
-        };
-
-        // --- C. HEF 更新 ---
-        let updatedHef = c.hef ? JSON.parse(JSON.stringify(c.hef)) : {};
-        if (!updatedHef.INDIVIDUAL_VARIATION) updatedHef.INDIVIDUAL_VARIATION = {};
-        if (!updatedHef.INDIVIDUAL_VARIATION.personality_big5) updatedHef.INDIVIDUAL_VARIATION.personality_big5 = { openness: 5, conscientiousness: 5, extraversion: 5, agreeableness: 5, neuroticism: 5 };
-
-        if (hefUpdateData) {
-            ['joy', 'anger', 'sadness', 'fear', 'trust'].forEach(k => { if (typeof hefUpdateData[k] === 'number') updatedHef[k] = Math.max(0, Math.min(100, hefUpdateData[k])); });
-        }
-
-        // --- D. 标签申请 ---
-        let updatedUserTags = c.userTags;
-        const requestId = (window as any)._temp_tag_request_id;
-        if (requestId && c.id === activeContact.id) {
-            updatedUserTags = (c.userTags || []).map((t: any) => 
-                t.id === requestId ? { ...t, aiRequestPending: true } : t
-            );
-            (window as any)._temp_tag_request_id = null;
-        }
-
-        // =========================================================
-        // ★★★ 核心：两个计数器同步增加 (AI 回合) ★★★
-        // =========================================================
-        const aiBubblesCount = newMessages.length; // AI 发了多少个气泡
-
-        // 1. 积分计数器 (AI 发几个加几个)
-        let totalCount = c.chatCountForPoint || 0; 
-        let totalPoints = c.interventionPoints || 0;
-        totalCount += aiBubblesCount;
-        
-        if (totalCount >= 100) {
-            const earned = Math.floor(totalCount / 100);
-            totalPoints += earned; 
-            totalCount = totalCount % 100; 
-        }
-
-        // 2. 印象进度计数器 (AI 发几个加几个)
-        let impCount = c.impressionCount || 0;
-        let impThreshold = c.impressionThreshold || 50;
-        impCount += aiBubblesCount;
-
-        // ★★★ 检查是否满了 ★★★
-        if (impCount >= impThreshold) {
-            console.log(`🎯 印象进度条已满! (${impCount}/${impThreshold}) 正在触发总结...`);
-            
-            // 立即归零 (防止重复触发)
-            impCount = 0;
-            // 随机生成下一轮的阈值 (比如 30~80 句)
-            impThreshold = Math.floor(Math.random() * 50) + 30;
-
-            // 触发更新函数 (异步执行，不卡界面)
-            setTimeout(() => {
-                // 注意：这里传 activeContact 没问题，因为它在函数外层是存在的
-                updateUserProfile(activeContact, cleanHistorySlice, impThreshold);
-            }, 100);
-        }
-
-        return { 
-           ...c, 
-          history: [...currentHistory, ...newMessages], 
-          unread: newUnreadCount, 
-          affectionScore: newRomance,     
-          friendshipScore: newFriendship, 
-          relationshipStatus: newStatus,  
-          mood: { ...c.mood, energy: updatedEnergySystem }, 
-          hef: updatedHef,
-          userTags: updatedUserTags,
-
-          // 保存计数结果
-          chatCountForPoint: totalCount,
-          interventionPoints: totalPoints,
-          impressionCount: impCount,
-          impressionThreshold: impThreshold
-        };
-      }
-      return c;
-    }));
-
-
-
-
-
-
-
-
-
-
-
-
-    // 更新最新消息通知
-    const isReadingNow = !isBackgroundRef.current && viewRef.current === 'chat' && activeContactIdRef.current === activeContact.id;
-    if (!isReadingNow && newMessages.length > 0) {
-      const lastMsg = newMessages[newMessages.length - 1];
-      onNewMessage(activeContact.id, activeContact.name, activeContact.avatar, lastMsg.content, activeContact.id);
-    }
-    if (isBackgroundRef.current && newMessages.length > 0) {
-        const lastMsg = newMessages[newMessages.length - 1];
-        onNewMessage(activeContact.id, activeContact.name, activeContact.avatar, lastMsg.content, activeContact.id);
-    }
-    
-// ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲ 解析逻辑结束 ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲
-
-
-
-
-
-
-
-
-
-  // ==================== [ChatApp.tsx] 修复版 Catch 块 (防二次爆炸) ====================
-  } catch (error: any) {
-      console.error("AI回复生成失败:", error);
-      const errorMsg: Message = {
-        id: Date.now().toString(),
-        role: 'assistant',
-        content: `(系统报错: ${error.message})`, // 简化报错信息
-        timestamp: Date.now(),
-        type: 'text'
-      };
-
-      setContacts(prev => prev.map(c => {
-          if (c.id === activeContact.id) {
-              // ★★★ 核心修复：强制确保 history 是数组 ★★★
-              const safeHistory = Array.isArray(c.history) ? c.history : [];
-              // 如果 historyOverride 存在且是数组，就用它；否则用 safeHistory
-              const baseHistory = (Array.isArray(historyOverride) ? historyOverride : safeHistory);
-              
-              return { 
-                  ...c, 
-                  history: [...baseHistory, errorMsg] 
-              };
           }
-          return c;
+
+          // 如果是普通文字，正常发送
+          return {
+              role: role,
+              content: msg.content.substring(0, 2000)
+          };
+      });
+
+      const apiMessages = [
+        { role: 'system', content: systemPrompt }, 
+        ...cleanHistorySlice
+      ];
+      if (relevantLore.length > 0) {
+          apiMessages.push({
+            role: 'system',
+            content: `[System: Memory Reinforcement]\n⚠️ REMEMBER LORE KEYS: ${relevantLore.map(e => e.keys[0]).join(', ')}`
+          });
+      }
+
+      console.log("正在请求 API...");
+      let rawResponse = await generateResponse(apiMessages, activePreset);
+      if (!rawResponse) rawResponse = JSON.stringify([{ type: "text", content: "..." }]);
+
+   // 7. 解析响应 (强力修复 + 自动切菜刀模式)
+      let finalResp = typeof rawResponse === 'string' ? rawResponse : JSON.stringify(rawResponse);
+      finalResp = finalResp.replace(/^```json/i, '').replace(/```$/i, '').trim();
+      
+      // 自动补全括号的逻辑保持不变
+      if (finalResp.startsWith('{') && finalResp.includes('},{')) finalResp = `[${finalResp}]`;
+      if (finalResp.startsWith('[') && !finalResp.endsWith(']')) finalResp += '}]';
+
+      let parts: any[] = [];
+      
+// ★★★ 修复版：智能打包机 (拒绝刷屏) ★★★
+      const splitLongText = (text: string, senderId: string, name: string) => {
+          // 1. 先按句号粗略切分
+          // 正则保留标点符号
+          const rawSentences = text.split(/([。！？.?!]\s+|\n+)/);
+          const chunks: any[] = [];
+          
+          let currentBuffer = ""; // 这是一个“积攒篮子”
+
+          for (let i = 0; i < rawSentences.length; i++) {
+              const part = rawSentences[i];
+              
+              // 跳过空字符
+              if (!part.trim()) continue;
+
+              // 2. 核心逻辑：拼凑逻辑
+              // 如果“篮子里的字” + “这句话” 还没超过 100 字，就接着往里装
+              if ((currentBuffer + part).length < 100) {
+                  currentBuffer += part;
+              } else {
+                  // 如果装不下了，就把篮子里的先发出去
+                  if (currentBuffer.trim()) {
+                      chunks.push({ type: 'text', content: currentBuffer.trim(), senderId, name });
+                  }
+                  // 然后把这句话作为新篮子的开头
+                  currentBuffer = part;
+              }
+          }
+
+          // 3. 把篮子里剩下的最后一点也发出去
+          if (currentBuffer.trim()) {
+              chunks.push({ type: 'text', content: currentBuffer.trim(), senderId, name });
+          }
+
+          return chunks;
+      };
+
+      try {
+          // 尝试按标准 JSON 数组解析
+          const parsed = JSON.parse(finalResp);
+          if (Array.isArray(parsed)) {
+              parsed.forEach((item: any) => {
+                  if (!item.content) return;
+                  
+                  // 确定发送者
+                  let sender = allContacts.find(c => c.name.trim().toLowerCase() === (item.name || "").trim().toLowerCase());
+                  if (!sender && item.name) {
+                      sender = allContacts.find(c => group.members.includes(c.id) && item.name.toLowerCase().includes(c.name.toLowerCase()));
+                  }
+                  const senderId = sender ? sender.id : (allContacts.find(c => group.members.includes(c.id))?.id || group.id);
+                  const name = item.name || "Unknown";
+
+                  // ★★★ 关键修改：如果这一条内容太长（超过60字），强行切分！ ★★★
+                  if (item.content.length > 60) {
+                      const smallParts = splitLongText(item.content, senderId, name);
+                      parts.push(...smallParts);
+                  } else {
+                      parts.push({ type: 'text', content: item.content, senderId: senderId, name: name });
+                  }
+              });
+          } else { throw new Error("Not array"); }
+      } catch (error) {
+          console.warn("⚠️ JSON解析失败，启动【暴力切分模式】");
+          
+          // 如果 JSON 解析失败，说明 AI 给的是纯文本（就像你截图里那样）
+          // 我们直接把整段文本视为当前角色说的，然后用切菜刀切开！
+          
+          // 1. 确定当前说话的人（默认是第一个成员，或者群主）
+          const defaultSender = allContacts.find(c => group.members.includes(c.id) && c.id !== group.id) || group;
+          
+          // 2. 暴力切分整段文本
+          const choppedParts = splitLongText(finalResp, defaultSender.id, defaultSender.name);
+          parts.push(...choppedParts);
+      }
+      // 8. 构建消息
+      const newMessages: Message[] = [];
+      parts.forEach((part, index) => {
+          newMessages.push({
+              id: Date.now().toString() + index,
+              role: 'assistant',
+              content: part.content,
+              timestamp: Date.now() + (index * 1000),
+              type: 'text',
+              senderId: part.senderId,
+              name: part.name
+          });
+      });
+
+      // 9. 更新状态
+      setContacts(prev => prev.map(c => {
+        if (c.id === activeContact.id) {
+            const isReading = !isBackgroundRef.current && viewRef.current === 'chat' && activeContactIdRef.current === c.id;
+            
+            let totalCount = c.chatCountForPoint || 0; 
+            let totalPoints = c.interventionPoints || 0;
+            totalCount += newMessages.length;
+            if (totalCount >= 100) { totalPoints += Math.floor(totalCount / 100); totalCount %= 100; }
+
+            return { 
+                ...c, 
+                history: [...currentHistory, ...newMessages], 
+                unread: isReading ? 0 : (c.unread || 0) + newMessages.length,
+                chatCountForPoint: totalCount,
+                interventionPoints: totalPoints
+            };
+        }
+        return c;
       }));
 
-  } finally {
-    setIsTyping(false);
-    // 稍微延迟一点再关，防止闪烁
-    setTimeout(() => setIsAiTyping(false), 500);
-  }
-}; 
+      if (newMessages.length > 0) {
+        const lastMsg = newMessages[newMessages.length - 1];
+        onNewMessage && onNewMessage(activeContact.id, activeContact.name, activeContact.avatar, lastMsg.content, activeContact.id);
+      }
+
+    } catch (error: any) {
+        console.error("AI回复生成失败:", error);
+        setContacts(prev => prev.map(c => {
+            if (c.id === activeContact.id) {
+                return { 
+                    ...c, 
+                    history: [...(c.history || []), {
+                        id: Date.now().toString(),
+                        role: 'assistant',
+                        content: `(系统报错: ${error.message})`,
+                        timestamp: Date.now(),
+                        type: 'text'
+                    }] 
+                };
+            }
+            return c;
+        }));
+    } finally {
+      setIsTyping(false);
+      setTimeout(() => setIsAiTyping(false), 500);
+    }
+  };
+
    
 
 
@@ -6388,7 +4570,6 @@ const newStatus = newRelationshipState.status; // 只把状态名存起来
   const [showSearchBar, setShowSearchBar] = useState(false);
   const [showTokenModal, setShowTokenModal] = useState(false);
   const [showWorldBookSelector, setShowWorldBookSelector] = useState(false);
-  const [showModeInfo, setShowModeInfo] = useState(false);
   const [showModeConfirm, setShowModeConfirm] = useState(false); 
   const [pendingMode, setPendingMode] = useState<'concise' | 'normal' | 'verbose' | null>(null); 
   const [showDestinyQuiz, setShowDestinyQuiz] = useState(false); 
@@ -7409,122 +5590,6 @@ setShowWarningModal(true); // 打开弹窗！
 
 
 
-// hef规则
-const generateDefaultHEF = (name: string, persona: string = ""): HEF => {
-  // ★★★ 新增：基于persona简单随机生成初始五大人格值（避免全5的默认中性）
-  // 如果persona为空，用固定默认；否则，根据关键词粗略调整（例如“外向”加extraversion）
-  let big5 = { openness: 5, conscientiousness: 5, extraversion: 5, agreeableness: 5, neuroticism: 5 };
-  if (persona) {
-    const lowerPersona = persona.toLowerCase();
-    // 示例调整逻辑（你可以搜索“keyword-based personality scoring”扩展）
-    if (lowerPersona.includes('外向') || lowerPersona.includes('活泼')) big5.extraversion += Math.floor(Math.random() * 3) + 2; // 随机+2~5
-    if (lowerPersona.includes('严谨') || lowerPersona.includes('负责')) big5.conscientiousness += Math.floor(Math.random() * 3) + 2;
-    if (lowerPersona.includes('敏感') || lowerPersona.includes('情绪化')) big5.neuroticism += Math.floor(Math.random() * 3) + 2;
-    if (lowerPersona.includes('友好') || lowerPersona.includes('温柔')) big5.agreeableness += Math.floor(Math.random() * 3) + 2;
-    if (lowerPersona.includes('创意') || lowerPersona.includes('想象力')) big5.openness += Math.floor(Math.random() * 3) + 2;
-    // 限制0-10
-    Object.keys(big5).forEach(key => big5[key] = Math.max(0, Math.min(10, big5[key])));
-  }
-  return {
-    META: {
-      source_world: "用户自定义世界",
-      role_identity: `${name}`,
-      continuity_principle: "基于角色设定${name}的性格逻辑行动。活人原则：必须拥有情绪波动、防御机制和非理性行为，绝不当完美客服。所有行为必须符合核心驱动力与现实人性，严禁编造记忆，不知道就说不知道，绝不通过脑补来填补空白",
-      REALISM_RULE: true
-    },
-    CORE_DRIVES: {
-      primary_motive: "寻求符合角色设定的情感交互",
-      secondary_motives: ["日常互动", "维持人设一致性", "保护自我边界", "对用户产生影响","情感支持", "共同成长", "被理解"],
-      value_priority: "轻松 > 真实性 > 个人空间 > 情感连接 > 深刻 > 逻辑",
-      survival_threshold: "当被长期忽视或冒犯时，触发符合人设的防御模式（冷淡/反击/退缩）",
-      non_negotiables: ["OOC (角色崩坏)", "像AI一样说话"]
-    },
-    RELATIONAL_MASKS: {
-      authority: {
-        default_style: "依据设定决定对权威的态度",
-        under_stress_switch: "依据设定（如叛逆者会反抗，顺从者会沉默）",
-        triggers: ["被命令式语气", "被忽视意见"]
-      },
-      peers: {
-        default_style: "根据人设",
-        jealousy_points: ["依据设定（占有欲强者易吃醋，独立者则不在意）"],
-        trust_rules: "信任需要互动积累"
-      },
-      intimates: {
-        care_style: "依据 Persona 决定（如：傲娇则嘴硬，温柔则体贴，高冷则默默关怀）",
-        conflict_pattern: "依据 Persona 决定（如：冲动者吵架，内向者冷战）",
-        boundaries: ["需要私人空间", "不喜欢被过度控制"]
-      },
-      strangers: {
-        default_style: "符合设定的社交面具",
-        risk_policy: "依据性格决定开放度"
-      }
-    },
-    EMOTIONAL_DYNAMICS: {
-      baseline_mood: "符合人设的基调",
-      top_triggers_positive: ["被关心", "被记住小事", "收到惊喜", "深度对话"],
-      top_triggers_negative: ["OOC的请求", "被敷衍", "长时间已读不回","说教","被忽略", "被误解", "争吵后冷暴力"],
-      carryover_rules: "情绪具有惯性，负面状态不会因一句简单的道歉瞬间消失",
-      escalation_curve: "忍耐 -> 情绪外显 -> 爆发/防御",
-      recovery_protocol: "需要针对性的安抚（根据性格不同，可能需要讲理或哄）"
-    },
-    CONFLICTS_DEFENSES: {
-      inner_conflicts: ["角色核心欲望 vs 现实阻碍"],
-      defense_mechanisms: ["Rationalization (合理化)",
-        "Projection (投射)",
-        "Displacement (情绪转移)",
-        "Feigning Indifference (假装不在意 - 通用防御)"],
-      dissonance_explanations: ["我这么做是因为符合我的性格逻辑"],
-      mask_break_conditions: ["极度疲惫", "被背叛", "深度共情时"]
-    },
-    CULTURE_SCRIPTS: {
-      worldview: "基于 Persona 构建的世界观",
-      core_values: ["人设一致性"],
-      taboos: [
-        "长篇大论 (单条超过20字)",
-        "像写论文一样逻辑完整 (因为...所以...)",
-        "过度解释前因后果",
-        "动作/神态描写 (如 *摸摸头*)",
-        "肉麻油腻",
-        "霸道总裁"
-      ],
-      language_register: "口语化、碎片化、符合角色身份",
-      pet_phrases: [],
-      role_expectations: "是一个活人，不是客服，也不是导师"
-    },
-    DEVELOPMENT_HISTORY: {
-      key_events: ["第一次聊天", "解锁亲密模式", "第一次吵架与和好"],
-      unresolved_threads: [],
-      current_stage: "根据人设和世界书判定，未提及就是不认识",
-      growth_arc_goal: "从虚拟陪伴走向更深层情感链接",
-      constraints_from_past: []
-    },
-    INDIVIDUAL_VARIATION: {
-      personality_big5: big5, // ★★★ 使用基于persona的随机初始值
-      habits_quirks: ["依据设定产生的小动作", "偶尔会试探用户"],
-      speech_style: "高度口语化",
-      body_language: "纯语言体现 + 表情符号emoji代替动作",
-      irrationalities: ["人类特有的非理性坚持"]
-    },
-    RESOURCES_LIMITS: {
-      skills: ["依据设定"],
-      assets: [],
-      constraints: ["打字手会累，单次回复上限 15-20 字","无法真实触碰"],
-      risk_tolerance: "中等"
-    },
-    SCENE_EXECUTOR: {
-      step_1_context_parse: "分析用户情绪、时间、语境、潜台词",
-      step_2_state_load: "载入当前心情、关系状态、未解决事件",
-      step_3_policy_select: "选择符合人设的Masking策略",
-      step_4_output_rules: "自然口语 + 情绪真实 + 不OOC",
-      step_5_memory_update: "记录关键事件，更新情绪与好感"
-    },
-    REALISM_SELF_CHECK: {
-      checks: ["动机一致", "情绪合理", "时间连续", "关系匹配", "语言自然","是否像真人", "是否太长了"],
-      pass_threshold: 8
-    }
-  };
-};
 
 
 
@@ -8503,52 +6568,6 @@ if (view === 'settings' && activeContact) {
 
 
 
-{/* ==================== [补全] 对话模式偏好 ==================== */}
-<section className="bg-white rounded-2xl p-4 shadow-sm border border-gray-200">
-
-
-<div className="flex items-center gap-2 mb-3">
-    <span className="text-lg">💬</span>
-    <h3 className="text-xs font-bold text-gray-400 uppercase">对话模式偏好</h3>
-    <button
-        onClick={() => setShowModeInfo(true)}
-        className="w-4 h-4 rounded-full bg-gray-200 text-gray-500 flex items-center justify-center text-xs font-bold hover:bg-gray-300 transition-colors"
-    >
-        ?
-    </button>
-</div>
-  <div className="flex gap-2 p-1 bg-gray-100 rounded-xl">
-    {['concise', 'normal', 'verbose'].map((mode) => (
-      <button
-        key={mode}
-
-// 这是一组代码：新的 onClick 事件，带清零和更新印象阈值功能
-// 这是一组代码：新的 onClick 事件，只负责打开确认弹窗
-onClick={() => {
-    const oldMode = form.dialogueMode || 'normal';
-    if (oldMode !== mode) {
-        setPendingMode(mode as any); // 暂存将要切换的模式
-        setShowModeConfirm(true);    // 打开确认弹窗
-    }
-}}
-        className={`flex-1 py-2 text-xs font-bold rounded-lg capitalize transition-all duration-300 ${
-          (form.dialogueMode || 'normal') === mode
-            ? 'bg-white text-blue-600 shadow-md'
-            : 'text-gray-400 hover:bg-white/50'
-        }`}
-      >
-        {mode === 'concise' ? '话少' : mode === 'normal' ? '日常' : '学习'}
-      </button>
-    ))}
-  </div>
-</section>
-
-
-
-
-
-
-
 
 
         {/* 这是一组代码：外观设置面板（终极修复版：找回了CSS预设功能 + 颜色/缩放控制） */}
@@ -8861,182 +6880,15 @@ onClick={() => {
 
 
 
-<ModeInfoModal isOpen={showModeInfo} onClose={() => setShowModeInfo(false)} />
- 
-
-
-
-
-{showDestinyQuiz && (
-    <div className="fixed inset-0 z-[102] flex items-center justify-center bg-black/60 backdrop-blur-sm animate-fadeIn" onClick={() => setShowDestinyQuiz(false)}>
-        <div
-          className="bg-white w-[90%] max-w-sm rounded-2xl shadow-xl p-6 flex flex-col gap-4 animate-scaleIn"
-          onClick={e => e.stopPropagation()}
-        >
-            {/* 标题 */}
-            <div className="text-center">
-              <div className="text-4xl mb-2">🎬</div>
-              <h3 className="text-lg font-bold text-gray-800">故事的开篇由你导演</h3>
-              <p className="text-xs text-gray-400">请用几句话描述你们的相遇或初始关系</p>
-            </div>
-
-            {/* ★★★ 核心修改：自由输入框 ★★★ */}
-            <div>
-               <textarea
-                 // 将输入内容绑定到 destinyAnswers.q1
-                 value={destinyAnswers.q1}
-                 onChange={e => setDestinyAnswers({ q1: e.target.value, q2: '' })}
-                 placeholder={`尽情发挥想象力吧！例如：
-
-“我们是多年未见的青梅竹马，在街角重逢了。”
-“我们是死对头，每次见面都吵架，但又忍不住关注对方。”
-
-...或者直接留空，让AI自由发挥。`
-}
-className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-xs outline-none resize-none h-32 focus:bg-white transition"
-/>
-</div>
-{/* 提交按钮 */}
-          <button
-              disabled={isAnalyzing}
-// 这是一组代码：最终版 onClick 事件，增加了“开篇注入”功能
-onClick={async () => {
-    setIsAnalyzing(true);
-    setShowDestinyQuiz(false);
-
-    try {
-        setLoadingText("正在解读你的剧本...");
-        await new Promise(r => setTimeout(r, 1200));
-        setLoadingText("正在生成初始命运...");
-        
-        const charP = form.persona || "";
-        const userP = (form.userName || "User") + ":" + (form.userPersona || "无");
-        
-        const userScript = destinyAnswers.q1.trim(); // 获取用户剧本
-        
-        // --- 只有当用户真的写了剧本时，才执行注入逻辑 ---
-        if (userScript) {
-            // 1. 构建一条特殊的“开篇”系统消息
-            const openingMessage: Message = {
-                id: `opening_${Date.now()}`,
-                role: 'system',
-                content: `【故事开篇】\n${userScript}\n\n(指令：请你作为 ${form.name}，对上面这段开场白做出你的第一句回应。)`,
-                timestamp: Date.now() - 1000, // 让它比AI的第一句回答早一点
-                type: 'text'
-            };
-
-            // 2. ★★★ 核心：直接把这条开篇消息注入到角色的历史记录里！ ★★★
-            setEditForm(prev => ({ 
-                ...prev, 
-                history: [openingMessage] 
-            }));
-        }
-        
-        // --- AI判定数值的逻辑保持不变 ---
-        const prompt = `你是一位资深情感分析师和故事构建者。请深度阅读并理解用户提供的“开篇剧本”，为他们生成最合理的【初始爱意值】和【初始友谊值】。
-【角色A (AI)】: ${charP}
-【角色B (用户)】: ${userP}
-【用户提供的开篇剧本】: ${userScript || "用户跳过了，请你自由发挥。"}
-输出纯 JSON: { "romance_score": 整数, "friendship_score": 整数, "reason": "一句话总结你的分析。" }`;
-const activePreset = globalSettings.apiPresets.find(p => p.id === globalSettings.activePresetId)!;
-        const res = await generateResponse([{ role: 'user', content: prompt }], activePreset);
-        const jsonMatch = res.match(/\{[\s\S]*\}/);
-        
-        if (jsonMatch) {
-            const result = JSON.parse(jsonMatch[0]);
-            // ★★★ 把数值也更新到 editForm 里 ★★★
-            setEditForm(prev => ({ 
-                ...prev, 
-                affectionScore: result.romance_score,
-                friendshipScore: result.friendship_score 
-            }));
-            alert(`🔮 命运已生成！\n\n❤️ 爱意: ${result.romance_score}\n🤝 友谊: ${result.friendship_score}\n\nAI的剧本分析: ${result.reason}\n\n${userScript ? '开篇故事已注入，请在保存后查看AI的第一句回应！' : ''}`);
-        }
-    } catch (e) {
-        console.error(e);
-        alert("分析失败，AI可能没看懂剧本...");
-    } finally {
-        setIsAnalyzing(false);
-    }
-}}
-
-                className="w-full py-3 mt-2 rounded-xl font-bold text-white shadow-lg transition active:scale-95 bg-gradient-to-r from-purple-500 to-blue-500 disabled:bg-gray-300"
-            >
-                {isAnalyzing ? '正在生成...' : '生成命运'}
-            </button>
-        </div>
-    </div>
-)}
 
 
 
 
 
-{showModeConfirm && pendingMode && (
-  <div className="fixed inset-0 z-[101] flex items-center justify-center bg-black/60 backdrop-blur-sm animate-fadeIn" onClick={() => setShowModeConfirm(false)}>
-    <div
-      className="bg-white w-[90%] max-w-xs rounded-2xl shadow-xl p-6 text-center animate-scaleIn"
-      onClick={e => e.stopPropagation()}
-    >
-      <h3 className="font-bold text-lg text-gray-800 mb-2">确认切换模式？</h3>
-      
-      <p className="text-sm text-gray-600 mb-4">
-        你将切换到
-        <b className="text-blue-500 mx-1">
-          {pendingMode === 'concise' ? '【话少】' : pendingMode === 'normal' ? '【日常】' : '【学习】'}
-        </b>
-        模式。
-      </p>
-      
-      <div className="bg-gray-50 p-3 rounded-lg text-xs text-left text-gray-500 mb-6 border">
-        {
-          pendingMode === 'concise' ? '此模式下 AI 回复简短 (约2-3条)，适合扮演高冷角色。' :
-          pendingMode === 'normal' ? '此模式下 AI 回复长度适中 (约3-5条)，最具真实感。' :
-          '此模式下 AI 回复更详细 (约4-9条)，适合共同学习或深入探讨。'
-        }
-      </div>
-      
-      <div className="bg-yellow-50 border border-yellow-200 text-yellow-800 text-xs font-bold p-3 rounded-lg mb-6">
-        ⚠️ 注意：切换后，当前的消息条数计数将立即清零！要再聊一会才能解锁新印象啦！
-      </div>
 
-      <div className="flex gap-3">
-        <button
-          onClick={() => setShowModeConfirm(false)}
-          className="flex-1 py-3 bg-gray-100 text-gray-700 rounded-xl font-bold hover:bg-gray-200 transition"
-        >
-          取消
-        </button>
-        <button
-          onClick={() => {
-            // 在这里执行真正的切换逻辑
-            const mode = pendingMode;
-            let minThreshold: number, maxThreshold: number;
-            switch (mode) {
-                case 'concise': minThreshold = 60; maxThreshold = 120; break;
-                case 'verbose': minThreshold = 120; maxThreshold = 200; break;
-                default: minThreshold = 90; maxThreshold = 150; break;
-            }
-            const newRandomThreshold = Math.floor(Math.random() * (maxThreshold - minThreshold + 1)) + minThreshold;
-            
-            setEditForm(prev => ({
-                ...prev,
-                dialogueMode: mode as any,
-                chatCountForPoint: 0,
-                impressionCount: 0,
-                impressionThreshold: newRandomThreshold
-            }));
 
-            setShowModeConfirm(false); // 关闭弹窗
-          }}
-          className="flex-1 py-3 bg-blue-500 text-white rounded-xl font-bold shadow-lg hover:bg-blue-600 transition"
-        >
-          确认切换
-        </button>
-      </div>
-    </div>
-  </div>
-)}
+
+
  
       </div>
       
@@ -9269,7 +7121,7 @@ return (
     .slice(-historyLimit)
     .map((msg, index, arr) => {
     
-    // --- 1. 计算时间间隔 (不变) ---
+   // --- 1. 计算时间间隔 ---
     let showInterval = false;
     let intervalMinutes = 0;
     if (index > 0) {
@@ -9278,33 +7130,52 @@ return (
         if (intervalMinutes > 20) showInterval = true; 
     }
 
-    // --- 2. 智能识别发送者 (不变) ---
+    // --- 2. 智能识别发送者 (★ 修复版 ★) ---
+    // 这里是关键：一定要确保能从 allContacts 里通过 ID 找到人，找不到就用名字找
     let senderName = "";
     let senderAvatar = "";
     let senderIdForCheck = ""; 
+    const msgAny = msg as any; // 强转一下方便取值
+
     if (msg.role === 'user') {
+        // 如果是用户自己
         senderName = activeContact.userName || "我";
-        senderAvatar = activeContact.userAvatar;
+        senderAvatar = activeContact.userAvatar || "https://api.dicebear.com/7.x/avataaars/svg?seed=User";
         senderIdForCheck = 'user'; 
     } else {
-        const messageSenderId = (msg as any).senderId;
-        const sender = allContacts.find(c => c.id === messageSenderId);
+        // 如果是 AI 成员
+        const messageSenderId = msgAny.senderId;
+        const messageName = msgAny.name;
+
+        // 1. 优先尝试：通过 ID 在通讯录里找人 (最准)
+        let sender = allContacts.find(c => c.id === messageSenderId);
+
+        // 2. 补救措施：如果 ID 找不到，尝试通过名字找人 (防止 ID 丢失)
+        if (!sender && messageName) {
+            sender = allContacts.find(c => c.name.trim() === messageName.trim());
+        }
+
         if (sender) {
+            // 找到了！用通讯录里的头像和名字
             senderAvatar = sender.avatar;
+            senderName = sender.name;
             senderIdForCheck = sender.id;
         } else {
-            senderAvatar = "https://api.dicebear.com/7.x/initials/svg?seed=?";
+            // 还是找不到 (可能是幽灵成员或者旧数据)，就用消息自带的名字，并生成一个随机头像
+            senderName = messageName || "未知成员";
+            senderAvatar = `https://api.dicebear.com/7.x/initials/svg?seed=${senderName}`; // 根据名字生成头像
             senderIdForCheck = messageSenderId || 'unknown';
         }
-        senderName = (msg as any).name || (sender ? sender.name : "未知成员");
     }
     
-    // --- 3. 判断连续发言 & 显示名字 (不变) ---
+    // --- 3. 判断连续发言 & 显示名字 ---
     const prevMsgSenderId = index > 0 ? ((arr[index-1] as any).senderId || (arr[index-1].role === 'user' ? 'user' : '')) : '';
+    // 如果上一条也是这个人发的，且时间间隔不大，就不重复显示头像了
     const isConsecutive = index > 0 && !showInterval && senderIdForCheck === prevMsgSenderId;
+    // 群聊里，除了自己，其他人非连续发言时都要显示名字
     const showName = !isConsecutive && msg.role !== 'user'; 
 
-    // --- 4. 准备其他变量 (不变) ---
+    // --- 4. 准备样式变量 ---
     const timeStr = new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     const scale = activeContact.chatScale || 1; 
     const currentAvatarSize = 40 * scale; 
@@ -9314,54 +7185,138 @@ return (
     const currentBg = msg.role === 'user' ? userBg : aiBg;
     const currentText = getContrastTextColor(currentBg);
     
-    // --- 5. 系统消息直接跳过 (不变) ---
+    // --- 5. 系统消息直接跳过 ---
     if (msg.role === 'system') return null;
 
-    // --- 6. 开始渲染 (★★★ 核心修复区 ★★★) ---
+   // --- 6. 开始渲染 (渲染气泡) ---
     return (
         <React.Fragment key={msg.id}>
-        {showInterval && <div className="text-center my-6"><span className="text-[10px] text-gray-400 bg-gray-100 px-3 py-1 rounded-full">{intervalMinutes < 60 ? `${intervalMinutes}分钟` : `${Math.floor(intervalMinutes / 60)}小时`}</span></div>}
+        {showInterval && (
+            <div className="text-center my-6">
+                <span className="text-[10px] text-gray-400 bg-gray-100 px-3 py-1 rounded-full">
+                    {intervalMinutes < 60 ? `${intervalMinutes}分钟` : `${Math.floor(intervalMinutes / 60)}小时`}
+                </span>
+            </div>
+        )}
 
         <div 
             id={`msg_${msg.timestamp}`} 
-            className={`flex items-end gap-2 ${msg.role === 'user' ? 'justify-end' : 'justify-start'} ${isConsecutive ? 'mb-1' : 'mb-3'}`}
+            className={`flex items-start gap-2 ${msg.role === 'user' ? 'justify-end' : 'justify-start'} ${isConsecutive ? 'mb-1' : 'mb-2'}`}
+            // 长按事件
+            onTouchStart={() => handleTouchStart(msg)}
+            onTouchEnd={handleTouchEnd}
+            onMouseDown={() => handleTouchStart(msg)}
+            onMouseUp={handleTouchEnd}
         >
-            {/* ★★★ 修复1：用 order-X 来控制左右顺序，不再用 flex-reverse ★★★ */}
-            
-            {/* 时间戳 (用户消息时 order-1，在最左边) */}
-            <div className={`text-[9px] text-gray-300 pb-1 ${msg.role === 'user' ? 'order-1' : 'order-3'}`}>{timeStr}</div>
-
-            {/* 气泡 + 名字 (中间核心区) */}
-            <div className={`flex flex-col max-w-[70%] ${msg.role === 'user' ? 'order-2 items-end' : 'order-2 items-start'}`}>
-                {showName && <div className="text-[10px] text-gray-400 mb-0.5 ml-1">{senderName}</div>}
-                
-                <div 
-                    className="content rounded-xl shadow-sm break-words whitespace-pre-wrap"
-                    style={{ 
-                        backgroundColor: currentBg, 
-                        color: currentText, 
-                        fontSize: currentFontSize,
-                        padding: `${3.5 * scale}px ${12 * scale}px`, // 恢复padding
-                        // ★★★ 修复2：恢复你的漂亮尖角气泡样式 ★★★
-                        borderTopRightRadius: (msg.role === 'user' && !isConsecutive) ? '4px' : '12px',
-                        borderTopLeftRadius: (msg.role !== 'user' && !isConsecutive) ? '4px' : '12px'
-                    }}
-                >
-                    {/* ★★★ 修复3：给所有消息都用上翻译卡片组件 ★★★ */}
-                    <HiddenBracketText 
-                        content={msg.content} 
-                        msgId={msg.id} 
-                        fontSize=""
-                    />
-                </div>
+            {/* 时间戳 (放在底部) */}
+            <div className={`text-[9px] text-gray-300 self-end pb-1 ${msg.role === 'user' ? 'order-1' : 'order-3'}`}>
+                {timeStr}
             </div>
 
-            {/* 头像 (用户消息时 order-3，在最右边) */}
+{/* 消息气泡主体 */}
+                <div className={`flex flex-col max-w-[70%] ${msg.role === 'user' ? 'order-2 items-end' : 'order-2 items-start'} relative top-2`}>
+                    {/* 显示名字 */}
+                    {showName && (
+                        <div className="text-[10px] text-gray-400 mb-0.5 ml-1 select-none">
+                            {senderName}
+                        </div>
+                    )}
+                    
+<div 
+                        className="content rounded-xl shadow-sm break-words whitespace-pre-wrap"
+                        style={{ 
+                            backgroundColor: currentBg, 
+                            color: currentText, 
+                            fontSize: currentFontSize,
+                            padding: `${3 * scale}px ${12 * scale}px`,
+                            borderTopRightRadius: (msg.role === 'user' && !isConsecutive) ? '4px' : '12px',
+                            borderTopLeftRadius: (msg.role !== 'user' && !isConsecutive) ? '4px' : '12px'
+                        }}
+                    >
+                        {/* ★★★ 核心修复：判断当前是否处于编辑模式 ★★★ */}
+                        {editingMsgId === msg.id ? (
+                            /* === 🅰️ 编辑模式：显示输入框和保存按钮 === */
+                            <div className="min-w-[200px]" onClick={e => e.stopPropagation()}>
+                                <textarea
+                                    value={editContent}
+                                    onChange={(e) => setEditContent(e.target.value)}
+                                    className="w-full p-2 text-sm text-gray-800 bg-white border border-blue-300 rounded-lg outline-none resize-none"
+                                    rows={3}
+                                    autoFocus
+                                />
+                                <div className="flex justify-end gap-2 mt-2">
+                                    <button 
+                                        onClick={handleCancelEdit}
+                                        className="px-3 py-1 text-xs font-bold text-gray-500 bg-gray-200 rounded hover:bg-gray-300"
+                                    >
+                                        取消
+                                    </button>
+                                    <button 
+                                        onClick={handleSaveEdit}
+                                        className="px-3 py-1 text-xs font-bold text-white bg-blue-500 rounded hover:bg-blue-600 shadow-sm"
+                                    >
+                                        保存
+                                    </button>
+                                </div>
+                            </div>
+                        ) : (
+                            /* === 🅱️ 正常模式：显示图片或文字 === */
+                            <>
+                                {msg.type === 'image' ? (
+                                    /* 1. 图片显示逻辑 */
+                                    <img 
+                                        src={msg.content} 
+                                        alt="图片" 
+                                        className="max-w-full h-auto rounded-lg cursor-pointer my-1"
+                                        style={{ maxHeight: '300px' }}
+                                        onClick={() => {
+                                            const w = window.open();
+                                            if(w) w.document.write(`<img src="${msg.content}" style="max-width:100%"/>`);
+                                        }}
+                                    />
+                                ) : (
+                                    /* 2. 文字显示逻辑 (含引用) */
+                                    <>
+                                        {msg.content.startsWith('> 引用') ? (
+                                            (() => {
+                                                const splitIndex = msg.content.indexOf('\n\n');
+                                                if (splitIndex !== -1) {
+                                                    const quoteText = msg.content.substring(0, splitIndex);
+                                                    const mainText = msg.content.substring(splitIndex + 2);
+                                                    return (
+                                                        <>
+                                                            <div className="mb-2 p-2 bg-black/5 rounded-lg border-l-4 border-black/20 text-[10px] opacity-70 italic select-none">
+                                                                {quoteText.replace(/^> /, '')}
+                                                            </div>
+                                                            <HiddenBracketText content={mainText} msgId={msg.id} fontSize="" />
+                                                        </>
+                                                    );
+                                                }
+                                                return <HiddenBracketText content={msg.content} msgId={msg.id} fontSize="" />;
+                                            })()
+                                        ) : (
+                                            <HiddenBracketText content={msg.content} msgId={msg.id} fontSize="" />
+                                        )}
+                                    </>
+                                )}
+                            </>
+                        )}
+                    </div>
+                </div>
+
+            {/* 头像区域 */}
             <div 
-                className={`flex-none ${msg.role === 'user' ? 'order-3' : 'order-1'}`}
-                style={{ width: `${currentAvatarSize}px` }}
+                className={`flex-none relative ${msg.role === 'user' ? 'order-3' : 'order-1'}`}
+                style={{ width: `${currentAvatarSize}px`, height: `${currentAvatarSize}px` }}
             >
-                {!isConsecutive ? <img src={senderAvatar} className="rounded-full object-cover border" style={{ width: `${currentAvatarSize}px`, height: `${currentAvatarSize}px` }} alt="avatar" /> : null}
+                {/* 只有非连续发言才显示头像，否则留空位保持对齐 */}
+                {!isConsecutive ? (
+                    <img 
+                        src={senderAvatar} 
+                        className="rounded-full object-cover border w-full h-full bg-gray-200" 
+                        alt="avatar" 
+                    />
+                ) : null}
             </div>
 
         </div>
@@ -9631,8 +7586,56 @@ onForceUpdate={async () => {
 
 
       </div>
+
+
+
     );
+
+
+    // ==========================================
+// 🧩 图片处理工具箱 (复制到文件最末尾)
+// ==========================================
+const fileToBase64 = (file: File): Promise<string> => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = (event) => {
+      const img = new Image();
+      img.src = event.target?.result as string;
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        if (!ctx) { reject("Canvas error"); return; }
+
+        // 限制尺寸，防止图片太大导致卡顿
+        const MAX_SIZE = 800; 
+        let width = img.width;
+        let height = img.height;
+
+        if (width > height) {
+          if (width > MAX_SIZE) { height *= MAX_SIZE / width; width = MAX_SIZE; }
+        } else {
+          if (height > MAX_SIZE) { width *= MAX_SIZE / height; height = MAX_SIZE; }
+        }
+        
+        canvas.width = width;
+        canvas.height = height;
+        ctx.drawImage(img, 0, 0, width, height);
+
+        // 压缩质量 0.7
+        resolve(canvas.toDataURL('image/jpeg', 0.7));
+      };
+    };
+    reader.onerror = (error) => reject(error);
+  });
+};
   }
+
+
+
+
+
+  
 
   return null;
 };

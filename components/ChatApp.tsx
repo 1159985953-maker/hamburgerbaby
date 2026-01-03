@@ -11143,14 +11143,12 @@ const isLoverInvitation = msg.content.includes('[LoverInvitation]') || msg.conte
                       </div>
                     )}
 
-                    <div
-                        id={`msg_${msg.timestamp}`}
-                        // ★★★ 修改重点：gap-3 改为 gap-2 (头像和气泡靠得更近)
-                        // ★★★ 修改重点：mb-3 改为 mb-2, mb-1 改为 mb-0.5 (上下消息靠得更近)
-                        className={`message-wrapper flex items-end gap-2 ${msg.role === 'user' ? 'justify-end' : 'justify-start'} ${index === arr.length - 1 ? 'animate-slideUp' : ''} ${isConsecutive ? 'mb-1' : 'mb-3'}`}
-                        // ★★★ 修改重点：删除了 minHeight 限制，这样单行消息就能变矮了！ ★★★
-                        style={{ }}
-                    >
+         <div
+    id={`msg_${msg.timestamp}`}
+    // ↓↓↓ 核心修改就在这里：items-end 改成了 items-start (底部对齐 -> 顶部对齐)
+    className={`message-wrapper flex items-start gap-2 ${msg.role === 'user' ? 'justify-end' : 'justify-start'} ${index === arr.length - 1 ? 'animate-slideUp' : ''} ${isConsecutive ? 'mb-0.5' : 'mb-2'}`}
+    style={{ }}
+>
 
                       {isSelectionMode && (
                         <div className={`flex items-center justify-center ${msg.role === 'user' ? 'order-2' : 'order-1'}`}>
@@ -11173,97 +11171,96 @@ const isLoverInvitation = msg.content.includes('[LoverInvitation]') || msg.conte
                         {isConsecutive && <div style={{ width: `${currentAvatarSize}px` }}></div>}
                       </div>
 
-                      <div className={`flex items-end gap-1.5 order-2 ${msg.role === 'user' ? 'flex-row-reverse' : 'flex-row'} max-w-[75%]`}>
-                        <div
-                          className={`message-bubble min-w-0 relative group transition-transform duration-75 active:scale-95`}
-                          onTouchStart={() => handleTouchStart(msg)}
-                          onTouchEnd={handleTouchEnd}
-                          onMouseDown={() => handleTouchStart(msg)}
-                          onMouseUp={handleTouchEnd}
-                          onMouseLeave={handleTouchEnd}
-                          onContextMenu={(e) => e.preventDefault()}
-                        >
-                          {isEditing ? (
-                            <div className="bg-white border-2 border-blue-400 rounded-xl p-2 shadow-lg min-w-[200px]">
-                              <textarea
-                                value={editContent}
-                                onChange={(e) => setEditContent(e.target.value)}
-                                className="w-full text-sm p-2 bg-gray-50 rounded outline-none resize-none"
-                                rows={3}
-                                autoFocus
-                                onMouseDown={e => e.stopPropagation()}
-                                onTouchStart={e => e.stopPropagation()}
-                              />
-                              <div className="flex justify-end gap-2 mt-2">
-                                <button onClick={handleCancelEdit} className="text-xs px-3 py-1 bg-gray-200 rounded">取消</button>
-                                <button onClick={handleSaveEdit} className="text-xs px-3 py-1 bg-blue-500 text-white rounded">保存</button>
-                              </div>
-                            </div>
-                          ) : (
-                            <div 
-                                className={`content rounded-xl leading-snug relative break-words whitespace-pre-wrap shadow-sm ` + (!activeContact.customCSS && currentText === '#111827' ? 'border border-gray-200/50' : '')}
-                                style={{
-                                    backgroundColor: !activeContact.customCSS ? currentBg : undefined,
-                                    color: !activeContact.customCSS ? currentText : undefined,
-                                    fontSize: currentFontSize,
-                                    // ★★★ 核心修改：使用缩小后的 padding 变量 ★★★
-                                    padding: `${currentPaddingY} ${currentPaddingX}`,
-                                    borderTopRightRadius: (msg.role === 'user' && !isConsecutive) ? '3px' : '16px',
-                                    borderTopLeftRadius: (msg.role === 'assistant' && !isConsecutive) ? '3px' : '16px',
-                                    borderBottomLeftRadius: '16px',
-                                    borderBottomRightRadius: '16px',
-                                }}
-                            >
-                                {/* 1. 引用块 */}
-                                {isQuoteMsg && quoteText && (
-                                  <div className="text-xs mb-2 p-2 bg-black/5 rounded-md border-l-4 border-gray-400 opacity-80 select-none">
-                                    <div className="font-bold text-[10px] text-gray-500 mb-0.5">↪️ 引用:</div>
-                                    <div className="line-clamp-2 italic">{quoteText}</div>
-                                  </div>
-                                )}
-
-                                {/* 2. 语音/图片/文字渲染 */}
-                                {msg.type === 'voice' || msg.content.trim().startsWith('[Voice Message]') ? (
-                                    <VoiceBubble
-                                      msg={msg}
-                                      isPlaying={playingMsgId === msg.id}
-                                      progress={audioProgress}
-                                      duration={duration}
-                                      onPlay={() => playMessageAudio(msg.id, msg.content)}
-                                      onSeek={handleSeek}
-                                      isUser={msg.role === 'user'}
-                                    />
-                                ) : msg.content.trim().startsWith('[FakeImage]') ? (
-                                    <details className="group">
-                                        <summary className="list-none outline-none cursor-pointer">
-                                            <div className="w-48 h-32 bg-white border-2 border-dashed border-gray-200 rounded-xl flex flex-col items-center justify-center gap-2 hover:border-blue-300 hover:bg-blue-50 transition-all duration-300 group-open:hidden">
-                                                <span className="text-3xl opacity-30 group-hover:scale-110 transition-transform">🖼️</span>
-                                                <span className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">点击查看画面</span>
-                                            </div>
-                                            <div className="hidden group-open:flex items-center gap-2 mb-2 text-[10px] text-gray-400 font-bold uppercase tracking-widest cursor-pointer hover:text-blue-500">
-                                                <span>🖼️ 画面描述 (点击收起)</span>
-                                            </div>
-                                        </summary>
-                                        <div className="bg-gray-50 p-4 rounded-xl border border-gray-100 text-sm text-gray-700 leading-relaxed font-serif italic animate-slideDown shadow-sm">
-                                            “{msg.content.replace('[FakeImage]', '').trim()}”
-                                        </div>
-                                    </details>
-                                ) : msg.type === 'image' ? (
-                                    <img src={msg.content} className="rounded-lg max-w-full" alt="msg" />
-                                ) : (
-                                    <div className="whitespace-pre-wrap break-words">
-                                        <HiddenBracketText 
-                                           content={isQuoteMsg ? replyText : msg.content} 
-                                           msgId={msg.id} 
-                                           fontSize={""} 
-                                        />
-                                    </div>
-                                )}
-                            </div>
-                          )}
-                        </div>
-                        {!isEditing && <div className="text-[9px] text-gray-300 whitespace-nowrap shrink-0 opacity-60 select-none mb-0.5">{timeStr}</div>}
+<div className={`flex items-end gap-1.5 order-2 ${msg.role === 'user' ? 'flex-row-reverse' : 'flex-row'} max-w-[75%] relative top-2`}>
+            <div
+              className={`message-bubble min-w-0 relative group transition-transform duration-75 active:scale-95`}
+              onTouchStart={() => handleTouchStart(msg)}
+              onTouchEnd={handleTouchEnd}
+              onMouseDown={() => handleTouchStart(msg)}
+              onMouseUp={handleTouchEnd}
+              onMouseLeave={handleTouchEnd}
+              onContextMenu={(e) => e.preventDefault()}
+            >
+              {isEditing ? (
+                <div className="bg-white border-2 border-blue-400 rounded-xl p-2 shadow-lg min-w-[200px]">
+                  <textarea
+                    value={editContent}
+                    onChange={(e) => setEditContent(e.target.value)}
+                    className="w-full text-sm p-2 bg-gray-50 rounded outline-none resize-none"
+                    rows={3}
+                    autoFocus
+                    onMouseDown={e => e.stopPropagation()}
+                    onTouchStart={e => e.stopPropagation()}
+                  />
+                  <div className="flex justify-end gap-2 mt-2">
+                    <button onClick={handleCancelEdit} className="text-xs px-3 py-1 bg-gray-200 rounded">取消</button>
+                    <button onClick={handleSaveEdit} className="text-xs px-3 py-1 bg-blue-500 text-white rounded">保存</button>
+                  </div>
+                </div>
+              ) : (
+                <div 
+                    className={`content rounded-xl leading-snug relative break-words whitespace-pre-wrap shadow-sm ` + (!activeContact.customCSS && currentText === '#111827' ? 'border border-gray-200/50' : '')}
+                    style={{
+                        backgroundColor: !activeContact.customCSS ? currentBg : undefined,
+                        color: !activeContact.customCSS ? currentText : undefined,
+                        fontSize: currentFontSize,
+                        padding: `${currentPaddingY} ${currentPaddingX}`,
+                        borderTopRightRadius: (msg.role === 'user' && !isConsecutive) ? '2px' : '16px',
+                        borderTopLeftRadius: (msg.role === 'assistant' && !isConsecutive) ? '2px' : '16px',
+                        borderBottomLeftRadius: '16px',
+                        borderBottomRightRadius: '16px',
+                    }}
+                >
+                    {/* 引用块 */}
+                    {isQuoteMsg && quoteText && (
+                      <div className="text-xs mb-2 p-2 bg-black/5 rounded-md border-l-4 border-gray-400 opacity-80 select-none">
+                        <div className="font-bold text-[10px] text-gray-500 mb-0.5">↪️ 引用:</div>
+                        <div className="line-clamp-2 italic">{quoteText}</div>
                       </div>
+                    )}
+
+                    {/* 语音/图片/文字渲染 */}
+                    {msg.type === 'voice' || msg.content.trim().startsWith('[Voice Message]') ? (
+                        <VoiceBubble
+                          msg={msg}
+                          isPlaying={playingMsgId === msg.id}
+                          progress={audioProgress}
+                          duration={duration}
+                          onPlay={() => playMessageAudio(msg.id, msg.content)}
+                          onSeek={handleSeek}
+                          isUser={msg.role === 'user'}
+                        />
+                    ) : msg.content.trim().startsWith('[FakeImage]') ? (
+                        <details className="group">
+                            <summary className="list-none outline-none cursor-pointer">
+                                <div className="w-48 h-32 bg-white border-2 border-dashed border-gray-200 rounded-xl flex flex-col items-center justify-center gap-2 hover:border-blue-300 hover:bg-blue-50 transition-all duration-300 group-open:hidden">
+                                    <span className="text-3xl opacity-30 group-hover:scale-110 transition-transform">🖼️</span>
+                                    <span className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">点击查看画面</span>
+                                </div>
+                                <div className="hidden group-open:flex items-center gap-2 mb-2 text-[10px] text-gray-400 font-bold uppercase tracking-widest cursor-pointer hover:text-blue-500">
+                                    <span>🖼️ 画面描述 (点击收起)</span>
+                                </div>
+                            </summary>
+                            <div className="bg-gray-50 p-4 rounded-xl border border-gray-100 text-sm text-gray-700 leading-relaxed font-serif italic animate-slideDown shadow-sm">
+                                “{msg.content.replace('[FakeImage]', '').trim()}”
+                            </div>
+                        </details>
+                    ) : msg.type === 'image' ? (
+                        <img src={msg.content} className="rounded-lg max-w-full" alt="msg" />
+                    ) : (
+                        <div className="whitespace-pre-wrap break-words">
+                            <HiddenBracketText 
+                               content={isQuoteMsg ? replyText : msg.content} 
+                               msgId={msg.id} 
+                               fontSize={""} 
+                            />
+                        </div>
+                    )}
+                </div>
+              )}
+            </div>
+            {!isEditing && <div className="text-[9px] text-gray-300 whitespace-nowrap shrink-0 opacity-60 select-none mb-0.5">{timeStr}</div>}
+          </div>
                     </div>
                   </React.Fragment>
                 );
