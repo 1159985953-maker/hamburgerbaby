@@ -7546,6 +7546,123 @@ const handleBatchCollect = () => {
 
 
 
+// ==================== ⬇️ 从这里开始完整复制替换 ⬇️ ====================
+
+const handleBatchSaveImage = async () => {
+    if (selectedIds.length === 0 || !activeContact) return;
+
+    const btn = document.getElementById('btn-save-img'); 
+    const originalText = btn ? btn.innerText : "📷 保存长图";
+    if(btn) btn.innerText = "生成中...";
+
+    try {
+        // 1. 准备数据
+        const selectedMessages = activeContact.history
+            .filter(m => selectedIds.includes(m.id))
+            .sort((a, b) => a.timestamp - b.timestamp);
+
+        // 2. 创建一个“看不见的画板” (样式保持紧凑美观)
+        const container = document.createElement('div');
+        container.style.cssText = `
+            position: absolute;
+            left: -9999px;
+            top: 0;
+            width: 400px;
+            padding: 24px 16px;
+            border-radius: 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        `;
+        
+        if (activeContact.chatBackground) {
+            container.style.backgroundImage = `url(${activeContact.chatBackground})`;
+            container.style.backgroundSize = 'cover';
+            container.style.backgroundPosition = 'center';
+        } else {
+            container.style.backgroundColor = '#f4f5f7';
+            container.style.backgroundImage = 'radial-gradient(#e5e7eb 1px, transparent 1px)';
+            container.style.backgroundSize = '20px 20px';
+        }
+        document.body.appendChild(container);
+
+        // 3. 克隆并清洗消息气泡
+        selectedMessages.forEach(msg => {
+            const domId = `msg_${msg.timestamp}`;
+            const originalNode = document.getElementById(domId);
+            
+            if (originalNode) {
+                const clone = originalNode.cloneNode(true) as HTMLElement;
+                
+                // --- 🧼 清洗步骤 1：去掉多选勾勾 ---
+                clone.querySelector('.selection-checkbox-wrapper')?.remove();
+
+                // ####################################################################
+                // ★★★ 核心修改：直接渲染原始文本 ★★★
+                // ####################################################################
+                // 找到气泡的内容区域
+                const contentDiv = clone.querySelector('.content');
+                if (contentDiv && msg.content) {
+                    // 不再做任何复杂的HTML拼接，直接把原始文本塞进去！
+                    contentDiv.textContent = msg.content;
+                }
+                // ####################################################################
+                
+                // 样式重置
+                clone.style.transform = 'none'; 
+                clone.style.animation = 'none';
+                clone.style.marginLeft = '0';
+                clone.style.marginRight = '0';
+                
+                container.appendChild(clone);
+            }
+        });
+
+        // 4. 底部水印框 (保持不变)
+        const footer = document.createElement('div');
+        footer.style.cssText = `
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-end;
+            margin-top: 16px;
+            padding-top: 12px;
+            border-top: 1px dashed #d1d5db;
+        `;
+        const left = document.createElement('div');
+        left.innerHTML = `<div style="display:flex; align-items:center; gap:6px;"><span style="font-size:18px;">🍔</span><span style="font-weight:bold; color:#a1a1aa; font-size:9px; letter-spacing:0.5px;">HAMBURGER PHONE</span></div>`;
+        const right = document.createElement('div');
+        const myName = globalSettings.userName || "Me";
+        const formattedDate = new Date().toLocaleString('sv-SE', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
+        right.innerHTML = `<div style="font-size:10px; font-weight:bold; color:#52525b; text-align:right; margin-bottom:4px;">@${myName} & ${activeContact.name}</div><div style="font-size:8px; color:#a1a1aa; font-family:monospace; text-align:right;">${formattedDate}</div>`;
+        footer.appendChild(left);
+        footer.appendChild(right);
+        container.appendChild(footer);
+
+        // 5. 生成图片并下载
+        const canvas = await html2canvas(container, { useCORS: true, scale: 2, backgroundColor: null });
+        const link = document.createElement('a');
+        link.download = `HAMBURGER_${activeContact.name}_${Date.now()}.png`;
+        link.href = canvas.toDataURL('image/png');
+        link.click();
+        link.remove();
+
+        // 6. 清理
+        document.body.removeChild(container);
+        setIsSelectionMode(false);
+        setSelectedIds([]);
+        alert("🍔 汉堡回忆已打包！");
+
+    } catch (err) {
+        console.error("生成长图失败:", err);
+        alert("生成失败，请重试。");
+    } finally {
+        if(btn) btn.innerText = originalText;
+    }
+};
+
+// ==================== ⬆️ 复制到这里结束 ⬆️ ====================
+
 
 
   // --- 5.5 消息编辑 (修改历史记录) ---
@@ -11150,8 +11267,8 @@ const isLoverInvitation = msg.content.includes('[LoverInvitation]') || msg.conte
     style={{ }}
 >
 
-                      {isSelectionMode && (
-                        <div className={`flex items-center justify-center ${msg.role === 'user' ? 'order-2' : 'order-1'}`}>
+                     {isSelectionMode && (
+  <div className={`selection-checkbox-wrapper flex items-center justify-center ${msg.role === 'user' ? 'order-2' : 'order-1'}`}>
                           <div onClick={() => toggleMessageSelection(msg.id)} className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${isSelected ? 'bg-blue-500 border-blue-500' : 'border-gray-300 bg-white'}`}>
                             {isSelected && <span className="text-white text-xs font-bold">✓</span>}
                           </div>
@@ -11198,8 +11315,8 @@ const isLoverInvitation = msg.content.includes('[LoverInvitation]') || msg.conte
                   </div>
                 </div>
               ) : (
-                <div 
-                    className={`content rounded-xl leading-snug relative break-words whitespace-pre-wrap shadow-sm ` + (!activeContact.customCSS && currentText === '#111827' ? 'border border-gray-200/50' : '')}
+               <div 
+    className={`content w-fit rounded-xl leading-snug relative break-words whitespace-pre-wrap shadow-sm ` + (!activeContact.customCSS && currentText === '#111827' ? 'border border-gray-200/50' : '')}
                     style={{
                         backgroundColor: !activeContact.customCSS ? currentBg : undefined,
                         color: !activeContact.customCSS ? currentText : undefined,
@@ -11380,21 +11497,55 @@ const isLoverInvitation = msg.content.includes('[LoverInvitation]') || msg.conte
 
 
         {/* Input Area */}
-      {/* 增加 paddingBottom: env(safe-area-inset-bottom) 确保输入框在黑条上方 */}
-        {isSelectionMode ? (
+{isSelectionMode ? (
           <div 
             className="bg-white border-t p-4 z-20 flex justify-between items-center animate-slideUp shadow-[0_-5px_15px_rgba(0,0,0,0.1)]"
-            // 这是一组代码：替换所有输入栏的 style（去除底部空白，实现强制全屏）
-style={{ paddingBottom: '12px' }}  // 只留一点内间距，让输入框不紧贴屏幕底边，但内容可延伸到底部系统栏下面
+            style={{ paddingBottom: '20px' }} 
           >
-            <button onClick={() => { setIsSelectionMode(false); setSelectedIds([]); }} className="text-gray-500 font-bold px-4">取消</button>
-            <span className="text-sm font-bold text-gray-700">已选 {selectedIds.length} 条</span>
-            <div className="flex gap-3">
-              <button onClick={handleBatchDelete} disabled={selectedIds.length === 0} className={`px-4 py-2 rounded-lg font-bold bg-red-100 text-red-500 ${selectedIds.length === 0 ? 'opacity-50' : ''}`}>🗑️ 删除</button>
-              <button onClick={handleBatchCollect} disabled={selectedIds.length === 0} className={`px-4 py-2 rounded-lg font-bold bg-yellow-400 text-yellow-900 shadow-sm ${selectedIds.length === 0 ? 'opacity-50' : ''}`}>📦 打包收藏</button>
+            {/* 左边：取消按钮 */}
+            <button 
+                onClick={() => { setIsSelectionMode(false); setSelectedIds([]); }} 
+                className="text-gray-500 font-bold px-2 text-sm"
+            >
+                取消
+            </button>
+
+            {/* 中间：数量提示 */}
+            <span className="text-xs font-bold text-gray-400">已选 {selectedIds.length}</span>
+
+            {/* 右边：操作按钮组 */}
+            <div className="flex gap-2">
+              {/* 1. 删除按钮 */}
+              <button 
+                  onClick={handleBatchDelete} 
+                  disabled={selectedIds.length === 0} 
+                  className={`px-3 py-2 rounded-lg font-bold text-xs bg-red-50 text-red-500 border border-red-100 ${selectedIds.length === 0 ? 'opacity-50' : ''}`}
+              >
+                  🗑️ 删除
+              </button>
+
+              {/* 2. 打包收藏按钮 */}
+              <button 
+                  onClick={handleBatchCollect} 
+                  disabled={selectedIds.length === 0} 
+                  className={`px-3 py-2 rounded-lg font-bold text-xs bg-yellow-50 text-yellow-600 border border-yellow-100 ${selectedIds.length === 0 ? 'opacity-50' : ''}`}
+              >
+                  📦 收藏
+              </button>
+
+              {/* 3. ★★★ 新增：保存图片按钮 ★★★ */}
+              <button 
+                  id="btn-save-img"
+                  onClick={handleBatchSaveImage} 
+                  disabled={selectedIds.length === 0} 
+                  className={`px-3 py-2 rounded-lg font-bold text-xs bg-blue-500 text-white shadow-md active:scale-95 transition-transform ${selectedIds.length === 0 ? 'opacity-50' : ''}`}
+              >
+                  📷 保存长图
+              </button>
             </div>
           </div>
         ) : (
+          // ... 这里是你原来的输入框代码 (else 分支)，保持不动 ...
           <div 
             className="bg-white/90 backdrop-blur border-t p-3 z-10"
             // 这是一组代码：替换所有输入栏的 style（去除底部空白，实现强制全屏）

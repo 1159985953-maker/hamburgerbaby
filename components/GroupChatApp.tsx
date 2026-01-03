@@ -441,7 +441,7 @@ const HiddenBracketText: React.FC<{ content: string; fontSize?: string; msgId: s
   const translationText = matches.map(m => m.replace(/^(\(|（)|(\)|）)$/g, '')).join(' ');
 
   return (
-    <div className="cursor-pointer group" onClick={toggleShow}>
+  <div className="cursor-pointer group inline-block" onClick={toggleShow}>
       <div className={`flex items-center ${fontSize} leading-relaxed relative`}>
         <span>{mainText}</span>
         {!show && <span className="w-1.5 h-1.5 bg-red-400 rounded-full ml-1.5 shrink-0 opacity-50"></span>}
@@ -4131,7 +4131,9 @@ ${loreText || "暂无特殊设定"}
 2. 如果做不到 JSON，**必须**使用严格的脚本格式换行，格式为：\`[名字]: 内容\`。
 3. **不要**把所有人的话写在同一行！
 4. **不要**加任何解释性文字。
-5. **不要**使用markdown格式
+5. **绝对绝对绝对不要**使用markdown格式
+6. **每个成员的话可以分为多个气泡！！不要全部挤在一个气泡里！！！！**：例如a发4个，b发2个，然后a又发了俩，c也来发了3，然后b又发了2，这样随机的感觉！
+7. **不要刻意让所有群成员说话**：根据人设来回答对应的问题和话题！！！！
 
 # ✅ 理想格式 (JSON):
 [
@@ -5141,6 +5143,122 @@ const handleBatchCollect = () => {
 
 
 
+// ==================== ⬇️ 从这里开始完整复制替换 ⬇️ ====================
+
+const handleBatchSaveImage = async () => {
+    if (selectedIds.length === 0 || !activeContact) return;
+
+    const btn = document.getElementById('btn-save-img'); 
+    const originalText = btn ? btn.innerText : "📷 保存长图";
+    if(btn) btn.innerText = "生成中...";
+
+    try {
+        // 1. 准备数据
+        const selectedMessages = activeContact.history
+            .filter(m => selectedIds.includes(m.id))
+            .sort((a, b) => a.timestamp - b.timestamp);
+
+        // 2. 创建一个“看不见的画板” (样式保持紧凑美观)
+        const container = document.createElement('div');
+        container.style.cssText = `
+            position: absolute;
+            left: -9999px;
+            top: 0;
+            width: 400px;
+            padding: 24px 16px;
+            border-radius: 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        `;
+        
+        if (activeContact.chatBackground) {
+            container.style.backgroundImage = `url(${activeContact.chatBackground})`;
+            container.style.backgroundSize = 'cover';
+            container.style.backgroundPosition = 'center';
+        } else {
+            container.style.backgroundColor = '#f4f5f7';
+            container.style.backgroundImage = 'radial-gradient(#e5e7eb 1px, transparent 1px)';
+            container.style.backgroundSize = '20px 20px';
+        }
+        document.body.appendChild(container);
+
+        // 3. 克隆并清洗消息气泡
+        selectedMessages.forEach(msg => {
+            const domId = `msg_${msg.timestamp}`;
+            const originalNode = document.getElementById(domId);
+            
+            if (originalNode) {
+                const clone = originalNode.cloneNode(true) as HTMLElement;
+                
+                // --- 🧼 清洗步骤 1：去掉多选勾勾 ---
+                clone.querySelector('.selection-checkbox-wrapper')?.remove();
+
+                // ####################################################################
+                // ★★★ 核心修改：直接渲染原始文本 ★★★
+                // ####################################################################
+                // 找到气泡的内容区域
+                const contentDiv = clone.querySelector('.content');
+                if (contentDiv && msg.content) {
+                    // 不再做任何复杂的HTML拼接，直接把原始文本塞进去！
+                    contentDiv.textContent = msg.content;
+                }
+                // ####################################################################
+                
+                // 样式重置
+                clone.style.transform = 'none'; 
+                clone.style.animation = 'none';
+                clone.style.marginLeft = '0';
+                clone.style.marginRight = '0';
+                
+                container.appendChild(clone);
+            }
+        });
+
+        // 4. 底部水印框 (保持不变)
+        const footer = document.createElement('div');
+        footer.style.cssText = `
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-end;
+            margin-top: 16px;
+            padding-top: 12px;
+            border-top: 1px dashed #d1d5db;
+        `;
+        const left = document.createElement('div');
+        left.innerHTML = `<div style="display:flex; align-items:center; gap:6px;"><span style="font-size:18px;">🍔</span><span style="font-weight:bold; color:#a1a1aa; font-size:9px; letter-spacing:0.5px;">HAMBURGER PHONE</span></div>`;
+        const right = document.createElement('div');
+        const myName = globalSettings.userName || "Me";
+        const formattedDate = new Date().toLocaleString('sv-SE', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
+        right.innerHTML = `<div style="font-size:10px; font-weight:bold; color:#52525b; text-align:right; margin-bottom:4px;">@${myName} & ${activeContact.name}</div><div style="font-size:8px; color:#a1a1aa; font-family:monospace; text-align:right;">${formattedDate}</div>`;
+        footer.appendChild(left);
+        footer.appendChild(right);
+        container.appendChild(footer);
+
+        // 5. 生成图片并下载
+        const canvas = await html2canvas(container, { useCORS: true, scale: 2, backgroundColor: null });
+        const link = document.createElement('a');
+        link.download = `HAMBURGER_${activeContact.name}_${Date.now()}.png`;
+        link.href = canvas.toDataURL('image/png');
+        link.click();
+        link.remove();
+
+        // 6. 清理
+        document.body.removeChild(container);
+        setIsSelectionMode(false);
+        setSelectedIds([]);
+        alert("🍔 汉堡回忆已打包！");
+
+    } catch (err) {
+        console.error("生成长图失败:", err);
+        alert("生成失败，请重试。");
+    } finally {
+        if(btn) btn.innerText = originalText;
+    }
+};
+
+// ==================== ⬆️ 复制到这里结束 ⬆️ ====================
 
 
   // --- 5.5 消息编辑 (修改历史记录) ---
@@ -7103,12 +7221,13 @@ return (
       </div>
   )}
 
+// ==================== ⬇️ 从这里开始完整复制替换 ⬇️ ====================
 
 {activeContact.history
     .slice(-historyLimit)
     .map((msg, index, arr) => {
     
-   // --- 1. 计算时间间隔 ---
+    // --- 1. 计算时间间隔 ---
     let showInterval = false;
     let intervalMinutes = 0;
     if (index > 0) {
@@ -7117,52 +7236,38 @@ return (
         if (intervalMinutes > 20) showInterval = true; 
     }
 
-    // --- 2. 智能识别发送者 (★ 修复版 ★) ---
-    // 这里是关键：一定要确保能从 allContacts 里通过 ID 找到人，找不到就用名字找
+    // --- 2. 智能识别发送者 ---
     let senderName = "";
     let senderAvatar = "";
     let senderIdForCheck = ""; 
-    const msgAny = msg as any; // 强转一下方便取值
+    const msgAny = msg as any;
 
     if (msg.role === 'user') {
-        // 如果是用户自己
         senderName = activeContact.userName || "我";
         senderAvatar = activeContact.userAvatar || "https://api.dicebear.com/7.x/avataaars/svg?seed=User";
         senderIdForCheck = 'user'; 
     } else {
-        // 如果是 AI 成员
         const messageSenderId = msgAny.senderId;
         const messageName = msgAny.name;
-
-        // 1. 优先尝试：通过 ID 在通讯录里找人 (最准)
         let sender = allContacts.find(c => c.id === messageSenderId);
-
-        // 2. 补救措施：如果 ID 找不到，尝试通过名字找人 (防止 ID 丢失)
         if (!sender && messageName) {
             sender = allContacts.find(c => c.name.trim() === messageName.trim());
         }
-
         if (sender) {
-            // 找到了！用通讯录里的头像和名字
             senderAvatar = sender.avatar;
             senderName = sender.name;
             senderIdForCheck = sender.id;
         } else {
-            // 还是找不到 (可能是幽灵成员或者旧数据)，就用消息自带的名字，并生成一个随机头像
             senderName = messageName || "未知成员";
-            senderAvatar = `https://api.dicebear.com/7.x/initials/svg?seed=${senderName}`; // 根据名字生成头像
+            senderAvatar = `https://api.dicebear.com/7.x/initials/svg?seed=${senderName}`;
             senderIdForCheck = messageSenderId || 'unknown';
         }
     }
     
-    // --- 3. 判断连续发言 & 显示名字 ---
+    // --- 3. 准备各种状态和样式 ---
     const prevMsgSenderId = index > 0 ? ((arr[index-1] as any).senderId || (arr[index-1].role === 'user' ? 'user' : '')) : '';
-    // 如果上一条也是这个人发的，且时间间隔不大，就不重复显示头像了
     const isConsecutive = index > 0 && !showInterval && senderIdForCheck === prevMsgSenderId;
-    // 群聊里，除了自己，其他人非连续发言时都要显示名字
     const showName = !isConsecutive && msg.role !== 'user'; 
-
-    // --- 4. 准备样式变量 ---
     const timeStr = new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     const scale = activeContact.chatScale || 1; 
     const currentAvatarSize = 40 * scale; 
@@ -7172,10 +7277,11 @@ return (
     const currentBg = msg.role === 'user' ? userBg : aiBg;
     const currentText = getContrastTextColor(currentBg);
     
-    // --- 5. 系统消息直接跳过 ---
+    // ★★★ 核心修复：把 isSelected 的判断也加进来！★★★
+    const isSelected = selectedIds.includes(msg.id);
+    
     if (msg.role === 'system') return null;
 
-   // --- 6. 开始渲染 (渲染气泡) ---
     return (
         <React.Fragment key={msg.id}>
         {showInterval && (
@@ -7189,25 +7295,43 @@ return (
         <div 
             id={`msg_${msg.timestamp}`} 
             className={`flex items-start gap-2 ${msg.role === 'user' ? 'justify-end' : 'justify-start'} ${isConsecutive ? 'mb-1' : 'mb-2'}`}
-            // 长按事件
             onTouchStart={() => handleTouchStart(msg)}
             onTouchEnd={handleTouchEnd}
             onMouseDown={() => handleTouchStart(msg)}
             onMouseUp={handleTouchEnd}
         >
-            {/* 时间戳 (放在底部) */}
-            <div className={`text-[9px] text-gray-300 self-end pb-1 ${msg.role === 'user' ? 'order-1' : 'order-3'}`}>
-                {timeStr}
+            {/* ★★★ 核心修复：把丢失的多选框渲染逻辑加回来！★★★ */}
+            {isSelectionMode && (
+                <div className={`selection-checkbox-wrapper flex items-center justify-center ${msg.role === 'user' ? 'ml-2 order-3' : 'mr-2 order-1'}`}>
+                    <div 
+                        onClick={() => toggleMessageSelection(msg.id)} 
+                        className={`w-5 h-5 rounded-full border-2 flex items-center justify-center cursor-pointer ${isSelected ? 'bg-blue-500 border-blue-500' : 'border-gray-300 bg-white'}`}
+                    >
+                        {isSelected && <span className="text-white text-xs font-bold">✓</span>}
+                    </div>
+                </div>
+            )}
+            
+            {/* 头像 (根据是否连续显示) */}
+            <div 
+                className={`flex-none self-start ${msg.role === 'user' ? 'order-2' : 'order-2'}`}
+                style={{ width: `${currentAvatarSize}px`, height: `${currentAvatarSize}px` }}
+            >
+                {!isConsecutive ? (
+                    <img src={senderAvatar} className="rounded-full object-cover border w-full h-full bg-gray-200" alt="avatar" />
+                ) : null}
             </div>
 
-{/* 消息气泡主体 */}
-                <div className={`flex flex-col max-w-[70%] ${msg.role === 'user' ? 'order-2 items-end' : 'order-2 items-start'} relative top-2`}>
-                    {/* 显示名字 */}
-                    {showName && (
-                        <div className="text-[10px] text-gray-400 mb-0.5 ml-1 select-none">
-                            {senderName}
-                        </div>
-                    )}
+            {/* 消息主体 (名字 + 气泡) */}
+            <div className={`flex flex-col max-w-[70%] ${msg.role === 'user' ? 'order-1 items-end' : 'order-3 items-start'}`}>
+                {showName && (
+                    <div className="text-[10px] text-gray-400 mb-0.5 px-2 select-none">
+                        {senderName}
+                    </div>
+                )}
+                
+                <div className="flex items-end gap-1.5">
+                    {msg.role === 'user' && <div className="text-[9px] text-gray-300 self-end pb-1">{timeStr}</div>}
                     
 <div 
                         className="content rounded-xl shadow-sm break-words whitespace-pre-wrap"
@@ -7289,27 +7413,15 @@ return (
                             </>
                         )}
                     </div>
+
+                    {msg.role !== 'user' && <div className="text-[9px] text-gray-300 self-end pb-1">{timeStr}</div>}
                 </div>
-
-            {/* 头像区域 */}
-            <div 
-                className={`flex-none relative ${msg.role === 'user' ? 'order-3' : 'order-1'}`}
-                style={{ width: `${currentAvatarSize}px`, height: `${currentAvatarSize}px` }}
-            >
-                {/* 只有非连续发言才显示头像，否则留空位保持对齐 */}
-                {!isConsecutive ? (
-                    <img 
-                        src={senderAvatar} 
-                        className="rounded-full object-cover border w-full h-full bg-gray-200" 
-                        alt="avatar" 
-                    />
-                ) : null}
             </div>
-
         </div>
         </React.Fragment>
     );
 })}
+
 
 
 
@@ -7427,20 +7539,55 @@ return (
 
         {/* Input Area */}
       {/* 增加 paddingBottom: env(safe-area-inset-bottom) 确保输入框在黑条上方 */}
-        {isSelectionMode ? (
+{isSelectionMode ? (
           <div 
             className="bg-white border-t p-4 z-20 flex justify-between items-center animate-slideUp shadow-[0_-5px_15px_rgba(0,0,0,0.1)]"
-            // 这是一组代码：替换所有输入栏的 style（去除底部空白，实现强制全屏）
-style={{ paddingBottom: '12px' }}  // 只留一点内间距，让输入框不紧贴屏幕底边，但内容可延伸到底部系统栏下面
+            style={{ paddingBottom: '20px' }} 
           >
-            <button onClick={() => { setIsSelectionMode(false); setSelectedIds([]); }} className="text-gray-500 font-bold px-4">取消</button>
-            <span className="text-sm font-bold text-gray-700">已选 {selectedIds.length} 条</span>
-            <div className="flex gap-3">
-              <button onClick={handleBatchDelete} disabled={selectedIds.length === 0} className={`px-4 py-2 rounded-lg font-bold bg-red-100 text-red-500 ${selectedIds.length === 0 ? 'opacity-50' : ''}`}>🗑️ 删除</button>
-              <button onClick={handleBatchCollect} disabled={selectedIds.length === 0} className={`px-4 py-2 rounded-lg font-bold bg-yellow-400 text-yellow-900 shadow-sm ${selectedIds.length === 0 ? 'opacity-50' : ''}`}>📦 打包收藏</button>
+            {/* 左边：取消按钮 */}
+            <button 
+                onClick={() => { setIsSelectionMode(false); setSelectedIds([]); }} 
+                className="text-gray-500 font-bold px-2 text-sm"
+            >
+                取消
+            </button>
+
+            {/* 中间：数量提示 */}
+            <span className="text-xs font-bold text-gray-400">已选 {selectedIds.length}</span>
+
+            {/* 右边：操作按钮组 */}
+            <div className="flex gap-2">
+              {/* 1. 删除按钮 */}
+              <button 
+                  onClick={handleBatchDelete} 
+                  disabled={selectedIds.length === 0} 
+                  className={`px-3 py-2 rounded-lg font-bold text-xs bg-red-50 text-red-500 border border-red-100 ${selectedIds.length === 0 ? 'opacity-50' : ''}`}
+              >
+                  🗑️ 删除
+              </button>
+
+              {/* 2. 打包收藏按钮 */}
+              <button 
+                  onClick={handleBatchCollect} 
+                  disabled={selectedIds.length === 0} 
+                  className={`px-3 py-2 rounded-lg font-bold text-xs bg-yellow-50 text-yellow-600 border border-yellow-100 ${selectedIds.length === 0 ? 'opacity-50' : ''}`}
+              >
+                  📦 收藏
+              </button>
+
+              {/* 3. ★★★ 新增：保存图片按钮 ★★★ */}
+              <button 
+                  id="btn-save-img"
+                  onClick={handleBatchSaveImage} 
+                  disabled={selectedIds.length === 0} 
+                  className={`px-3 py-2 rounded-lg font-bold text-xs bg-blue-500 text-white shadow-md active:scale-95 transition-transform ${selectedIds.length === 0 ? 'opacity-50' : ''}`}
+              >
+                  📷 保存长图
+              </button>
             </div>
           </div>
         ) : (
+          // ... 这里是你原来的输入框代码 (else 分支)，保持不动 ...
           <div 
             className="bg-white/90 backdrop-blur border-t p-3 z-10"
             // 这是一组代码：替换所有输入栏的 style（去除底部空白，实现强制全屏）
