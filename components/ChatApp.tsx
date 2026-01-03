@@ -11092,220 +11092,181 @@ const isLoverInvitation = msg.content.includes('[LoverInvitation]') || msg.conte
    // 2. 连续发言判断
                 // ❌ 错误写法: activeContact.history[index - 1] 
                 // ✅ 正确写法: arr[index - 1] (arr 就是当前屏幕上显示的这个切片)
+              // 2. 连续发言判断
+                // ✅ 正确写法: arr[index - 1] (arr 就是当前屏幕上显示的这个切片)
                 const isConsecutive = index > 0 && arr[index - 1].role === msg.role && !showInterval;
-    const isSelected = selectedIds.includes(msg.id);
-    const duration = msg.voiceDuration || 10;
-    const timeStr = new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    const isEditing = editingMsgId === msg.id;
+                const isSelected = selectedIds.includes(msg.id);
+                const duration = msg.voiceDuration || 10;
+                const timeStr = new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                const isEditing = editingMsgId === msg.id;
 
-    // 3. 计算缩放
-    const scale = activeContact.chatScale || 1; 
-    const currentAvatarSize = 40 * scale; 
-    const currentFontSize = `${14 * scale}px`;
-    const currentPaddingY = `${3 * scale}px`; 
-    const currentPaddingX = `${12 * scale}px`;
+                // 3. 计算缩放与间距 (★ 已修改：调小了默认间距，让气泡更紧凑 ★)
+                const scale = activeContact.chatScale || 1; 
+                const currentAvatarSize = 40 * scale; 
+                const currentFontSize = `${14 * scale}px`;
+                // ↓↓↓ 这里改小了，原来是 3，现在改成 1.5，气泡更扁 ↓↓↓
+                const currentPaddingY = `${5 * scale}px`; 
+                // ↓↓↓ 这里改小了，原来是 12，现在改成 8，左右更紧凑 ↓↓↓
+                const currentPaddingX = `${12 * scale}px`;
 
-    // 4. 颜色与自动反色
-    const userBg = activeContact.bubbleColorUser || '#FBCFE8';
-    const aiBg = activeContact.bubbleColorAI || '#ffffff';
-    const userTextColor = getContrastTextColor(userBg);
-    const aiTextColor = getContrastTextColor(aiBg);
-    const currentBg = msg.role === 'user' ? userBg : aiBg;
-    const currentText = msg.role === 'user' ? userTextColor : aiTextColor;
+                // 4. 颜色与自动反色
+                const userBg = activeContact.bubbleColorUser || '#FBCFE8';
+                const aiBg = activeContact.bubbleColorAI || '#ffffff';
+                const userTextColor = getContrastTextColor(userBg);
+                const aiTextColor = getContrastTextColor(aiBg);
+                const currentBg = msg.role === 'user' ? userBg : aiBg;
+                const currentText = msg.role === 'user' ? userTextColor : aiTextColor;
 
+                // ★★★ 核心修复：更聪明的引用检测 & 换行处理 ★★★
+                const isQuoteMsg = msg.content.trim().startsWith('>');
+                let quoteText = '';
+                let replyText = msg.content;
+                
+                if (isQuoteMsg) {
+                    const firstLineBreak = msg.content.indexOf('\n');
+                    if (firstLineBreak !== -1) {
+                        quoteText = msg.content.substring(0, firstLineBreak).replace(/^> ?(引用)? ?/, '').trim();
+                        replyText = msg.content.substring(firstLineBreak + 1).trim();
+                    } else {
+                        quoteText = msg.content.replace(/^> ?/, '').trim();
+                        replyText = ""; 
+                    }
+                }
 
+                return (
+                  <React.Fragment key={msg.id}>
+                    {showInterval && (
+                      <div className="text-center my-2 animate-fadeIn">
+                        <span className="text-[10px] text-gray-400 bg-gray-100 px-3 py-1 rounded-full">
+                          {intervalMinutes < 60 ? `相隔 ${intervalMinutes} 分钟` : `相隔 ${Math.floor(intervalMinutes / 60)} 小时`}
+                        </span>
+                      </div>
+                    )}
 
-// ★★★ 核心修复：更聪明的引用检测 & 换行处理 ★★★
-    // 只要是以 > 开头，都算引用
-    const isQuoteMsg = msg.content.trim().startsWith('>');
-    
-    // 提取引用文本和回复文本
-    let quoteText = '';
-    let replyText = msg.content;
-    
-    if (isQuoteMsg) {
-        // 找到第一个换行符的位置
-        const firstLineBreak = msg.content.indexOf('\n');
-        if (firstLineBreak !== -1) {
-            quoteText = msg.content.substring(0, firstLineBreak).replace(/^> ?(引用)? ?/, '').trim();
-            replyText = msg.content.substring(firstLineBreak + 1).trim();
-        } else {
-            // 如果没有换行，说明整句都是引用（虽然不常见）
-            quoteText = msg.content.replace(/^> ?/, '').trim();
-            replyText = ""; 
-        }
-    }
+                    <div
+                        id={`msg_${msg.timestamp}`}
+                        // ★★★ 修改重点：gap-3 改为 gap-2 (头像和气泡靠得更近)
+                        // ★★★ 修改重点：mb-3 改为 mb-2, mb-1 改为 mb-0.5 (上下消息靠得更近)
+                        className={`message-wrapper flex items-end gap-2 ${msg.role === 'user' ? 'justify-end' : 'justify-start'} ${index === arr.length - 1 ? 'animate-slideUp' : ''} ${isConsecutive ? 'mb-1' : 'mb-3'}`}
+                        // ★★★ 修改重点：删除了 minHeight 限制，这样单行消息就能变矮了！ ★★★
+                        style={{ }}
+                    >
 
-
-    return (
-      <React.Fragment key={msg.id}>
-        {showInterval && (
-          <div className="text-center my-2 animate-fadeIn">
-            <span className="text-[10px] text-gray-400 bg-gray-100 px-3 py-1 rounded-full">
-              {intervalMinutes < 60 ? `相隔 ${intervalMinutes} 分钟` : `相隔 ${Math.floor(intervalMinutes / 60)} 小时`}
-            </span>
-          </div>
-        )}
-
-
-<div
-    id={`msg_${msg.timestamp}`}
-    className={`message-wrapper flex items-end gap-3 ${msg.role === 'user' ? 'justify-end' : 'justify-start'} ${index === arr.length - 1 ? 'animate-slideUp' : ''} ${isConsecutive ? 'mb-1' : 'mb-3'}`}
-    style={{ minHeight: `${currentAvatarSize}px` }}
->
-
-
-
-
-          {isSelectionMode && (
-            <div className={`flex items-center justify-center ${msg.role === 'user' ? 'order-2' : 'order-1'}`}>
-              <div onClick={() => toggleMessageSelection(msg.id)} className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${isSelected ? 'bg-blue-500 border-blue-500' : 'border-gray-300 bg-white'}`}>
-                {isSelected && <span className="text-white text-xs font-bold">✓</span>}
-              </div>
-            </div>
-          )}
-
-          <div 
-             className={`flex-none flex ${msg.role === 'user' ? 'justify-end order-3' : 'justify-start order-1'}`}
-             style={{ width: `${currentAvatarSize}px`, height: `${currentAvatarSize}px`, minWidth: `${currentAvatarSize}px` }}
-          >
-            {msg.role === 'assistant' && !isConsecutive && (
-                <img src={activeContact.avatar} className="rounded-full object-cover border border-gray-100 shadow-sm w-full h-full block" alt="AI" />
-            )}
-            {msg.role === 'user' && !isConsecutive && (
-                <img src={activeContact.userAvatar} className="rounded-full object-cover border border-white shadow-sm w-full h-full block" alt="user" />
-            )}
-            {isConsecutive && <div style={{ width: `${currentAvatarSize}px` }}></div>}
-          </div>
-
-          <div className={`flex items-end gap-1.5 order-2 ${msg.role === 'user' ? 'flex-row-reverse' : 'flex-row'} max-w-[75%]`}>
-            <div
-              className={`message-bubble min-w-0 relative group transition-transform duration-75 active:scale-95`}
-              onTouchStart={() => handleTouchStart(msg)}
-              onTouchEnd={handleTouchEnd}
-              onMouseDown={() => handleTouchStart(msg)}
-              onMouseUp={handleTouchEnd}
-              onMouseLeave={handleTouchEnd}
-              onContextMenu={(e) => e.preventDefault()}
-            >
-              {isEditing ? (
-                <div className="bg-white border-2 border-blue-400 rounded-xl p-2 shadow-lg min-w-[200px]">
-                  <textarea
-                    value={editContent}
-                    onChange={(e) => setEditContent(e.target.value)}
-                    className="w-full text-sm p-2 bg-gray-50 rounded outline-none resize-none"
-                    rows={3}
-                    autoFocus
-                    onMouseDown={e => e.stopPropagation()}
-                    onTouchStart={e => e.stopPropagation()}
-                  />
-                  <div className="flex justify-end gap-2 mt-2">
-                    <button onClick={handleCancelEdit} className="text-xs px-3 py-1 bg-gray-200 rounded">取消</button>
-                    <button onClick={handleSaveEdit} className="text-xs px-3 py-1 bg-blue-500 text-white rounded">保存</button>
-                  </div>
-                </div>
-              ) : (
-                <div 
-
-    className={`content rounded-xl leading-snug relative break-words whitespace-pre-wrap shadow-sm ` + (!activeContact.customCSS && currentText === '#111827' ? 'border border-gray-200/50' : '')}
-    style={{
-        backgroundColor: !activeContact.customCSS ? currentBg : undefined,
-        color: !activeContact.customCSS ? currentText : undefined,
-        fontSize: currentFontSize,
-        // ★★★ 核心修改：使用和群聊一样的 padding 简写方式 ★★★
-        padding: `${currentPaddingY} ${currentPaddingX}`,
-        borderTopRightRadius: (msg.role === 'user' && !isConsecutive) ? '2px' : '16px',
-        borderTopLeftRadius: (msg.role === 'assistant' && !isConsecutive) ? '2px' : '16px',
-        borderBottomLeftRadius: '16px',
-        borderBottomRightRadius: '16px',
-    }}
->
-    {/* 1. 引用块 (保持不变) */}
-    {isQuoteMsg && quoteText && (
-      <div className="text-xs mb-2 p-2 bg-black/5 rounded-md border-l-4 border-gray-400 opacity-80 select-none">
-        <div className="font-bold text-[10px] text-gray-500 mb-0.5">↪️ 引用:</div>
-        <div className="line-clamp-2 italic">{quoteText}</div>
-      </div>
-    )}
-
-    {/* ★★★ 核心修复开始 ★★★ */}
-
-    {/* 2. 语音播放器 (如果消息是语音类型，就显示它) */}
-    {(msg.type === 'voice' || msg.content.trim().startsWith('[Voice Message]')) && (
-      <div className="mb-2"> {/* 加一点间距，让播放器和文字分开 */}
-        <VoiceBubble
-          msg={msg}
-          isPlaying={playingMsgId === msg.id}
-          progress={audioProgress}
-          duration={duration}
-          onPlay={() => playMessageAudio(msg.id, msg.content)}
-          onSeek={handleSeek}
-          isUser={msg.role === 'user'}
-        />
-      </div>
-    )}
-
-
-
-{/* ★★★ 核心消息内容 (修复换行 + 盲盒版FakeImage) ★★★ */}
-                  {msg.type === 'voice' || msg.content.trim().startsWith('[Voice Message]') ? (
-                    <VoiceBubble
-                      msg={msg}
-                      isPlaying={playingMsgId === msg.id}
-                      progress={audioProgress}
-                      duration={duration}
-                      onPlay={() => playMessageAudio(msg.id, msg.content)}
-                      onSeek={handleSeek}
-                      isUser={msg.role === 'user'}
-                    />
-                  ) : msg.content.trim().startsWith('[FakeImage]') ? (
-                    // ★★★ 新增：【盲盒版】FakeImage 逻辑 ★★★
-                    // 使用 details 标签，天然支持“点击展开/收起”，无需额外代码
-                    <details className="group">
-                        {/* 1. 默认显示的：白色图框 (点击它会展开) */}
-                        <summary className="list-none outline-none cursor-pointer">
-                            <div className="w-48 h-32 bg-white border-2 border-dashed border-gray-200 rounded-xl flex flex-col items-center justify-center gap-2 hover:border-blue-300 hover:bg-blue-50 transition-all duration-300 group-open:hidden">
-                                <span className="text-3xl opacity-30 group-hover:scale-110 transition-transform">🖼️</span>
-                                <span className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">点击查看画面</span>
-                            </div>
-                            
-                            {/* 展开后：保留一个小的标题栏，点击可以收起 */}
-                            <div className="hidden group-open:flex items-center gap-2 mb-2 text-[10px] text-gray-400 font-bold uppercase tracking-widest cursor-pointer hover:text-blue-500">
-                                <span>🖼️ 画面描述 (点击收起)</span>
-                            </div>
-                        </summary>
-
-                        {/* 2. 展开后看到的内容：文字描述 */}
-                        <div className="bg-gray-50 p-4 rounded-xl border border-gray-100 text-sm text-gray-700 leading-relaxed font-serif italic animate-slideDown shadow-sm">
-                            “{msg.content.replace('[FakeImage]', '').trim()}”
+                      {isSelectionMode && (
+                        <div className={`flex items-center justify-center ${msg.role === 'user' ? 'order-2' : 'order-1'}`}>
+                          <div onClick={() => toggleMessageSelection(msg.id)} className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${isSelected ? 'bg-blue-500 border-blue-500' : 'border-gray-300 bg-white'}`}>
+                            {isSelected && <span className="text-white text-xs font-bold">✓</span>}
+                          </div>
                         </div>
-                    </details>
-                  ) : msg.type === 'image' ? (
-                    <img src={msg.content} className="rounded-lg max-w-full" alt="msg" />
-                  ) : (
-                    // 这里的 whitespace-pre-wrap 是换行的关键
-                    <div className="whitespace-pre-wrap break-words">
-                        {/* 如果是引用消息，这里只显示回复部分；否则显示全部 */}
-                        <HiddenBracketText 
-                           content={isQuoteMsg ? replyText : msg.content} 
-                           msgId={msg.id} 
-                           fontSize={""} 
-                        />
+                      )}
+
+                      <div 
+                         className={`flex-none flex ${msg.role === 'user' ? 'justify-end order-3' : 'justify-start order-1'}`}
+                         style={{ width: `${currentAvatarSize}px`, height: `${currentAvatarSize}px`, minWidth: `${currentAvatarSize}px` }}
+                      >
+                        {msg.role === 'assistant' && !isConsecutive && (
+                            <img src={activeContact.avatar} className="rounded-full object-cover border border-gray-100 shadow-sm w-full h-full block" alt="AI" />
+                        )}
+                        {msg.role === 'user' && !isConsecutive && (
+                            <img src={activeContact.userAvatar} className="rounded-full object-cover border border-white shadow-sm w-full h-full block" alt="user" />
+                        )}
+                        {isConsecutive && <div style={{ width: `${currentAvatarSize}px` }}></div>}
+                      </div>
+
+                      <div className={`flex items-end gap-1.5 order-2 ${msg.role === 'user' ? 'flex-row-reverse' : 'flex-row'} max-w-[75%]`}>
+                        <div
+                          className={`message-bubble min-w-0 relative group transition-transform duration-75 active:scale-95`}
+                          onTouchStart={() => handleTouchStart(msg)}
+                          onTouchEnd={handleTouchEnd}
+                          onMouseDown={() => handleTouchStart(msg)}
+                          onMouseUp={handleTouchEnd}
+                          onMouseLeave={handleTouchEnd}
+                          onContextMenu={(e) => e.preventDefault()}
+                        >
+                          {isEditing ? (
+                            <div className="bg-white border-2 border-blue-400 rounded-xl p-2 shadow-lg min-w-[200px]">
+                              <textarea
+                                value={editContent}
+                                onChange={(e) => setEditContent(e.target.value)}
+                                className="w-full text-sm p-2 bg-gray-50 rounded outline-none resize-none"
+                                rows={3}
+                                autoFocus
+                                onMouseDown={e => e.stopPropagation()}
+                                onTouchStart={e => e.stopPropagation()}
+                              />
+                              <div className="flex justify-end gap-2 mt-2">
+                                <button onClick={handleCancelEdit} className="text-xs px-3 py-1 bg-gray-200 rounded">取消</button>
+                                <button onClick={handleSaveEdit} className="text-xs px-3 py-1 bg-blue-500 text-white rounded">保存</button>
+                              </div>
+                            </div>
+                          ) : (
+                            <div 
+                                className={`content rounded-xl leading-snug relative break-words whitespace-pre-wrap shadow-sm ` + (!activeContact.customCSS && currentText === '#111827' ? 'border border-gray-200/50' : '')}
+                                style={{
+                                    backgroundColor: !activeContact.customCSS ? currentBg : undefined,
+                                    color: !activeContact.customCSS ? currentText : undefined,
+                                    fontSize: currentFontSize,
+                                    // ★★★ 核心修改：使用缩小后的 padding 变量 ★★★
+                                    padding: `${currentPaddingY} ${currentPaddingX}`,
+                                    borderTopRightRadius: (msg.role === 'user' && !isConsecutive) ? '3px' : '16px',
+                                    borderTopLeftRadius: (msg.role === 'assistant' && !isConsecutive) ? '3px' : '16px',
+                                    borderBottomLeftRadius: '16px',
+                                    borderBottomRightRadius: '16px',
+                                }}
+                            >
+                                {/* 1. 引用块 */}
+                                {isQuoteMsg && quoteText && (
+                                  <div className="text-xs mb-2 p-2 bg-black/5 rounded-md border-l-4 border-gray-400 opacity-80 select-none">
+                                    <div className="font-bold text-[10px] text-gray-500 mb-0.5">↪️ 引用:</div>
+                                    <div className="line-clamp-2 italic">{quoteText}</div>
+                                  </div>
+                                )}
+
+                                {/* 2. 语音/图片/文字渲染 */}
+                                {msg.type === 'voice' || msg.content.trim().startsWith('[Voice Message]') ? (
+                                    <VoiceBubble
+                                      msg={msg}
+                                      isPlaying={playingMsgId === msg.id}
+                                      progress={audioProgress}
+                                      duration={duration}
+                                      onPlay={() => playMessageAudio(msg.id, msg.content)}
+                                      onSeek={handleSeek}
+                                      isUser={msg.role === 'user'}
+                                    />
+                                ) : msg.content.trim().startsWith('[FakeImage]') ? (
+                                    <details className="group">
+                                        <summary className="list-none outline-none cursor-pointer">
+                                            <div className="w-48 h-32 bg-white border-2 border-dashed border-gray-200 rounded-xl flex flex-col items-center justify-center gap-2 hover:border-blue-300 hover:bg-blue-50 transition-all duration-300 group-open:hidden">
+                                                <span className="text-3xl opacity-30 group-hover:scale-110 transition-transform">🖼️</span>
+                                                <span className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">点击查看画面</span>
+                                            </div>
+                                            <div className="hidden group-open:flex items-center gap-2 mb-2 text-[10px] text-gray-400 font-bold uppercase tracking-widest cursor-pointer hover:text-blue-500">
+                                                <span>🖼️ 画面描述 (点击收起)</span>
+                                            </div>
+                                        </summary>
+                                        <div className="bg-gray-50 p-4 rounded-xl border border-gray-100 text-sm text-gray-700 leading-relaxed font-serif italic animate-slideDown shadow-sm">
+                                            “{msg.content.replace('[FakeImage]', '').trim()}”
+                                        </div>
+                                    </details>
+                                ) : msg.type === 'image' ? (
+                                    <img src={msg.content} className="rounded-lg max-w-full" alt="msg" />
+                                ) : (
+                                    <div className="whitespace-pre-wrap break-words">
+                                        <HiddenBracketText 
+                                           content={isQuoteMsg ? replyText : msg.content} 
+                                           msgId={msg.id} 
+                                           fontSize={""} 
+                                        />
+                                    </div>
+                                )}
+                            </div>
+                          )}
+                        </div>
+                        {!isEditing && <div className="text-[9px] text-gray-300 whitespace-nowrap shrink-0 opacity-60 select-none mb-0.5">{timeStr}</div>}
+                      </div>
                     </div>
-                  )}
-
-
-
-
-
-                </div>
-              )}
-            </div>
-            {!isEditing && <div className="text-[9px] text-gray-300 whitespace-nowrap shrink-0 opacity-60 select-none mb-0.5">{timeStr}</div>}
-          </div>
-        </div>
-      </React.Fragment>
-    );
+                  </React.Fragment>
+                );
 })}
 
 

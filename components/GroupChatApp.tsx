@@ -9341,7 +9341,7 @@ return (
                         backgroundColor: currentBg, 
                         color: currentText, 
                         fontSize: currentFontSize,
-                        padding: `${3 * scale}px ${12 * scale}px`, // 恢复padding
+                        padding: `${3.5 * scale}px ${12 * scale}px`, // 恢复padding
                         // ★★★ 修复2：恢复你的漂亮尖角气泡样式 ★★★
                         borderTopRightRadius: (msg.role === 'user' && !isConsecutive) ? '4px' : '12px',
                         borderTopLeftRadius: (msg.role !== 'user' && !isConsecutive) ? '4px' : '12px'
