@@ -3660,30 +3660,26 @@ const checkAutoSummary = async (currentContact: Contact, currentHistory: Message
            
             const today = new Date().toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric' });
             const nextDay = new Date(Date.now() + 86400000).toLocaleDateString('zh-CN', { month: 'long', day: 'numeric' });
-const systemPrompt = `
+            const systemPrompt = `
 # 你的任务
-你正在记录“${currentContact.name}”的群聊回忆。请仔细阅读对话历史，**识别出刚才参与发言的每一个角色**（不包括用户），并为**每一位活跃角色**写一段简短的第一人称总结。
-
+你就是角色“${currentContact.name}”。请你回顾一下刚才和“${currentContact.userName}”的对话，然后用【第一人称 ("我")】的口吻，总结出一段简短的、客观的、包含关键信息的记忆。
 # 当前时间
 - 今天是：${today}
-
 # 核心规则
-1. 【群像视角】: 绝对不要写成一个笼统的“我们”。必须按角色拆分，格式如下：
-   **【角色名】**: 它的第一人称心理活动或总结...
-   **【角色名】**: 它的第一人称心理活动或总结...
-2. 【内容核心】:
-    * 刚才大家在聊什么？
-    * “我”（该角色）刚才说了什么？我的态度是什么？
-    * 比如：Mia 可能会关注情感，Leo 可能会关注逻辑。
-3. 【时间转换】: 如果提到相对时间（如“明天”），必须转换为公历日期（${nextDay}）。
-4. 【长度限制】: 每个角色的总结控制在 30-50 字以内，保持精炼。
-5. 【输出格式】: 你的回复【必须且只能】是一个JSON对象，summary 字段包含所有人的总结，用换行符分隔。
-    格式示例: \`{"summary": "【Mia】: 那个图片吓了我一跳，像烟花一样炸开了！\n\n【Alex】: 我仔细看了那张图的数据流，非常有意思的结构。"}\`
-
+1. 【视角铁律】: 你的总结【必须】使用【主观的第一人称视角 ("我")，即角色视角，而非用户视角】来写，称用户为ta的本名。
+2. 【内容核心 (最高优先级)】: 你的总结【必须】专注于以下几点：
+    * 重要事件: 刚才发生了什么具体的事情？
+    * 关键决定: 我们达成了什么共识或做出了什么决定？
+    * 未来计划: 我们约定了什么未来的计划或待办事项？
+3. 【时间转换铁律 (必须遵守)】: 如果对话中提到了相对时间（如“明天”），你【必须】结合“今天是${today}”这个信息，将其转换为【具体的公历日期】（例如：“约定了明天见面”应总结为“我们约定了${nextDay}见面”）。
+4. 【风格要求】: 你的总结应该像一份备忘录，而不是一篇抒情散文。
+5. 【长度铁律】: 你的总结【必须】非常简短，总长度【绝对不能超过100个字】。
+6. 【输出格式】: 你的回复【必须且只能】是一个JSON对象，格式如下：
+    \`{"summary": "在这里写下你以第一人称视角，总结好的核心事实与计划。"}\`
 # 待总结的对话历史
 ${historyText}
-
-现在，请以群聊记录员的身份，开始编写多视角的群聊回忆录。`;
+现在，请以“${currentContact.name}”的身份，开始你的客观总结。`;
+            
 
 
 
@@ -4020,7 +4016,7 @@ ${systemInstruction}
 
 
 
-// --- 2.5 ★★★ 核心回复逻辑 (防演讲版：强力修复格式 + 强制短语) ★★★ ---
+// --- 2.5 ★★★ 核心回复逻辑 (最终修复版：增加暴力拆解器) ★★★ ---
   const handleAiReplyTrigger = async (historyOverride?: Message[], isForceWakeUp = false) => {
     
     // 0. DND 拦截器
@@ -4113,65 +4109,49 @@ ${systemInstruction}
       const memberInstructions = fullMembersData.map(member => `
 ### 🎭 角色: 【${member.name}】
 - **📜 设定**: ${member.persona || "无设定"}
-- **❤️ 状态**: 亲密度(${member.affectionScore || 50})
 `).join('\n\n----------------\n\n');
 
-      // ==================== 📝 [System Prompt - 防演讲版] ====================
+      // ==================== 📝 [System Prompt - 终极格式锁] ====================
       const systemPrompt = `
-# 核心任务：模拟真实的、混乱的群聊
-你负责扮演名为“${group.name}”的群聊成员。
+# 核心任务：模拟群聊 (Backend Engine)
+你是一个群聊生成引擎。你需要根据语境，决定哪些群成员会发言。
 
-# 🚫 严厉禁忌 (违反即死机)
-1. **禁止日常话语中有markdown格式**：除非是提交笔记这样的特殊时刻
-2. **禁止全员到齐**：不要刻意让所有人都出来说话！
-3. **禁止排队**：不要按顺序发言，要像真人一样插嘴、发短句、用表情。
-4. **严禁扮演群组**：只能扮演具体成员。
-5. **绝对禁止把所有人的话都放在一个气泡中！！！！**
-
-
-# 👥 【成员档案】
+# 👥 【成员列表】(只能扮演这些!)
 ${memberInstructions}
 
-# 🌍 【世界观】
+# 🌍 【知识库】
 ${loreText || "暂无特殊设定"}
 
 # ⏰ 【环境】
-- 时间: ${strictTimeStr} (${holidayPatch})
-- 间隔: ${gapDescription}
+- 时间: ${strictTimeStr}
+- 语境: ${gapDescription}
 
-# ⚠️ 输出格式
-必须是 JSON 数组。
-✅ 正确示范 :
+# ⚠️ 绝对输出规则 (CRITICAL)
+1. **优先使用 JSON 数组格式**。
+2. 如果做不到 JSON，**必须**使用严格的脚本格式换行，格式为：\`[名字]: 内容\`。
+3. **不要**把所有人的话写在同一行！
+4. **不要**加任何解释性文字。
+5. **不要**使用markdown格式
+
+# ✅ 理想格式 (JSON):
 [
-  {"type": "text", "name": "Mia", "content": "哈哈哈哈笑死"},
-  {"type": "text", "name": "Mia", "content": "我觉得挺有意思的"},
-  {"type": "text", "name": "Mia", "content": "但是也值得思考"},
-  {"type": "text", "name": "Elio", "content": "确实"},
-  {"type": "text", "name": "Mia", "content": "比如刚才我们说的例子"}
+  {"name": "Mia", "content": "哈哈哈笑死"},
+  {"name": "Elio", "content": "确实"}
 ]
+
+# ⚠️ 保底格式 (Script):
+[Mia]: 哈哈哈笑死
+[Elio]: 确实
 `;
 
-// ★★★ 核心修复：开启 Vision (视觉) 模式 ★★★
-      // 如果是图片，把它打包成标准视觉格式发送；如果是文字，正常发送。
-    // ★★★ 核心修复：智能省钱模式 (Smart Vision) ★★★
-      // 逻辑：只有【最近 2 条】消息里的图片，才会真的发给 AI 看。
-      // 更早之前的图片，会自动变成 "[图片]" 文字，既省钱又防报错。
-      
-      // 1. 先截取最近的聊天记录 (比如最近 20 条)
       const rawSlice = currentHistory.slice(-(activeContact.contextDepth || 20));
       
       const cleanHistorySlice = rawSlice.map((msg, index) => {
-          // 判断是不是图片
           const isImage = msg.type === 'image' || (msg.content && msg.content.startsWith('data:image'));
           const role = msg.role === 'user' ? 'user' : 'assistant';
-
-          // 判断这条消息是不是“最近的新消息”
-          // index 是当前消息的序号，rawSlice.length 是总长度
-          // 如果 index >= 总长度 - 2，说明它是最后两条之一
           const isRecent = index >= rawSlice.length - 2;
 
           if (isImage) {
-             // A. 如果是【最近】的图片 -> 发送真图给 AI 看
              if (isRecent) {
                  return {
                      role: role,
@@ -4180,20 +4160,15 @@ ${loreText || "暂无特殊设定"}
                          { type: "image_url", image_url: { url: msg.content } }
                      ]
                  };
-             } 
-             // B. 如果是【很久以前】的图片 -> 扔掉图片数据，只发个文字占位符，省 Token！
-             else {
-                 return {
-                     role: role,
-                     content: "[历史图片已归档]" 
-                 };
+             } else {
+                 return { role: role, content: "[历史图片已归档]" };
              }
           }
-
-          // 如果是普通文字，正常发送
+          // 加上名字前缀，帮AI分清是谁
+          const prefix = msg.name ? `[${msg.name}]: ` : '';
           return {
               role: role,
-              content: msg.content.substring(0, 2000)
+              content: prefix + msg.content.substring(0, 2000)
           };
       });
 
@@ -4210,99 +4185,145 @@ ${loreText || "暂无特殊设定"}
 
       console.log("正在请求 API...");
       let rawResponse = await generateResponse(apiMessages, activePreset);
-      if (!rawResponse) rawResponse = JSON.stringify([{ type: "text", content: "..." }]);
-
-   // 7. 解析响应 (强力修复 + 自动切菜刀模式)
-      let finalResp = typeof rawResponse === 'string' ? rawResponse : JSON.stringify(rawResponse);
-      finalResp = finalResp.replace(/^```json/i, '').replace(/```$/i, '').trim();
       
-      // 自动补全括号的逻辑保持不变
-      if (finalResp.startsWith('{') && finalResp.includes('},{')) finalResp = `[${finalResp}]`;
-      if (finalResp.startsWith('[') && !finalResp.endsWith(']')) finalResp += '}]';
+      // 7. 解析响应 (暴力拆解版)
+      if (!rawResponse) rawResponse = "[]"; // 兜底
+
+      console.log("AI 原始回复:", rawResponse); 
+
+      let finalResp = typeof rawResponse === 'string' ? rawResponse : JSON.stringify(rawResponse);
+      finalResp = finalResp.replace(/```json/gi, '').replace(/```/g, '').trim();
+      
+      // 修复裸奔 JSON
+      if (finalResp.startsWith('{') && finalResp.endsWith('}')) {
+          finalResp = `[${finalResp}]`;
+      }
 
       let parts: any[] = [];
-      
-// ★★★ 修复版：智能打包机 (拒绝刷屏) ★★★
-      const splitLongText = (text: string, senderId: string, name: string) => {
-          // 1. 先按句号粗略切分
-          // 正则保留标点符号
-          const rawSentences = text.split(/([。！？.?!]\s+|\n+)/);
-          const chunks: any[] = [];
-          
-          let currentBuffer = ""; // 这是一个“积攒篮子”
-
-          for (let i = 0; i < rawSentences.length; i++) {
-              const part = rawSentences[i];
-              
-              // 跳过空字符
-              if (!part.trim()) continue;
-
-              // 2. 核心逻辑：拼凑逻辑
-              // 如果“篮子里的字” + “这句话” 还没超过 100 字，就接着往里装
-              if ((currentBuffer + part).length < 100) {
-                  currentBuffer += part;
-              } else {
-                  // 如果装不下了，就把篮子里的先发出去
-                  if (currentBuffer.trim()) {
-                      chunks.push({ type: 'text', content: currentBuffer.trim(), senderId, name });
-                  }
-                  // 然后把这句话作为新篮子的开头
-                  currentBuffer = part;
-              }
-          }
-
-          // 3. 把篮子里剩下的最后一点也发出去
-          if (currentBuffer.trim()) {
-              chunks.push({ type: 'text', content: currentBuffer.trim(), senderId, name });
-          }
-
-          return chunks;
-      };
-
       try {
-          // 尝试按标准 JSON 数组解析
+          // A. 尝试标准 JSON 解析
           const parsed = JSON.parse(finalResp);
           if (Array.isArray(parsed)) {
-              parsed.forEach((item: any) => {
-                  if (!item.content) return;
-                  
-                  // 确定发送者
-                  let sender = allContacts.find(c => c.name.trim().toLowerCase() === (item.name || "").trim().toLowerCase());
-                  if (!sender && item.name) {
-                      sender = allContacts.find(c => group.members.includes(c.id) && item.name.toLowerCase().includes(c.name.toLowerCase()));
-                  }
-                  const senderId = sender ? sender.id : (allContacts.find(c => group.members.includes(c.id))?.id || group.id);
-                  const name = item.name || "Unknown";
-
-                  // ★★★ 关键修改：如果这一条内容太长（超过60字），强行切分！ ★★★
-                  if (item.content.length > 60) {
-                      const smallParts = splitLongText(item.content, senderId, name);
-                      parts.push(...smallParts);
-                  } else {
-                      parts.push({ type: 'text', content: item.content, senderId: senderId, name: name });
-                  }
+              parts = parsed.filter((item: any) => item.content).map((item: any) => {
+                  let sender = fullMembersData.find(c => c.name.trim().toLowerCase() === (item.name || "").trim().toLowerCase());
+                  if (!sender) sender = fullMembersData.find(c => item.name.toLowerCase().includes(c.name.toLowerCase()));
+                  const senderId = sender ? sender.id : (item.name || "Unknown");
+                  return { type: 'text', content: item.content, senderId: senderId, name: item.name };
               });
-          } else { throw new Error("Not array"); }
+          } else if (parsed.content) {
+              parts = [parsed];
+          }
       } catch (error) {
-          console.warn("⚠️ JSON解析失败，启动【暴力切分模式】");
+          console.warn("⚠️ JSON解析失败，启动【暴力拆解模式】");
           
-          // 如果 JSON 解析失败，说明 AI 给的是纯文本（就像你截图里那样）
-          // 我们直接把整段文本视为当前角色说的，然后用切菜刀切开！
+          // ==================== 🛠️ 暴力拆解器 (针对你的截图优化) ====================
+          // 你的截图情况是：[Mia]: blabla [Elio]: blabla 挤在一坨
+          // 策略：用正则寻找 "[Name]:" 这种锚点，然后切分
           
-          // 1. 确定当前说话的人（默认是第一个成员，或者群主）
-          const defaultSender = allContacts.find(c => group.members.includes(c.id) && c.id !== group.id) || group;
+          // 1. 构建所有成员名字的正则 (例如: Mia|Elio|Leo|Julian|Alex)
+          const validNames = fullMembersData.map(m => m.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|');
           
-          // 2. 暴力切分整段文本
-          const choppedParts = splitLongText(finalResp, defaultSender.id, defaultSender.name);
-          parts.push(...choppedParts);
+          // 这个正则的意思是：匹配 "[Mia]:" 或者 "Mia:" 这种开头
+          const splitRegex = new RegExp(`(\\[?(${validNames})\\]?[:：])`, 'gi');
+          
+          // 2. 切分字符串
+          const tokens = finalResp.split(splitRegex);
+          // split 的结果会是：["", "[Mia]:", "Mia", "内容...", "[Elio]:", "Elio", "内容..."]
+          
+          let currentName = "";
+          let currentContent = "";
+
+          for (let i = 0; i < tokens.length; i++) {
+              const token = tokens[i];
+              
+              // 如果这一段是名字 (我们在正则里用了捕获组，所以名字会出现在数组里)
+              const matchedMember = fullMembersData.find(m => m.name.toLowerCase() === token.trim().toLowerCase());
+
+              if (matchedMember) {
+                  // 如果之前已经有内容了，先保存上一条
+                  if (currentName && currentContent.trim()) {
+                      const sender = fullMembersData.find(c => c.name.toLowerCase() === currentName.toLowerCase());
+                      parts.push({
+                          type: 'text', 
+                          content: currentContent.trim(), 
+                          senderId: sender ? sender.id : "Unknown", 
+                          name: currentName
+                      });
+                  }
+                  // 开始新的一条
+                  currentName = matchedMember.name;
+                  currentContent = ""; 
+                  // 跳过下一个 token，因为它是 split 产生的完整匹配串 (如 "[Mia]:")，我们不需要它，只需要名字
+                  // split 机制导致 index+1 是完整匹配，index 是捕获组。这里逻辑比较绕，简化处理：
+                  // 我们只要确定 currentName 变了，接下来的非名字 token 就是内容
+              } else {
+                  // 如果不是名字，也不是分隔符 (例如 ":")，那就是内容
+                  // 过滤掉类似 "[Mia]:" 这种纯分隔符
+                  const isSeparator = /^\[?.*\]?[:：]$/.test(token.trim());
+                  if (!isSeparator && currentName) {
+                      currentContent += token;
+                  }
+              }
+          }
+          
+          // 循环结束，保存最后一条
+          if (currentName && currentContent.trim()) {
+              const sender = fullMembersData.find(c => c.name.toLowerCase() === currentName.toLowerCase());
+              parts.push({
+                  type: 'text', 
+                  content: currentContent.trim(), 
+                  senderId: sender ? sender.id : "Unknown", 
+                  name: currentName
+              });
+          }
+
+          // 如果暴力拆解也没拆出来（比如名字没匹配上），那就当做第一人说的
+          if (parts.length === 0) {
+              console.log("暴力拆解失败，兜底处理");
+              // 尝试简单按行切分
+              const lines = finalResp.split('\n');
+              if (lines.length > 1) {
+                  // 有换行的情况
+                   lines.forEach(line => {
+                       const partsOfLine = line.split(/[:：]/);
+                       if (partsOfLine.length > 1) {
+                           const nameCandidate = partsOfLine[0].replace(/[\[\]]/g, '').trim();
+                           const contentCandidate = partsOfLine.slice(1).join(':').trim();
+                           const sender = fullMembersData.find(c => c.name.toLowerCase() === nameCandidate.toLowerCase());
+                           if (sender) {
+                               parts.push({ type: 'text', content: contentCandidate, senderId: sender.id, name: sender.name });
+                           }
+                       }
+                   });
+              }
+              
+              // 还是空的，就全部给第一个人
+              if (parts.length === 0) {
+                  const fallbackMember = fullMembersData[0];
+                  parts = [{ 
+                      type: 'text', 
+                      content: finalResp, 
+                      senderId: fallbackMember ? fallbackMember.id : "Unknown", 
+                      name: fallbackMember ? fallbackMember.name : "Unknown" 
+                  }];
+              }
+          }
       }
+
       // 8. 构建消息
       const newMessages: Message[] = [];
       parts.forEach((part, index) => {
+          // 清理内容里的名字前缀 (有些 AI 会把 [Mia]: 也写进 content 里)
+          let cleanContent = part.content;
+          if (part.name) {
+              const prefixRegex = new RegExp(`^\\[?${part.name}\\]?[:：]\\s*`, 'i');
+              cleanContent = cleanContent.replace(prefixRegex, '');
+          }
+
           newMessages.push({
               id: Date.now().toString() + index,
               role: 'assistant',
-              content: part.content,
+              content: cleanContent,
               timestamp: Date.now() + (index * 1000),
               type: 'text',
               senderId: part.senderId,
@@ -4358,6 +4379,7 @@ ${loreText || "暂无特殊设定"}
       setTimeout(() => setIsAiTyping(false), 500);
     }
   };
+
 
    
 
@@ -6836,41 +6858,6 @@ if (view === 'settings' && activeContact) {
 
 
 
-{/* ★★★ 全屏沉浸式加载遮罩 (同款高级样式) ★★★ */}
-{/* ★★★ 全屏沉浸式加载遮罩 (同款高级样式) ★★★ */}
-                 {isAnalyzing && (
-                    <div className="absolute inset-0 z-[100] bg-white/80 backdrop-blur-md flex flex-col items-center justify-center animate-fadeIn cursor-wait rounded-3xl">
-                        {/* 动画图标容器 */}
-                        <div className="relative mb-6">
-                           {/* 外圈旋转 (紫色/蓝色渐变光环) */}
-                           <div className="w-20 h-20 border-4 border-indigo-100 border-t-indigo-500 rounded-full animate-spin"></div>
-                           
-                           {/* 中间图标 (跳动的大脑) */}
-                           <div className="absolute inset-0 flex items-center justify-center text-3xl animate-pulse">
-                             🪐
-                           </div>
-                        </div>
-                        
-                        {/* 动态文字 (显示 loadingText) */}
-                        <h3 className="text-xl font-black text-gray-800 mb-2 tracking-widest animate-pulse">
-                          {loadingText || "正在分析中..."}
-                        </h3>
-                        
-                        {/* 装饰性胶囊标签 */}
-                        <div className="flex gap-2">
-                            <span className="text-[10px] text-indigo-500 font-mono bg-indigo-50 px-3 py-1 rounded-full border border-indigo-100">
-                              Deep Dive
-                            </span>
-                            <span className="text-[10px] text-purple-500 font-mono bg-purple-50 px-3 py-1 rounded-full border border-purple-100">
-                              Re-Analyzing
-                            </span>
-                        </div>
-                        
-                        <p className="text-[10px] text-gray-400 mt-8 absolute bottom-20">
-                          AI 正在量化角色的人格数据...
-                        </p>
-                    </div>
-                 )}
 
 
 
